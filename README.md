@@ -83,3 +83,23 @@ make test-e2e-compute-demo
 The local setup uses only development dependencies declared in
 `pyproject.toml`. It does not require production secrets, object-storage
 credentials, platform signing keys, or external AI credentials.
+
+## Configuration
+
+The service reads configuration from environment variables through
+`app.kernel.config.load_config`. Minimal local demo values:
+
+```bash
+export DATAFORGE_PROFILE=demo_strict
+export DATAFORGE_OBJECT_STORAGE_ENDPOINT_URL=http://localhost:9000
+export DATAFORGE_OBJECT_STORAGE_BUCKET=dataforge-local
+export DATAFORGE_PLATFORM_CALLBACK_URL=http://platform.local/api/ml/jobs/callback
+export DATAFORGE_SERVICE_SIGNING_SECRET=local-dev-signing-secret
+export DATAFORGE_DAGSTER_HOME=/tmp/dataforge-dagster
+export DATAFORGE_POLICY_CONFIG_PATH=configs/policies/demo_strict.yaml
+export DATAFORGE_DECISION_POLICY_PATH=configs/policies/decision_v0.yaml
+export DATAFORGE_SCORE_POLICY_PATH=configs/policies/score_v0.yaml
+```
+
+Supported profiles are `demo_strict` and `banking_strict`. External AI access is
+disabled by default through `DATAFORGE_ALLOW_EXTERNAL_API=false`.
