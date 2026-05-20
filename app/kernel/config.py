@@ -40,6 +40,8 @@ class PlatformSettings(BaseModel):
 
     callback_url: str = Field(min_length=1)
     service_signing_secret: SecretStr = Field(min_length=1)
+    service_identity: str = Field(default="dataforge-platform", min_length=1)
+    signature_max_age_seconds: int = Field(default=300, gt=0)
 
 
 class DagsterSettings(BaseModel):
@@ -143,6 +145,15 @@ def load_config(env: Mapping[str, str] | None = None) -> ServiceConfig:
                 service_signing_secret=SecretStr(
                     _required(source, "DATAFORGE_SERVICE_SIGNING_SECRET")
                 ),
+                service_identity=source.get(
+                    "DATAFORGE_PLATFORM_SERVICE_IDENTITY",
+                    "dataforge-platform",
+                ),
+                signature_max_age_seconds=_env_int(
+                    source,
+                    "DATAFORGE_PLATFORM_SIGNATURE_MAX_AGE_SECONDS",
+                    300,
+                ),
             ),
             dagster=DagsterSettings(
                 home=_required(source, "DATAFORGE_DAGSTER_HOME"),
@@ -209,6 +220,16 @@ def _env_bool(env: Mapping[str, str], name: str, default: bool) -> bool:
     if normalized in {"0", "false", "no", "off"}:
         return False
     raise ConfigError(f"Invalid boolean for {name}: expected true/false")
+
+
+def _env_int(env: Mapping[str, str], name: str, default: int) -> int:
+    value = env.get(name)
+    if value is None or value == "":
+        return default
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ConfigError(f"Invalid integer for {name}") from exc
 
 
 def _required(env: Mapping[str, str], name: str) -> str:

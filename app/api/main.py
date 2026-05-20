@@ -11,14 +11,21 @@ from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import RequestResponseEndpoint
 
 from app.api.schemas import HealthResponse
+from app.api.security import PlatformIdentityDep, ServiceSignatureError
 from app.domain import ErrorBody, ErrorCode, ErrorResponse
+from app.kernel.config import ServiceConfig
 from app.validation.contracts import load_contract_pack
 
 SERVICE_PACKAGE_NAME = "dataforgeai-ml-service"
 API_PREFIX = "/api/v1"
 
 
-def create_app(*, include_test_error_route: bool = False) -> FastAPI:
+def create_app(
+    *,
+    include_test_error_route: bool = False,
+    include_test_protected_route: bool = False,
+    config: ServiceConfig | None = None,
+) -> FastAPI:
     """Create the FastAPI app without requiring production secrets."""
     application = FastAPI(
         title="DataForge AI ML Service",
@@ -27,6 +34,7 @@ def create_app(*, include_test_error_route: bool = False) -> FastAPI:
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
     )
+    application.state.service_config = config
 
     @application.middleware("http")
     async def safe_unhandled_error_middleware(
@@ -69,6 +77,20 @@ def create_app(*, include_test_error_route: bool = False) -> FastAPI:
             details={"error_count": len(exc.errors())},
         )
 
+    @application.exception_handler(ServiceSignatureError)
+    async def service_signature_exception_handler(
+        request: Request,
+        exc: ServiceSignatureError,
+    ) -> JSONResponse:
+        return error_json_response(
+            status_code=exc.status_code,
+            code=exc.code,
+            message="Service signature validation failed.",
+            recoverable=True,
+            stage="api.security",
+            details={"reason_code": exc.reason_code},
+        )
+
     @application.get(
         f"{API_PREFIX}/health",
         response_model=HealthResponse,
@@ -85,6 +107,8 @@ def create_app(*, include_test_error_route: bool = False) -> FastAPI:
 
     if include_test_error_route:
         _add_test_error_routes(application)
+    if include_test_protected_route:
+        _add_test_protected_routes(application)
 
     return application
 
@@ -137,6 +161,19 @@ def _add_test_error_routes(application: FastAPI) -> None:
         limit: Annotated[int, Query(ge=1)],
     ) -> dict[str, int]:
         return {"limit": limit}
+
+
+def _add_test_protected_routes(application: FastAPI) -> None:
+    @application.post("/__test__/protected-compute-request", include_in_schema=False)
+    async def protected_compute_request_fixture(
+        identity: PlatformIdentityDep,
+    ) -> dict[str, str]:
+        return {
+            "status": "accepted",
+            "service_identity": identity.service_identity,
+            "organization_id": identity.organization_id,
+            "project_id": identity.project_id,
+        }
 
 
 app = create_app()
