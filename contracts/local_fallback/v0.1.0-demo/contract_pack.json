@@ -8,8 +8,20 @@
       "path": "schemas/artifact_ref.schema.json"
     },
     {
+      "name": "compute_run",
+      "path": "schemas/compute_run.schema.json"
+    },
+    {
+      "name": "dataset_version",
+      "path": "schemas/dataset_version.schema.json"
+    },
+    {
       "name": "prediction_manifest",
       "path": "schemas/prediction_manifest.schema.json"
+    },
+    {
+      "name": "platform_job",
+      "path": "schemas/platform_job.schema.json"
     },
     {
       "name": "error_response",
@@ -23,9 +35,24 @@
       "path": "examples/artifact_ref.basic.json"
     },
     {
+      "name": "compute_run.analyze_only",
+      "schema": "compute_run",
+      "path": "examples/compute_run.analyze_only.json"
+    },
+    {
+      "name": "dataset_version.context",
+      "schema": "dataset_version",
+      "path": "examples/dataset_version.context.json"
+    },
+    {
       "name": "prediction_manifest.fraud",
       "schema": "prediction_manifest",
       "path": "examples/prediction_manifest.fraud.json"
+    },
+    {
+      "name": "platform_job.context",
+      "schema": "platform_job",
+      "path": "examples/platform_job.context.json"
     },
     {
       "name": "error_response.invalid_job_payload",

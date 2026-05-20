@@ -63,6 +63,18 @@
             "null"
           ]
         },
+        "plugin_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "remediation_hint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "details": {
           "type": "object"
         }

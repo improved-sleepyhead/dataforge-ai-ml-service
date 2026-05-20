@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/dataset_version.schema.json",
+  "title": "DatasetVersionContext",
+  "type": "object",
+  "required": [
+    "organization_id",
+    "project_id",
+    "dataset_id",
+    "version_id",
+    "version_name",
+    "created_by_job_id",
+    "created_at",
+    "risk_profile",
+    "policy_version",
+    "artifact_refs"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parent_version_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "version_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_by_job_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "risk_profile": {
+      "type": "string",
+      "enum": [
+        "demo_strict",
+        "banking_strict"
+      ]
+    },
+    "policy_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "artifact_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

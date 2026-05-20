@@ -22,10 +22,20 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
 
     assert pack.version == "local-fallback-v0.1.0-demo"
     assert pack.source == "temporary_ml_service_fixture_until_dataforgeai_contracts_is_ready"
-    assert {"artifact_ref", "prediction_manifest", "error_response"} <= set(pack.schemas)
+    assert {
+        "artifact_ref",
+        "compute_run",
+        "dataset_version",
+        "prediction_manifest",
+        "platform_job",
+        "error_response",
+    } <= set(pack.schemas)
     assert {example.name for example in pack.examples} == {
         "artifact_ref.basic",
+        "compute_run.analyze_only",
+        "dataset_version.context",
         "prediction_manifest.fraud",
+        "platform_job.context",
         "error_response.invalid_job_payload",
     }
 
@@ -35,7 +45,10 @@ def test_all_contract_examples_validate() -> None:
 
     assert validated == [
         "artifact_ref.basic",
+        "compute_run.analyze_only",
+        "dataset_version.context",
         "prediction_manifest.fraud",
+        "platform_job.context",
         "error_response.invalid_job_payload",
     ]
 

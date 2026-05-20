@@ -1,0 +1,17 @@
+{
+  "compute_run_id": "compute_run_001",
+  "platform_job_id": "platform_job_001",
+  "organization_id": "org_1",
+  "project_id": "project_1",
+  "dataset_id": "dataset_fraud_demo",
+  "dataset_version_id": "dataset_version_v1",
+  "workflow_type": "ANALYZE_ONLY",
+  "status": "COMPLETED",
+  "contract_pack_version": "local-fallback-v0.1.0-demo",
+  "config_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "started_at": "2026-05-20T07:10:00Z",
+  "completed_at": "2026-05-20T07:12:00Z",
+  "artifacts": [
+    "artifact_manifest_001"
+  ]
+}
