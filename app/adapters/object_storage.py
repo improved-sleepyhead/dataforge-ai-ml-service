@@ -194,6 +194,10 @@ class MinioObjectStorageAdapter:
                 continue
         return tuple(infos)
 
+    def uri_for_object_name(self, object_name: str) -> str:
+        """Return the scoped s3 URI that would be used for a relative object name."""
+        return self._uri_for_key(self._key_for_object_name(object_name))
+
     def _key_for_object_name(self, object_name: str) -> str:
         object_path = _safe_relative_path(object_name)
         key = _join_key(self.allowed_prefix, object_path)

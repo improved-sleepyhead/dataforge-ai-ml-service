@@ -1,5 +1,6 @@
 """Ports for object storage, platform metadata, vector stores, and external systems."""
 
+from app.adapters.artifact_registry import ArtifactRegistry, RegisteredArtifact
 from app.adapters.object_storage import (
     MinioObjectStorageAdapter,
     ObjectStorageError,
@@ -18,6 +19,7 @@ from app.adapters.platform_metadata import (
 
 __all__ = [
     "AuditEventType",
+    "ArtifactRegistry",
     "FakePlatformMetadataClient",
     "FakePlatformState",
     "MinioObjectStorageAdapter",
@@ -25,6 +27,7 @@ __all__ = [
     "ObjectStorageScope",
     "PlatformAuditEvent",
     "PlatformJobEvent",
+    "RegisteredArtifact",
     "StoredObject",
     "StoredObjectInfo",
     "create_fake_platform_app",
