@@ -29,6 +29,7 @@ def test_load_config_with_demo_env() -> None:
     assert config.platform.service_signing_secret.get_secret_value() == "local-dev-signing-secret"
     assert config.dagster.home == "/tmp/dataforge-dagster"
     assert config.policies.policy_config_path == "configs/policies/demo_strict.yaml"
+    assert config.contract_pack_version == "local-fallback-v0.1.0-demo"
     assert config.profile_defaults.object_storage_profile == "local_minio"
     assert config.config_hash.startswith("sha256:")
 

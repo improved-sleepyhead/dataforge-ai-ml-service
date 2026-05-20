@@ -95,6 +95,7 @@ class ServiceConfig(BaseModel):
     platform: PlatformSettings
     dagster: DagsterSettings
     policies: PolicySettings
+    contract_pack_version: str = Field(default="local-fallback-v0.1.0-demo", min_length=1)
     external_ai: ExternalAISettings = Field(default_factory=ExternalAISettings)
     profile_defaults: ProfileDefaults
 
@@ -152,6 +153,9 @@ def load_config(env: Mapping[str, str] | None = None) -> ServiceConfig:
                 policy_config_path=_required(source, "DATAFORGE_POLICY_CONFIG_PATH"),
                 decision_policy_path=_required(source, "DATAFORGE_DECISION_POLICY_PATH"),
                 score_policy_path=_required(source, "DATAFORGE_SCORE_POLICY_PATH"),
+            ),
+            contract_pack_version=source.get(
+                "DATAFORGE_CONTRACT_PACK_VERSION", "local-fallback-v0.1.0-demo"
             ),
             external_ai=ExternalAISettings(
                 allow_external_api=_env_bool(source, "DATAFORGE_ALLOW_EXTERNAL_API", False),

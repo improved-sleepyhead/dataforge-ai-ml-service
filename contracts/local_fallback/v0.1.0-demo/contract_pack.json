@@ -1,0 +1,36 @@
+{
+  "contract_pack_id": "dataforgeai-local-fallback",
+  "version": "local-fallback-v0.1.0-demo",
+  "source": "temporary_ml_service_fixture_until_dataforgeai_contracts_is_ready",
+  "schemas": [
+    {
+      "name": "artifact_ref",
+      "path": "schemas/artifact_ref.schema.json"
+    },
+    {
+      "name": "prediction_manifest",
+      "path": "schemas/prediction_manifest.schema.json"
+    },
+    {
+      "name": "error_response",
+      "path": "schemas/error_response.schema.json"
+    }
+  ],
+  "examples": [
+    {
+      "name": "artifact_ref.basic",
+      "schema": "artifact_ref",
+      "path": "examples/artifact_ref.basic.json"
+    },
+    {
+      "name": "prediction_manifest.fraud",
+      "schema": "prediction_manifest",
+      "path": "examples/prediction_manifest.fraud.json"
+    },
+    {
+      "name": "error_response.invalid_job_payload",
+      "schema": "error_response",
+      "path": "examples/error_response.invalid_job_payload.json"
+    }
+  ]
+}

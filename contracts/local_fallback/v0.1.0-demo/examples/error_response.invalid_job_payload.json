@@ -1,0 +1,12 @@
+{
+  "error": {
+    "code": "INVALID_JOB_PAYLOAD",
+    "message": "Request payload does not match the compute contract.",
+    "recoverable": true,
+    "stage": "request_validation",
+    "job_id": null,
+    "details": {
+      "schema": "analyze_dataset_request"
+    }
+  }
+}
