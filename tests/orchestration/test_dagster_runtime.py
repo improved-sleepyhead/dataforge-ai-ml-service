@@ -90,14 +90,11 @@ def test_skeleton_analyze_job_materializes_and_records_stage_events() -> None:
     snapshot = fake_platform.snapshot()
 
     expected_stages = {
-        "analyze.raw_manifest",
-        "analyze.validated_manifest",
-        "analyze.tabular_profile_report",
-        "analyze.object_analytics_passports",
-        "analyze.evidence_bundle",
-        "analyze.decision_report",
-        "analyze.recommended_actions",
-        "analyze.review_queue",
+        "INGESTING",
+        "BUILDING_MANIFEST",
+        "PROFILING_TABULAR",
+        "BUILDING_EVIDENCE",
+        "RUNNING_DECISION_CORE",
     }
     actual_stages = {event.stage for event in snapshot.job_events}
     assert expected_stages.issubset(actual_stages)
@@ -194,8 +191,9 @@ def test_apply_assets_succeed_with_apply_context_and_emit_stage_events() -> None
     assert materialized == set(APPLY_ASSET_KEYS)
 
     snapshot = fake_platform.snapshot()
-    assert any(event.stage == "apply.action_plan" for event in snapshot.job_events)
-    assert any(event.stage == "apply.export_package" for event in snapshot.job_events)
+    apply_stages = {event.stage for event in snapshot.job_events}
+    assert "RUNNING_DECISION_CORE" in apply_stages
+    assert "COMPLETED" in apply_stages
 
 
 def _job_by_name(definitions: Definitions, name: str) -> JobDefinition:

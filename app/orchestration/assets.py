@@ -28,9 +28,10 @@ from typing import Any
 from dagster import AssetExecutionContext, AssetKey, MaterializeResult, asset
 
 from app.adapters import FakePlatformMetadataClient
-from app.domain import ComputeRunStatus, WorkflowType
+from app.domain import WorkflowType
+from app.orchestration.job_event import JobStage
 from app.orchestration.run_context import RunContextResource
-from app.orchestration.status_bridge import RunContext, emit_stage_event
+from app.orchestration.status_bridge import RunContext, RunStatusBridge
 
 ANALYZE_GROUP = "analyze_only"
 
@@ -45,6 +46,22 @@ ANALYZE_ASSET_KEYS: tuple[AssetKey, ...] = (
     AssetKey("review_queue"),
 )
 
+# Map asset name -> (JobStage, normalized progress at the end of the stage).
+# Progress moves through canonical platform stages so the UI can render a
+# stable timeline. Stages outside the canonical lifecycle (recommended_actions,
+# review_queue) reuse RUNNING_DECISION_CORE because they are produced from
+# the Decision Core output.
+_ANALYZE_STAGE_BY_ASSET: dict[str, tuple[JobStage, float]] = {
+    "raw_manifest": (JobStage.INGESTING, 0.10),
+    "validated_manifest": (JobStage.BUILDING_MANIFEST, 0.25),
+    "tabular_profile_report": (JobStage.PROFILING_TABULAR, 0.45),
+    "object_analytics_passports": (JobStage.PROFILING_TABULAR, 0.55),
+    "evidence_bundle": (JobStage.BUILDING_EVIDENCE, 0.70),
+    "decision_report": (JobStage.RUNNING_DECISION_CORE, 0.80),
+    "recommended_actions": (JobStage.RUNNING_DECISION_CORE, 0.90),
+    "review_queue": (JobStage.RUNNING_DECISION_CORE, 0.95),
+}
+
 _ANALYZE_RESOURCE_KEYS = {"run_context", "fake_platform"}
 
 
@@ -54,7 +71,6 @@ def _require_analyze_only(run_context: RunContext, workflow_type: WorkflowType) 
             "ANALYZE_ONLY assets cannot run under workflow_type "
             f"{workflow_type.value!r}; this prevents accidental dataset mutation"
         )
-    # Defensive sanity: dataset/version identifiers must be present.
     if not run_context.dataset_version_id:
         raise ValueError("RunContext must include dataset_version_id for analyze runs")
 
@@ -63,7 +79,8 @@ def _materialization_metadata(
     *,
     run_context: RunContext,
     workflow_type: WorkflowType,
-    stage: str,
+    stage: JobStage,
+    progress: float,
 ) -> dict[str, Any]:
     return {
         "compute_run_id": run_context.compute_run_id,
@@ -74,30 +91,16 @@ def _materialization_metadata(
         "dataset_version_id": run_context.dataset_version_id,
         "workflow_type": workflow_type.value,
         "mutates_dataset": False,
-        "stage": stage,
+        "stage": stage.value,
+        "progress": progress,
         "skeleton": True,
     }
-
-
-def _emit_stage(
-    *,
-    fake_platform: FakePlatformMetadataClient,
-    run_context: RunContext,
-    stage: str,
-) -> None:
-    emit_stage_event(
-        fake_platform=fake_platform,
-        run_context=run_context,
-        stage=stage,
-        status=ComputeRunStatus.RUNNING,
-    )
 
 
 def _materialize_skeleton(
     context: AssetExecutionContext,
     *,
-    stage: str,
-    extra_metadata: dict[str, Any] | None = None,
+    asset_name: str,
 ) -> MaterializeResult[None]:
     run_context_resource: RunContextResource = context.resources.run_context
     fake_platform: FakePlatformMetadataClient = context.resources.fake_platform
@@ -105,15 +108,18 @@ def _materialize_skeleton(
     run_context = run_context_resource.run_context
     workflow_type = run_context_resource.workflow_type
     _require_analyze_only(run_context, workflow_type)
-    _emit_stage(fake_platform=fake_platform, run_context=run_context, stage=stage)
+
+    stage, progress = _ANALYZE_STAGE_BY_ASSET[asset_name]
+
+    bridge = RunStatusBridge(fake_platform=fake_platform)
+    bridge.emit_stage(run_context=run_context, stage=stage, progress=progress)
 
     metadata = _materialization_metadata(
         run_context=run_context,
         workflow_type=workflow_type,
         stage=stage,
+        progress=progress,
     )
-    if extra_metadata:
-        metadata.update(extra_metadata)
     return MaterializeResult(metadata=metadata)
 
 
@@ -124,7 +130,7 @@ def _materialize_skeleton(
     description="Skeleton: raw asset manifest assembled from immutable raw archive refs.",
 )
 def raw_manifest(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, stage="analyze.raw_manifest")
+    return _materialize_skeleton(context, asset_name="raw_manifest")
 
 
 @asset(
@@ -135,7 +141,7 @@ def raw_manifest(context: AssetExecutionContext) -> MaterializeResult[None]:
     description="Skeleton: validated manifest after schema/contract checks.",
 )
 def validated_manifest(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, stage="analyze.validated_manifest")
+    return _materialize_skeleton(context, asset_name="validated_manifest")
 
 
 @asset(
@@ -146,7 +152,7 @@ def validated_manifest(context: AssetExecutionContext) -> MaterializeResult[None
     description="Skeleton: tabular profile/EDA report (placeholder for tabular plugin).",
 )
 def tabular_profile_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, stage="analyze.tabular_profile_report")
+    return _materialize_skeleton(context, asset_name="tabular_profile_report")
 
 
 @asset(
@@ -157,7 +163,7 @@ def tabular_profile_report(context: AssetExecutionContext) -> MaterializeResult[
     description="Skeleton: per-object analytical passports (placeholder).",
 )
 def object_analytics_passports(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, stage="analyze.object_analytics_passports")
+    return _materialize_skeleton(context, asset_name="object_analytics_passports")
 
 
 @asset(
@@ -168,7 +174,7 @@ def object_analytics_passports(context: AssetExecutionContext) -> MaterializeRes
     description="Skeleton: normalized EvidenceBundle for Decision Core (placeholder).",
 )
 def evidence_bundle(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, stage="analyze.evidence_bundle")
+    return _materialize_skeleton(context, asset_name="evidence_bundle")
 
 
 @asset(
@@ -179,7 +185,7 @@ def evidence_bundle(context: AssetExecutionContext) -> MaterializeResult[None]:
     description="Skeleton: Decision Core dataset-level report (placeholder).",
 )
 def decision_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, stage="analyze.decision_report")
+    return _materialize_skeleton(context, asset_name="decision_report")
 
 
 @asset(
@@ -190,7 +196,7 @@ def decision_report(context: AssetExecutionContext) -> MaterializeResult[None]:
     description="Skeleton: recommended actions surfaced to the platform UI.",
 )
 def recommended_actions(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, stage="analyze.recommended_actions")
+    return _materialize_skeleton(context, asset_name="recommended_actions")
 
 
 @asset(
@@ -201,7 +207,7 @@ def recommended_actions(context: AssetExecutionContext) -> MaterializeResult[Non
     description="Skeleton: review queue for label/privacy/duplicate review.",
 )
 def review_queue(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, stage="analyze.review_queue")
+    return _materialize_skeleton(context, asset_name="review_queue")
 
 
 ANALYZE_ASSETS = (

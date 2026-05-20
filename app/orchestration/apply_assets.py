@@ -26,9 +26,10 @@ from typing import Any
 from dagster import AssetExecutionContext, AssetKey, MaterializeResult, asset
 
 from app.adapters import FakePlatformMetadataClient
-from app.domain import ComputeRunStatus, WorkflowType
+from app.domain import WorkflowType
+from app.orchestration.job_event import JobStage
 from app.orchestration.run_context import ApplyRunContext, RunContextResource
-from app.orchestration.status_bridge import RunContext, emit_stage_event
+from app.orchestration.status_bridge import RunContext, RunStatusBridge
 
 APPLY_GROUP = "apply_selected_actions"
 
@@ -40,6 +41,18 @@ APPLY_ASSET_KEYS: tuple[AssetKey, ...] = (
     AssetKey("model_impact_report"),
     AssetKey("export_package"),
 )
+
+# Apply stages all run after the analyze pipeline has completed; the bridge
+# uses RUNNING_DECISION_CORE for the apply preamble and COMPLETED only at the
+# end of the export stage. Progress monotonically increases.
+_APPLY_STAGE_BY_ASSET: dict[str, tuple[JobStage, float]] = {
+    "action_plan": (JobStage.RUNNING_DECISION_CORE, 0.30),
+    "remediation_execution_report": (JobStage.RUNNING_DECISION_CORE, 0.50),
+    "prepared_dataset": (JobStage.RUNNING_DECISION_CORE, 0.65),
+    "synthetic_dataset": (JobStage.RUNNING_DECISION_CORE, 0.75),
+    "model_impact_report": (JobStage.RUNNING_DECISION_CORE, 0.90),
+    "export_package": (JobStage.COMPLETED, 1.0),
+}
 
 _APPLY_RESOURCE_KEYS = {"run_context", "fake_platform"}
 
@@ -67,7 +80,8 @@ def _apply_metadata(
     *,
     run_context: RunContext,
     apply_context: ApplyRunContext,
-    stage: str,
+    stage: JobStage,
+    progress: float,
 ) -> dict[str, Any]:
     return {
         "compute_run_id": run_context.compute_run_id,
@@ -79,7 +93,8 @@ def _apply_metadata(
         "workflow_type": WorkflowType.APPLY_SELECTED_ACTIONS.value,
         "action_plan_id": apply_context.action_plan_id,
         "decision_report_id": apply_context.decision_report_id,
-        "stage": stage,
+        "stage": stage.value,
+        "progress": progress,
         "skeleton": True,
         # Skeleton emits no candidate artifact; flag stays False until a real
         # ArtifactRegistry write happens in the implementation phase.
@@ -90,7 +105,7 @@ def _apply_metadata(
 def _materialize_apply_skeleton(
     context: AssetExecutionContext,
     *,
-    stage: str,
+    asset_name: str,
 ) -> MaterializeResult[None]:
     run_context_resource: RunContextResource = context.resources.run_context
     fake_platform: FakePlatformMetadataClient = context.resources.fake_platform
@@ -101,18 +116,19 @@ def _materialize_apply_skeleton(
         run_context, workflow_type, run_context_resource.apply_context
     )
 
-    emit_stage_event(
-        fake_platform=fake_platform,
-        run_context=run_context,
-        stage=stage,
-        status=ComputeRunStatus.RUNNING,
-    )
+    stage, progress = _APPLY_STAGE_BY_ASSET[asset_name]
+    bridge = RunStatusBridge(fake_platform=fake_platform)
+    if stage is JobStage.COMPLETED:
+        bridge.emit_completed(run_context=run_context)
+    else:
+        bridge.emit_stage(run_context=run_context, stage=stage, progress=progress)
 
     return MaterializeResult(
         metadata=_apply_metadata(
             run_context=run_context,
             apply_context=resolved_apply,
             stage=stage,
+            progress=progress,
         )
     )
 
@@ -124,7 +140,7 @@ def _materialize_apply_skeleton(
     description="Skeleton: approved ActionPlan loaded from the platform.",
 )
 def action_plan(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_skeleton(context, stage="apply.action_plan")
+    return _materialize_apply_skeleton(context, asset_name="action_plan")
 
 
 @asset(
@@ -135,7 +151,7 @@ def action_plan(context: AssetExecutionContext) -> MaterializeResult[None]:
     description="Skeleton: report produced by ActionPlan step execution.",
 )
 def remediation_execution_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_skeleton(context, stage="apply.remediation_execution_report")
+    return _materialize_apply_skeleton(context, asset_name="remediation_execution_report")
 
 
 @asset(
@@ -146,7 +162,7 @@ def remediation_execution_report(context: AssetExecutionContext) -> MaterializeR
     description="Skeleton: prepared candidate dataset artifact reference (placeholder).",
 )
 def prepared_dataset(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_skeleton(context, stage="apply.prepared_dataset")
+    return _materialize_apply_skeleton(context, asset_name="prepared_dataset")
 
 
 @asset(
@@ -157,7 +173,7 @@ def prepared_dataset(context: AssetExecutionContext) -> MaterializeResult[None]:
     description="Skeleton: synthetic candidate dataset artifact reference (placeholder).",
 )
 def synthetic_dataset(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_skeleton(context, stage="apply.synthetic_dataset")
+    return _materialize_apply_skeleton(context, asset_name="synthetic_dataset")
 
 
 @asset(
@@ -168,7 +184,7 @@ def synthetic_dataset(context: AssetExecutionContext) -> MaterializeResult[None]
     description="Skeleton: baseline vs candidate model impact report (placeholder).",
 )
 def model_impact_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_skeleton(context, stage="apply.model_impact_report")
+    return _materialize_apply_skeleton(context, asset_name="model_impact_report")
 
 
 @asset(
@@ -179,7 +195,7 @@ def model_impact_report(context: AssetExecutionContext) -> MaterializeResult[Non
     description="Skeleton: export package after readiness gates (placeholder).",
 )
 def export_package(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_skeleton(context, stage="apply.export_package")
+    return _materialize_apply_skeleton(context, asset_name="export_package")
 
 
 APPLY_ASSETS = (

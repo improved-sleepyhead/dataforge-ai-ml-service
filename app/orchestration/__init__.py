@@ -16,6 +16,7 @@ from app.orchestration.definitions import (
     build_local_demo_definitions,
     defs,
 )
+from app.orchestration.job_event import JobEvent, JobStage
 from app.orchestration.jobs import (
     ANALYZE_JOB_NAME,
     APPLY_JOB_NAME,
@@ -30,7 +31,12 @@ from app.orchestration.resources import (
     ComputeResources,
 )
 from app.orchestration.run_context import ApplyRunContext, RunContextResource
-from app.orchestration.status_bridge import RunContext, emit_stage_event
+from app.orchestration.status_bridge import (
+    RunContext,
+    RunStatusBridge,
+    emit_stage_event,
+    scan_event_for_raw_pii,
+)
 
 __all__ = [
     "ANALYZE_ASSET_KEYS",
@@ -45,10 +51,13 @@ __all__ = [
     "ApplyRunContext",
     "ComputeResources",
     "FAKE_PLATFORM_RESOURCE_KEY",
+    "JobEvent",
+    "JobStage",
     "OBJECT_STORAGE_RESOURCE_KEY",
     "RUN_CONTEXT_RESOURCE_KEY",
     "RunContext",
     "RunContextResource",
+    "RunStatusBridge",
     "SERVICE_CONFIG_RESOURCE_KEY",
     "build_analyze_job",
     "build_apply_job",
@@ -56,4 +65,5 @@ __all__ = [
     "build_local_demo_definitions",
     "defs",
     "emit_stage_event",
+    "scan_event_for_raw_pii",
 ]
