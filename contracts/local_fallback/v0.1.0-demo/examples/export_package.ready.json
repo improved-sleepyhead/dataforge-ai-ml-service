@@ -1,0 +1,66 @@
+{
+  "export_package_id": "export_package_001",
+  "export_schema_version": "export_package.v1",
+  "dataset_id": "dataset_fraud_demo",
+  "version_id": "dataset_version_v2_imputed_candidate",
+  "source_version_id": "dataset_version_v1",
+  "created_by_job_id": "job_export_001",
+  "status": "READY",
+  "artifacts": [
+    {
+      "artifact_id": "artifact_export_manifest_001",
+      "kind": "EXPORT_MANIFEST",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v2/export/manifest.jsonl",
+      "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/jsonl",
+      "size_bytes": 8192,
+      "schema_version": "manifest_row.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_imputed_candidate",
+        "job_id": "job_export_001",
+        "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at": "2026-05-20T07:50:00Z"
+      }
+    },
+    {
+      "artifact_id": "artifact_dataset_card_001",
+      "kind": "DATASET_CARD",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v2/export/dataset_card.md",
+      "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "media_type": "text/markdown",
+      "size_bytes": 2048,
+      "schema_version": "dataset_card.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_imputed_candidate",
+        "job_id": "job_export_001",
+        "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at": "2026-05-20T07:50:00Z"
+      }
+    }
+  ],
+  "validation_gates": [
+    {
+      "name": "schema_validation",
+      "status": "passed",
+      "reason_codes": []
+    },
+    {
+      "name": "privacy_check",
+      "status": "passed",
+      "reason_codes": []
+    }
+  ],
+  "object_counts": {
+    "included": 998,
+    "blocked": 0,
+    "excluded": 2
+  },
+  "blocked_reason_codes": [],
+  "lineage": {
+    "parent_version_id": "dataset_version_v1",
+    "action_plan_id": "action_plan_001",
+    "decision_report_id": "decision_report_001",
+    "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "created_at": "2026-05-20T07:50:00Z"
+}

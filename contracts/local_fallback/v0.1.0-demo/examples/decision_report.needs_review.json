@@ -1,0 +1,67 @@
+{
+  "decision_report_id": "decision_report_001",
+  "dataset_id": "dataset_fraud_demo",
+  "version_id": "dataset_version_v1",
+  "decision_schema_version": "decision_report.v1",
+  "dataset_decision": "NEEDS_REVIEW",
+  "readiness": {
+    "status": "NOT_READY_FOR_EXPORT",
+    "score": 0.63,
+    "reason_codes": [
+      "privacy_review_required",
+      "label_review_required"
+    ]
+  },
+  "critical_blockers": [
+    {
+      "code": "PII_UNMASKED",
+      "severity": "critical",
+      "message": "Unmasked PII candidates require redaction before export.",
+      "evidence_refs": [
+        {
+          "kind": "EVIDENCE_BUNDLE",
+          "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/evidence/evidence_txn_00123.json"
+        }
+      ]
+    }
+  ],
+  "safe_actions_available": true,
+  "recommended_next_job": "PREVIEW_ACTION_PLAN",
+  "recommended_actions": [
+    {
+      "recommendation_id": "rec_label_review_001",
+      "action": "SEND_TO_LABEL_REVIEW",
+      "modality": "tabular",
+      "count": 2,
+      "reason_codes": [
+        "high_model_uncertainty",
+        "ambiguous_object"
+      ],
+      "reason": "Prediction-derived ambiguity requires label review before export.",
+      "segment": "fraud=true",
+      "method_recommendation_id": null,
+      "requires_approval": false
+    },
+    {
+      "recommendation_id": "rec_impute_income_001",
+      "action": "IMPUTE_MISSING_VALUES",
+      "modality": "tabular",
+      "count": 42,
+      "reason_codes": [
+        "missing_monthly_income",
+        "segment_dependent_missingness"
+      ],
+      "reason": "Monthly income has segment-dependent missingness.",
+      "segment": "column=monthly_income",
+      "method_recommendation_id": "method_rec_impute_income_001",
+      "requires_approval": false
+    }
+  ],
+  "policy_versions": {
+    "decision_policy": "decision_v0",
+    "score_policy": "dataforge_score_v0",
+    "privacy_policy": "privacy_v0",
+    "method_policy": "method_selection_v0"
+  },
+  "generated_at": "2026-05-20T07:30:00Z"
+}

@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/dataforge_report.schema.json",
+  "title": "DataForgeReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_schema_version",
+    "dataset_id",
+    "version_id",
+    "workflow_type",
+    "mutates_dataset",
+    "overview",
+    "score",
+    "modality_scores",
+    "blockers",
+    "recommendations",
+    "review_queues",
+    "detail_artifacts",
+    "prediction_section",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["kind", "uri"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "pattern": "^s3://[^\\s]+$"}
+      }
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "pattern": "^s3://[^\\s]+$"},
+        "hash": {"$ref": "#/$defs/sha256"},
+        "media_type": {"type": "string", "minLength": 1},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "schema_version": {"type": "string", "minLength": 1},
+        "lineage": {
+          "type": "object",
+          "required": ["parent_version_id", "job_id", "config_hash", "created_at"],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {"type": "string", "minLength": 1},
+            "job_id": {"type": "string", "minLength": 1},
+            "config_hash": {"$ref": "#/$defs/sha256"},
+            "created_at": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    },
+    "critical_blocker": {
+      "type": "object",
+      "required": ["code", "severity", "message", "evidence_refs"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "severity": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1},
+        "evidence_refs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidence_ref"}
+        }
+      }
+    },
+    "recommended_action": {
+      "type": "object",
+      "required": [
+        "recommendation_id",
+        "action",
+        "modality",
+        "count",
+        "reason_codes",
+        "reason",
+        "segment",
+        "method_recommendation_id",
+        "requires_approval"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "recommendation_id": {"type": "string", "minLength": 1},
+        "action": {"type": "string", "minLength": 1},
+        "modality": {
+          "type": "string",
+          "enum": ["tabular", "text", "image", "video", "audio", "document_ocr", "multimodal"]
+        },
+        "count": {"type": "integer", "minimum": 0},
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "reason": {"type": "string", "minLength": 1},
+        "segment": {"type": ["string", "null"]},
+        "method_recommendation_id": {"type": ["string", "null"]},
+        "requires_approval": {"type": "boolean"}
+      }
+    }
+  },
+  "properties": {
+    "report_id": {"type": "string", "minLength": 1},
+    "report_schema_version": {"type": "string", "minLength": 1},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "version_id": {"type": "string", "minLength": 1},
+    "workflow_type": {
+      "type": "string",
+      "enum": ["ANALYZE_ONLY", "PREVIEW_ACTION_PLAN", "APPLY_SELECTED_ACTIONS", "EXPORT"]
+    },
+    "mutates_dataset": {"type": "boolean"},
+    "overview": {"type": "object"},
+    "score": {
+      "type": "object",
+      "required": ["value", "policy_version", "components", "reason_codes"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {"type": "number", "minimum": 0, "maximum": 1},
+        "policy_version": {"type": "string", "minLength": 1},
+        "components": {
+          "type": "object",
+          "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "modality_scores": {
+      "type": "object",
+      "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+    },
+    "blockers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/critical_blocker"}
+    },
+    "recommendations": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/recommended_action"}
+    },
+    "review_queues": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidence_ref"}
+    },
+    "detail_artifacts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/artifact_ref"}
+    },
+    "prediction_section": {
+      "type": "object",
+      "required": [
+        "status",
+        "reason",
+        "prediction_manifest_ref",
+        "ambiguous_object_count",
+        "probable_label_error_count"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"type": "string", "enum": ["available", "not_applicable", "unavailable"]},
+        "reason": {"type": ["string", "null"]},
+        "prediction_manifest_ref": {
+          "anyOf": [
+            {"$ref": "#/$defs/evidence_ref"},
+            {"type": "null"}
+          ]
+        },
+        "ambiguous_object_count": {"type": "integer", "minimum": 0},
+        "probable_label_error_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"}
+  }
+}

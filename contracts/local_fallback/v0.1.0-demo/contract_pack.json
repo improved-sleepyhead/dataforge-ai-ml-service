@@ -1,0 +1,149 @@
+{
+  "contract_pack_id": "dataforgeai-local-fallback",
+  "version": "local-fallback-v0.1.0-demo",
+  "source": "temporary_ml_service_fixture_until_dataforgeai_contracts_is_ready",
+  "schemas": [
+    {
+      "name": "artifact_ref",
+      "path": "schemas/artifact_ref.schema.json"
+    },
+    {
+      "name": "compute_run",
+      "path": "schemas/compute_run.schema.json"
+    },
+    {
+      "name": "dataset_version",
+      "path": "schemas/dataset_version.schema.json"
+    },
+    {
+      "name": "prediction_manifest",
+      "path": "schemas/prediction_manifest.schema.json"
+    },
+    {
+      "name": "platform_job",
+      "path": "schemas/platform_job.schema.json"
+    },
+    {
+      "name": "error_response",
+      "path": "schemas/error_response.schema.json"
+    },
+    {
+      "name": "manifest_row",
+      "path": "schemas/manifest_row.schema.json"
+    },
+    {
+      "name": "object_analytical_passport",
+      "path": "schemas/object_analytical_passport.schema.json"
+    },
+    {
+      "name": "evidence_bundle",
+      "path": "schemas/evidence_bundle.schema.json"
+    },
+    {
+      "name": "decision_report",
+      "path": "schemas/decision_report.schema.json"
+    },
+    {
+      "name": "method_recommendation",
+      "path": "schemas/method_recommendation.schema.json"
+    },
+    {
+      "name": "action_plan",
+      "path": "schemas/action_plan.schema.json"
+    },
+    {
+      "name": "review_queue",
+      "path": "schemas/review_queue.schema.json"
+    },
+    {
+      "name": "dataforge_report",
+      "path": "schemas/dataforge_report.schema.json"
+    },
+    {
+      "name": "export_package",
+      "path": "schemas/export_package.schema.json"
+    }
+  ],
+  "examples": [
+    {
+      "name": "artifact_ref.basic",
+      "schema": "artifact_ref",
+      "path": "examples/artifact_ref.basic.json"
+    },
+    {
+      "name": "compute_run.analyze_only",
+      "schema": "compute_run",
+      "path": "examples/compute_run.analyze_only.json"
+    },
+    {
+      "name": "dataset_version.context",
+      "schema": "dataset_version",
+      "path": "examples/dataset_version.context.json"
+    },
+    {
+      "name": "prediction_manifest.fraud",
+      "schema": "prediction_manifest",
+      "path": "examples/prediction_manifest.fraud.json"
+    },
+    {
+      "name": "platform_job.context",
+      "schema": "platform_job",
+      "path": "examples/platform_job.context.json"
+    },
+    {
+      "name": "error_response.invalid_job_payload",
+      "schema": "error_response",
+      "path": "examples/error_response.invalid_job_payload.json"
+    },
+    {
+      "name": "manifest_row.tabular",
+      "schema": "manifest_row",
+      "path": "examples/manifest_row.tabular.json"
+    },
+    {
+      "name": "object_analytical_passport.with_prediction",
+      "schema": "object_analytical_passport",
+      "path": "examples/object_analytical_passport.with_prediction.json"
+    },
+    {
+      "name": "evidence_bundle.with_prediction",
+      "schema": "evidence_bundle",
+      "path": "examples/evidence_bundle.with_prediction.json"
+    },
+    {
+      "name": "evidence_bundle.no_prediction",
+      "schema": "evidence_bundle",
+      "path": "examples/evidence_bundle.no_prediction.json"
+    },
+    {
+      "name": "decision_report.needs_review",
+      "schema": "decision_report",
+      "path": "examples/decision_report.needs_review.json"
+    },
+    {
+      "name": "method_recommendation.imputation",
+      "schema": "method_recommendation",
+      "path": "examples/method_recommendation.imputation.json"
+    },
+    {
+      "name": "action_plan.imputation_preview",
+      "schema": "action_plan",
+      "path": "examples/action_plan.imputation_preview.json"
+    },
+    {
+      "name": "review_queue.label_review",
+      "schema": "review_queue",
+      "path": "examples/review_queue.label_review.json"
+    },
+    {
+      "name": "dataforge_report.analyze_only",
+      "schema": "dataforge_report",
+      "path": "examples/dataforge_report.analyze_only.json"
+    },
+    {
+      "name": "export_package.ready",
+      "schema": "export_package",
+      "path": "examples/export_package.ready.json"
+    }
+  ]
+}

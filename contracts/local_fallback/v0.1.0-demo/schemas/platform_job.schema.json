@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/platform_job.schema.json",
+  "title": "PlatformJobContext",
+  "type": "object",
+  "required": [
+    "platform_job_id",
+    "organization_id",
+    "project_id",
+    "dataset_id",
+    "dataset_version_id",
+    "job_type",
+    "requested_by",
+    "requested_at",
+    "callback_url"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "platform_job_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "organization_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataset_version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "job_type": {
+      "type": "string",
+      "enum": [
+        "ANALYZE_DATASET",
+        "PREVIEW_ACTION_PLAN",
+        "APPLY_SELECTED_ACTIONS",
+        "EXPORT"
+      ]
+    },
+    "requested_by": {
+      "type": "string",
+      "minLength": 1
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "callback_url": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

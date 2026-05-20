@@ -1,0 +1,84 @@
+{
+  "evidence_bundle_id": "evidence_txn_00123",
+  "object_id": "txn_00123",
+  "dataset_id": "dataset_fraud_demo",
+  "version_id": "dataset_version_v1",
+  "modality": "tabular",
+  "object_type": "table_row",
+  "signals": {
+    "technical_quality": {
+      "value": 0.86,
+      "status": "available",
+      "reason": null
+    },
+    "duplicate_score": {
+      "value": 0.03,
+      "status": "available",
+      "reason": null
+    },
+    "privacy_risk": {
+      "value": 0.1,
+      "status": "available",
+      "reason": null
+    },
+    "label_issue_score": {
+      "value": 0.22,
+      "status": "available",
+      "reason": null
+    },
+    "rare_segment_score": {
+      "value": 0.74,
+      "status": "available",
+      "reason": null
+    },
+    "business_importance": {
+      "value": 0.8,
+      "status": "available",
+      "reason": null
+    },
+    "model_uncertainty": {
+      "value": 0.41,
+      "status": "available",
+      "reason": null
+    },
+    "prediction_confidence": {
+      "value": 0.59,
+      "status": "available",
+      "reason": null
+    },
+    "prediction_margin": {
+      "value": 0.18,
+      "status": "available",
+      "reason": null
+    },
+    "prediction_entropy": {
+      "value": 0.98,
+      "status": "available",
+      "reason": null
+    },
+    "ambiguous_object_score": {
+      "value": 0.61,
+      "status": "available",
+      "reason": null
+    },
+    "probable_label_error_score": {
+      "value": 0.12,
+      "status": "available",
+      "reason": null
+    }
+  },
+  "confidence": {
+    "technical_quality": 0.95,
+    "model_uncertainty": 0.82,
+    "ambiguous_object_score": 0.77,
+    "probable_label_error_score": 0.74
+  },
+  "evidence_refs": [
+    {
+      "kind": "PREDICTION_MANIFEST",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/predictions.jsonl"
+    }
+  ],
+  "computed_by_job_id": "job_analyze_001",
+  "evidence_schema_version": "evidence_bundle.v1"
+}

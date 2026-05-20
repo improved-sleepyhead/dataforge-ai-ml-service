@@ -1,0 +1,15 @@
+{
+  "organization_id": "org_1",
+  "project_id": "project_1",
+  "dataset_id": "dataset_fraud_demo",
+  "version_id": "dataset_version_v1",
+  "parent_version_id": null,
+  "version_name": "v1_raw",
+  "created_by_job_id": "platform_job_001",
+  "created_at": "2026-05-20T07:00:00Z",
+  "risk_profile": "demo_strict",
+  "policy_version": "demo_strict_v1",
+  "artifact_refs": [
+    "artifact_manifest_001"
+  ]
+}

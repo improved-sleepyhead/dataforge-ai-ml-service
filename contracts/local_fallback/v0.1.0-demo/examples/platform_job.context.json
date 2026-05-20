@@ -1,0 +1,11 @@
+{
+  "platform_job_id": "platform_job_001",
+  "organization_id": "org_1",
+  "project_id": "project_1",
+  "dataset_id": "dataset_fraud_demo",
+  "dataset_version_id": "dataset_version_v1",
+  "job_type": "ANALYZE_DATASET",
+  "requested_by": "platform_service",
+  "requested_at": "2026-05-20T07:05:00Z",
+  "callback_url": "http://platform.local/api/ml/jobs/callback"
+}

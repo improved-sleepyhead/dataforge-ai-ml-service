@@ -1,0 +1,67 @@
+{
+  "action_plan_id": "action_plan_001",
+  "plan_schema_version": "action_plan.v1",
+  "source_dataset_version_id": "dataset_version_v1",
+  "target_version_name": "dataset_version_v2_imputed_candidate",
+  "created_from_decision_report": "decision_report_001",
+  "selected_decision_ids": [
+    "rec_impute_income_001"
+  ],
+  "created_by_user_id": "platform_user_123",
+  "policy_version": "method_selection_v0",
+  "requires_approval": false,
+  "approval_request_id": null,
+  "execution_mode": "PREVIEW_ACTION_PLAN",
+  "steps": [
+    {
+      "step_id": "impute_income_001",
+      "type": "IMPUTE_MISSING_VALUES",
+      "depends_on": [],
+      "idempotency_key": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "method_id": "group_median",
+      "plugin_id": "dataforge.tabular",
+      "plugin_version": "0.1.0",
+      "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "policy_version": "method_selection_v0",
+      "validation_gates": [
+        "schema_validation",
+        "business_rules",
+        "privacy_check"
+      ],
+      "preconditions": [
+        "source_version_is_immutable",
+        "target_column_not_used_for_imputation"
+      ],
+      "input_artifacts": [
+        "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/manifest.jsonl"
+      ],
+      "output_artifact_kind": "CANDIDATE_DATASET_VERSION",
+      "config": {
+        "column": "monthly_income",
+        "group_key": "customer_segment",
+        "add_missingness_indicator": true
+      },
+      "random_seed": null,
+      "retry_policy": {
+        "max_attempts": 2,
+        "retryable_errors": [
+          "TRANSIENT_STORAGE_ERROR",
+          "DAGSTER_WORKER_RESTART"
+        ]
+      },
+      "on_failure": "fail_plan_keep_artifacts_unpromoted",
+      "promotion_scope": "candidate_only"
+    }
+  ],
+  "validation_gates": [
+    "schema_validation",
+    "business_rules",
+    "privacy_check"
+  ],
+  "expected_outputs": [
+    "imputation_report",
+    "candidate_dataset_version",
+    "version_compare_report"
+  ],
+  "created_at": "2026-05-20T07:35:00Z"
+}

@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/action_plan.schema.json",
+  "title": "ActionPlan",
+  "type": "object",
+  "required": [
+    "action_plan_id",
+    "plan_schema_version",
+    "source_dataset_version_id",
+    "target_version_name",
+    "created_from_decision_report",
+    "selected_decision_ids",
+    "created_by_user_id",
+    "policy_version",
+    "requires_approval",
+    "approval_request_id",
+    "execution_mode",
+    "steps",
+    "validation_gates",
+    "expected_outputs",
+    "created_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "string_list": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "retry_policy": {
+      "type": "object",
+      "required": ["max_attempts", "retryable_errors"],
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts": {"type": "integer", "minimum": 1},
+        "retryable_errors": {"$ref": "#/$defs/string_list"}
+      }
+    },
+    "step": {
+      "type": "object",
+      "required": [
+        "step_id",
+        "type",
+        "depends_on",
+        "idempotency_key",
+        "method_id",
+        "plugin_id",
+        "plugin_version",
+        "config_hash",
+        "policy_version",
+        "validation_gates",
+        "preconditions",
+        "input_artifacts",
+        "output_artifact_kind",
+        "config",
+        "random_seed",
+        "retry_policy",
+        "on_failure",
+        "promotion_scope"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "step_id": {"type": "string", "minLength": 1},
+        "type": {"type": "string", "minLength": 1},
+        "depends_on": {"$ref": "#/$defs/string_list"},
+        "idempotency_key": {"$ref": "#/$defs/sha256"},
+        "method_id": {"type": "string", "minLength": 1},
+        "plugin_id": {"type": "string", "minLength": 1},
+        "plugin_version": {"type": "string", "minLength": 1},
+        "config_hash": {"$ref": "#/$defs/sha256"},
+        "policy_version": {"type": "string", "minLength": 1},
+        "validation_gates": {"$ref": "#/$defs/string_list"},
+        "preconditions": {"$ref": "#/$defs/string_list"},
+        "input_artifacts": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^s3://[^\\s]+$"}
+        },
+        "output_artifact_kind": {"type": "string", "minLength": 1},
+        "config": {"type": "object"},
+        "random_seed": {"type": ["integer", "null"]},
+        "retry_policy": {"$ref": "#/$defs/retry_policy"},
+        "on_failure": {"type": "string", "minLength": 1},
+        "promotion_scope": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "properties": {
+    "action_plan_id": {"type": "string", "minLength": 1},
+    "plan_schema_version": {"type": "string", "minLength": 1},
+    "source_dataset_version_id": {"type": "string", "minLength": 1},
+    "target_version_name": {"type": "string", "minLength": 1},
+    "created_from_decision_report": {"type": "string", "minLength": 1},
+    "selected_decision_ids": {"$ref": "#/$defs/string_list"},
+    "created_by_user_id": {"type": "string", "minLength": 1},
+    "policy_version": {"type": "string", "minLength": 1},
+    "requires_approval": {"type": "boolean"},
+    "approval_request_id": {"type": ["string", "null"]},
+    "execution_mode": {
+      "type": "string",
+      "enum": ["ANALYZE_ONLY", "PREVIEW_ACTION_PLAN", "APPLY_SELECTED_ACTIONS", "EXPORT"]
+    },
+    "steps": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/step"}
+    },
+    "validation_gates": {"$ref": "#/$defs/string_list"},
+    "expected_outputs": {"$ref": "#/$defs/string_list"},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}
