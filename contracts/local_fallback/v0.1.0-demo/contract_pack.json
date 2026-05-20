@@ -38,6 +38,30 @@
     {
       "name": "evidence_bundle",
       "path": "schemas/evidence_bundle.schema.json"
+    },
+    {
+      "name": "decision_report",
+      "path": "schemas/decision_report.schema.json"
+    },
+    {
+      "name": "method_recommendation",
+      "path": "schemas/method_recommendation.schema.json"
+    },
+    {
+      "name": "action_plan",
+      "path": "schemas/action_plan.schema.json"
+    },
+    {
+      "name": "review_queue",
+      "path": "schemas/review_queue.schema.json"
+    },
+    {
+      "name": "dataforge_report",
+      "path": "schemas/dataforge_report.schema.json"
+    },
+    {
+      "name": "export_package",
+      "path": "schemas/export_package.schema.json"
     }
   ],
   "examples": [
@@ -90,6 +114,36 @@
       "name": "evidence_bundle.no_prediction",
       "schema": "evidence_bundle",
       "path": "examples/evidence_bundle.no_prediction.json"
+    },
+    {
+      "name": "decision_report.needs_review",
+      "schema": "decision_report",
+      "path": "examples/decision_report.needs_review.json"
+    },
+    {
+      "name": "method_recommendation.imputation",
+      "schema": "method_recommendation",
+      "path": "examples/method_recommendation.imputation.json"
+    },
+    {
+      "name": "action_plan.imputation_preview",
+      "schema": "action_plan",
+      "path": "examples/action_plan.imputation_preview.json"
+    },
+    {
+      "name": "review_queue.label_review",
+      "schema": "review_queue",
+      "path": "examples/review_queue.label_review.json"
+    },
+    {
+      "name": "dataforge_report.analyze_only",
+      "schema": "dataforge_report",
+      "path": "examples/dataforge_report.analyze_only.json"
+    },
+    {
+      "name": "export_package.ready",
+      "schema": "export_package",
+      "path": "examples/export_package.ready.json"
     }
   ]
 }

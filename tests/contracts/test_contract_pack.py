@@ -32,6 +32,12 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "evidence_bundle",
         "manifest_row",
         "object_analytical_passport",
+        "decision_report",
+        "method_recommendation",
+        "action_plan",
+        "review_queue",
+        "dataforge_report",
+        "export_package",
     } <= set(pack.schemas)
     assert {example.name for example in pack.examples} == {
         "artifact_ref.basic",
@@ -44,6 +50,12 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "object_analytical_passport.with_prediction",
         "evidence_bundle.with_prediction",
         "evidence_bundle.no_prediction",
+        "decision_report.needs_review",
+        "method_recommendation.imputation",
+        "action_plan.imputation_preview",
+        "review_queue.label_review",
+        "dataforge_report.analyze_only",
+        "export_package.ready",
     }
 
 
@@ -61,6 +73,12 @@ def test_all_contract_examples_validate() -> None:
         "object_analytical_passport.with_prediction",
         "evidence_bundle.with_prediction",
         "evidence_bundle.no_prediction",
+        "decision_report.needs_review",
+        "method_recommendation.imputation",
+        "action_plan.imputation_preview",
+        "review_queue.label_review",
+        "dataforge_report.analyze_only",
+        "export_package.ready",
     ]
 
 

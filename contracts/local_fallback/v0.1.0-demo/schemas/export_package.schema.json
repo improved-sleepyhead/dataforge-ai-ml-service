@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/export_package.schema.json",
+  "title": "ExportPackage",
+  "type": "object",
+  "required": [
+    "export_package_id",
+    "export_schema_version",
+    "dataset_id",
+    "version_id",
+    "source_version_id",
+    "created_by_job_id",
+    "status",
+    "artifacts",
+    "validation_gates",
+    "object_counts",
+    "blocked_reason_codes",
+    "lineage",
+    "created_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {"type": "string", "minLength": 1},
+        "kind": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "pattern": "^s3://[^\\s]+$"},
+        "hash": {"$ref": "#/$defs/sha256"},
+        "media_type": {"type": "string", "minLength": 1},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "schema_version": {"type": "string", "minLength": 1},
+        "lineage": {
+          "type": "object",
+          "required": ["parent_version_id", "job_id", "config_hash", "created_at"],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {"type": "string", "minLength": 1},
+            "job_id": {"type": "string", "minLength": 1},
+            "config_hash": {"$ref": "#/$defs/sha256"},
+            "created_at": {"type": "string", "format": "date-time"}
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "export_package_id": {"type": "string", "minLength": 1},
+    "export_schema_version": {"type": "string", "minLength": 1},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "version_id": {"type": "string", "minLength": 1},
+    "source_version_id": {"type": "string", "minLength": 1},
+    "created_by_job_id": {"type": "string", "minLength": 1},
+    "status": {"type": "string", "enum": ["READY", "BLOCKED"]},
+    "artifacts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/artifact_ref"}
+    },
+    "validation_gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "status", "reason_codes"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "status": {"type": "string", "enum": ["pending", "passed", "failed", "not_applicable"]},
+          "reason_codes": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "object_counts": {
+      "type": "object",
+      "required": ["included", "blocked", "excluded"],
+      "additionalProperties": false,
+      "properties": {
+        "included": {"type": "integer", "minimum": 0},
+        "blocked": {"type": "integer", "minimum": 0},
+        "excluded": {"type": "integer", "minimum": 0}
+      }
+    },
+    "blocked_reason_codes": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "lineage": {
+      "type": "object",
+      "required": ["parent_version_id", "action_plan_id", "decision_report_id", "config_hash"],
+      "additionalProperties": false,
+      "properties": {
+        "parent_version_id": {"type": "string", "minLength": 1},
+        "action_plan_id": {"type": ["string", "null"]},
+        "decision_report_id": {"type": "string", "minLength": 1},
+        "config_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "recommendation_id": "method_rec_impute_income_001",
+  "issue_id": "issue_missing_monthly_income",
+  "action_type": "IMPUTE_MISSING_VALUES",
+  "target": {
+    "scope": "column",
+    "column": "monthly_income"
+  },
+  "recommended_method": {
+    "method_id": "group_median",
+    "plugin_id": "dataforge.tabular",
+    "readiness_level": 4,
+    "requires_approval": false,
+    "reason_codes": [
+      "skewed_numeric_distribution",
+      "segment_dependent_missingness",
+      "target_safe"
+    ]
+  },
+  "candidate_methods": [
+    {
+      "method_id": "group_median",
+      "status": "recommended",
+      "quality_score": 0.82,
+      "risk_score": 0.12,
+      "policy_status": "enabled",
+      "reason": null
+    },
+    {
+      "method_id": "global_median",
+      "status": "available",
+      "quality_score": 0.68,
+      "risk_score": 0.08,
+      "policy_status": "enabled",
+      "reason": null
+    },
+    {
+      "method_id": "pmm",
+      "status": "disabled_by_policy",
+      "quality_score": 0.86,
+      "risk_score": 0.18,
+      "policy_status": "disabled_by_policy",
+      "reason": "pilot capability not enabled for this project profile"
+    }
+  ],
+  "blocked_methods": [
+    {
+      "method_id": "target_imputation",
+      "reason_code": "target_column_auto_imputation_forbidden",
+      "reason": "Target-aware imputation is blocked by policy for this column."
+    }
+  ],
+  "expected_outputs": [
+    "imputation_report",
+    "candidate_dataset_version",
+    "version_compare_report"
+  ],
+  "model_impact_required": true
+}

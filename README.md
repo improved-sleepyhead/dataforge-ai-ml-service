@@ -110,6 +110,8 @@ disabled by default through `DATAFORGE_ALLOW_EXTERNAL_API=false`.
 Until the shared `dataforgeai-contracts` repository publishes canonical schemas,
 this service carries a temporary fallback contract pack at
 `contracts/local_fallback/v0.1.0-demo`. It includes JSON Schemas and examples for
-`ArtifactRef`, `PredictionManifest`, and `ErrorResponse`; `make test-contracts`
-loads the pack and validates all examples without requiring a real backend,
-frontend, or external contract repository.
+core compute-plane contracts including artifacts, contexts, manifests,
+prediction manifests, evidence, decision reports, method recommendations,
+action plans, review queues, DataForge reports, export packages, and errors;
+`make test-contracts` loads the pack and validates all examples without
+requiring a real backend, frontend, or external contract repository.
