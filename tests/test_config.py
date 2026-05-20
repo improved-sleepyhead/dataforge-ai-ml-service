@@ -27,6 +27,8 @@ def test_load_config_with_demo_env() -> None:
     assert config.object_storage.bucket_name == "dataforge-local"
     assert config.platform.callback_url == "http://platform.local/api/ml/jobs/callback"
     assert config.platform.service_signing_secret.get_secret_value() == "local-dev-signing-secret"
+    assert config.platform.service_identity == "dataforge-platform"
+    assert config.platform.signature_max_age_seconds == 300
     assert config.dagster.home == "/tmp/dataforge-dagster"
     assert config.policies.policy_config_path == "configs/policies/demo_strict.yaml"
     assert config.contract_pack_version == "local-fallback-v0.1.0-demo"
@@ -64,4 +66,15 @@ def test_invalid_boolean_env_raises_clear_error() -> None:
     env["DATAFORGE_ALLOW_EXTERNAL_API"] = "maybe"
 
     with pytest.raises(ConfigError, match="Invalid boolean for DATAFORGE_ALLOW_EXTERNAL_API"):
+        load_config(env)
+
+
+def test_invalid_signature_max_age_env_raises_clear_error() -> None:
+    env = demo_env()
+    env["DATAFORGE_PLATFORM_SIGNATURE_MAX_AGE_SECONDS"] = "soon"
+
+    with pytest.raises(
+        ConfigError,
+        match="Invalid integer for DATAFORGE_PLATFORM_SIGNATURE_MAX_AGE_SECONDS",
+    ):
         load_config(env)
