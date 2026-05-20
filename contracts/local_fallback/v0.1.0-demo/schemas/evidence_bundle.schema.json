@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/evidence_bundle.schema.json",
+  "title": "EvidenceBundle",
+  "type": "object",
+  "required": [
+    "evidence_bundle_id",
+    "object_id",
+    "dataset_id",
+    "version_id",
+    "modality",
+    "object_type",
+    "signals",
+    "confidence",
+    "evidence_refs",
+    "computed_by_job_id",
+    "evidence_schema_version"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "signal": {
+      "type": "object",
+      "required": ["value", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "status": {
+          "type": "string",
+          "enum": ["available", "not_applicable", "unavailable"]
+        },
+        "reason": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["kind", "uri"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        }
+      }
+    }
+  },
+  "properties": {
+    "evidence_bundle_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "object_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "modality": {
+      "type": "string",
+      "enum": ["tabular", "text", "image", "video", "audio", "document_ocr", "multimodal"]
+    },
+    "object_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "signals": {
+      "type": "object",
+      "required": [
+        "technical_quality",
+        "duplicate_score",
+        "privacy_risk",
+        "label_issue_score",
+        "rare_segment_score",
+        "business_importance",
+        "model_uncertainty",
+        "prediction_confidence",
+        "prediction_margin",
+        "prediction_entropy",
+        "ambiguous_object_score",
+        "probable_label_error_score"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "technical_quality": {"$ref": "#/$defs/signal"},
+        "duplicate_score": {"$ref": "#/$defs/signal"},
+        "privacy_risk": {"$ref": "#/$defs/signal"},
+        "label_issue_score": {"$ref": "#/$defs/signal"},
+        "rare_segment_score": {"$ref": "#/$defs/signal"},
+        "business_importance": {"$ref": "#/$defs/signal"},
+        "model_uncertainty": {"$ref": "#/$defs/signal"},
+        "prediction_confidence": {"$ref": "#/$defs/signal"},
+        "prediction_margin": {"$ref": "#/$defs/signal"},
+        "prediction_entropy": {"$ref": "#/$defs/signal"},
+        "ambiguous_object_score": {"$ref": "#/$defs/signal"},
+        "probable_label_error_score": {"$ref": "#/$defs/signal"}
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence_ref"
+      }
+    },
+    "computed_by_job_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence_schema_version": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

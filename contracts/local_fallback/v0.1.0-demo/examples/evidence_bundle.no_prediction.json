@@ -1,0 +1,76 @@
+{
+  "evidence_bundle_id": "evidence_txn_00999",
+  "object_id": "txn_00999",
+  "dataset_id": "dataset_fraud_demo",
+  "version_id": "dataset_version_v1",
+  "modality": "tabular",
+  "object_type": "table_row",
+  "signals": {
+    "technical_quality": {
+      "value": 0.91,
+      "status": "available",
+      "reason": null
+    },
+    "duplicate_score": {
+      "value": 0.02,
+      "status": "available",
+      "reason": null
+    },
+    "privacy_risk": {
+      "value": 0.0,
+      "status": "available",
+      "reason": null
+    },
+    "label_issue_score": {
+      "value": null,
+      "status": "not_applicable",
+      "reason": "prediction_manifest_not_provided"
+    },
+    "rare_segment_score": {
+      "value": 0.19,
+      "status": "available",
+      "reason": null
+    },
+    "business_importance": {
+      "value": 0.45,
+      "status": "available",
+      "reason": null
+    },
+    "model_uncertainty": {
+      "value": null,
+      "status": "not_applicable",
+      "reason": "prediction_manifest_not_provided"
+    },
+    "prediction_confidence": {
+      "value": null,
+      "status": "not_applicable",
+      "reason": "prediction_manifest_not_provided"
+    },
+    "prediction_margin": {
+      "value": null,
+      "status": "not_applicable",
+      "reason": "prediction_manifest_not_provided"
+    },
+    "prediction_entropy": {
+      "value": null,
+      "status": "not_applicable",
+      "reason": "prediction_manifest_not_provided"
+    },
+    "ambiguous_object_score": {
+      "value": null,
+      "status": "not_applicable",
+      "reason": "prediction_manifest_not_provided"
+    },
+    "probable_label_error_score": {
+      "value": null,
+      "status": "not_applicable",
+      "reason": "prediction_manifest_not_provided"
+    }
+  },
+  "confidence": {
+    "technical_quality": 0.94
+  },
+  "evidence_refs": [],
+  "computed_by_job_id": "job_analyze_001",
+  "evidence_schema_version": "evidence_bundle.v1"
+}

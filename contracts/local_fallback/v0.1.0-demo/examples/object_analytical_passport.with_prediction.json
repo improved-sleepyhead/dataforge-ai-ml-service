@@ -1,0 +1,70 @@
+{
+  "object_id": "txn_00123",
+  "analytics_schema_version": "object_analytics.v1",
+  "identity": {
+    "object_id": "txn_00123",
+    "dataset_id": "dataset_fraud_demo",
+    "version_id": "dataset_version_v1",
+    "modality": "tabular",
+    "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "parent_object_id": null,
+    "created_by_job_id": "job_analyze_001",
+    "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "metadata": {
+      "case_id": "case_001"
+    }
+  },
+  "technical_quality": {
+    "score": 0.86,
+    "status": "available",
+    "metrics": {
+      "missing_value_ratio": 0.02,
+      "format_valid": true
+    }
+  },
+  "privacy": {
+    "risk_score": 0.1,
+    "status": "available",
+    "pii_detected": false,
+    "pii_types": [],
+    "export_eligibility": "allowed"
+  },
+  "duplicate_signals": {
+    "duplicate_score": 0.03,
+    "status": "available",
+    "duplicate_cluster_id": null
+  },
+  "learning_value": {
+    "rare_segment_score": 0.74,
+    "diversity_score": 0.68,
+    "model_uncertainty": 0.41,
+    "label_issue_score": 0.22,
+    "ambiguous_object_score": 0.61,
+    "probable_label_error_score": 0.12,
+    "decision_value_score": 0.77,
+    "missing_reason": null
+  },
+  "prediction": {
+    "model_id": "fraud_baseline",
+    "model_version": "2026-05-20",
+    "true_label": "fraud",
+    "predicted_label": "not_fraud",
+    "confidence": 0.59,
+    "margin": 0.18,
+    "normalized_entropy": 0.98
+  },
+  "decision": {
+    "action": "SEND_TO_LABEL_REVIEW",
+    "reason_codes": [
+      "high_model_uncertainty",
+      "ambiguous_object"
+    ]
+  },
+  "evidence_refs": [
+    {
+      "kind": "PREDICTION_MANIFEST",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/predictions.jsonl"
+    }
+  ],
+  "computed_at": "2026-05-20T07:20:00Z"
+}

@@ -26,6 +26,18 @@
     {
       "name": "error_response",
       "path": "schemas/error_response.schema.json"
+    },
+    {
+      "name": "manifest_row",
+      "path": "schemas/manifest_row.schema.json"
+    },
+    {
+      "name": "object_analytical_passport",
+      "path": "schemas/object_analytical_passport.schema.json"
+    },
+    {
+      "name": "evidence_bundle",
+      "path": "schemas/evidence_bundle.schema.json"
     }
   ],
   "examples": [
@@ -58,6 +70,26 @@
       "name": "error_response.invalid_job_payload",
       "schema": "error_response",
       "path": "examples/error_response.invalid_job_payload.json"
+    },
+    {
+      "name": "manifest_row.tabular",
+      "schema": "manifest_row",
+      "path": "examples/manifest_row.tabular.json"
+    },
+    {
+      "name": "object_analytical_passport.with_prediction",
+      "schema": "object_analytical_passport",
+      "path": "examples/object_analytical_passport.with_prediction.json"
+    },
+    {
+      "name": "evidence_bundle.with_prediction",
+      "schema": "evidence_bundle",
+      "path": "examples/evidence_bundle.with_prediction.json"
+    },
+    {
+      "name": "evidence_bundle.no_prediction",
+      "schema": "evidence_bundle",
+      "path": "examples/evidence_bundle.no_prediction.json"
     }
   ]
 }

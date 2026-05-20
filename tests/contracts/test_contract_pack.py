@@ -29,6 +29,9 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "prediction_manifest",
         "platform_job",
         "error_response",
+        "evidence_bundle",
+        "manifest_row",
+        "object_analytical_passport",
     } <= set(pack.schemas)
     assert {example.name for example in pack.examples} == {
         "artifact_ref.basic",
@@ -37,6 +40,10 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "prediction_manifest.fraud",
         "platform_job.context",
         "error_response.invalid_job_payload",
+        "manifest_row.tabular",
+        "object_analytical_passport.with_prediction",
+        "evidence_bundle.with_prediction",
+        "evidence_bundle.no_prediction",
     }
 
 
@@ -50,6 +57,10 @@ def test_all_contract_examples_validate() -> None:
         "prediction_manifest.fraud",
         "platform_job.context",
         "error_response.invalid_job_payload",
+        "manifest_row.tabular",
+        "object_analytical_passport.with_prediction",
+        "evidence_bundle.with_prediction",
+        "evidence_bundle.no_prediction",
     ]
 
 

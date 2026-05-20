@@ -1,0 +1,24 @@
+{
+  "object_id": "txn_00123",
+  "dataset_id": "dataset_fraud_demo",
+  "version_id": "dataset_version_v1",
+  "modality": "tabular",
+  "asset_uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/transactions.csv",
+  "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "metadata": {
+    "case_id": "case_001",
+    "customer_id_hash": "cust_hash_001",
+    "row_number": 123
+  },
+  "lineage": {
+    "source_artifact_id": "artifact_transactions_raw",
+    "parent_version_id": "dataset_version_raw_001",
+    "created_by_job_id": "job_manifest_001",
+    "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "annotation_uri": null,
+  "label": "fraud",
+  "split": "validation",
+  "source_system": "demo_archive",
+  "embedding_refs": {}
+}
