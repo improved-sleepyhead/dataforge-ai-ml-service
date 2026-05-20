@@ -57,3 +57,29 @@ tests/
 - External AI/network egress is disabled by default and must be policy-gated.
 - Plugins produce normalized, contract-compatible evidence; Decision Core
   consumes `EvidenceBundle`-style outputs rather than plugin-private data.
+
+## Local Tooling
+
+Create a local virtual environment and install development dependencies:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+make install-dev
+```
+
+Run quality gates:
+
+```bash
+make lint
+make typecheck
+make test
+make test-contracts
+make test-plugins
+make test-security
+make test-e2e-compute-demo
+```
+
+The local setup uses only development dependencies declared in
+`pyproject.toml`. It does not require production secrets, object-storage
+credentials, platform signing keys, or external AI credentials.
