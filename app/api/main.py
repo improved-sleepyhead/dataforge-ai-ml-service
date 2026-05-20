@@ -14,6 +14,8 @@ from app.api.schemas import HealthResponse
 from app.api.security import PlatformIdentityDep, ServiceSignatureError
 from app.domain import ErrorBody, ErrorCode, ErrorResponse
 from app.kernel.config import ServiceConfig
+from app.plugin_sdk import CapabilitiesResponse
+from app.plugins import build_static_plugin_manager
 from app.validation.contracts import load_contract_pack
 
 SERVICE_PACKAGE_NAME = "dataforgeai-ml-service"
@@ -104,6 +106,15 @@ def create_app(
             service_version=service_version(),
             contract_pack_version=contract_pack.version,
         )
+
+    @application.get(
+        f"{API_PREFIX}/capabilities",
+        response_model=CapabilitiesResponse,
+        responses={500: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        tags=["system"],
+    )
+    async def capabilities() -> CapabilitiesResponse:
+        return build_static_plugin_manager().capabilities()
 
     if include_test_error_route:
         _add_test_error_routes(application)
