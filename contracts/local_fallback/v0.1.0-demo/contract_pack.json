@@ -66,6 +66,10 @@
     {
       "name": "tabular_profile_report",
       "path": "schemas/tabular_profile_report.schema.json"
+    },
+    {
+      "name": "prediction_manifest_row",
+      "path": "schemas/prediction_manifest_row.schema.json"
     }
   ],
   "examples": [
@@ -153,6 +157,11 @@
       "name": "tabular_profile_report.fraud",
       "schema": "tabular_profile_report",
       "path": "examples/tabular_profile_report.fraud.json"
+    },
+    {
+      "name": "prediction_manifest_row.fraud",
+      "schema": "prediction_manifest_row",
+      "path": "examples/prediction_manifest_row.fraud.json"
     }
   ]
 }
