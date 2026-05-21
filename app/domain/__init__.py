@@ -95,6 +95,13 @@ from app.domain.profile import (
     TabularProfileLineage,
     TabularProfileReport,
 )
+from app.domain.text_ocr import (
+    TextDuplicateGroup,
+    TextOcrReport,
+    TextOcrSourceKind,
+    TextOcrSourceReport,
+    TextValidationIssue,
+)
 
 __all__ = [
     "ArtifactLineage",
@@ -183,6 +190,11 @@ __all__ = [
     "TabularProfileLineage",
     "TabularProfileReport",
     "TechnicalQualityBlock",
+    "TextDuplicateGroup",
+    "TextOcrReport",
+    "TextOcrSourceKind",
+    "TextOcrSourceReport",
+    "TextValidationIssue",
     "ValidationGateResult",
     "WorkflowType",
 ]
