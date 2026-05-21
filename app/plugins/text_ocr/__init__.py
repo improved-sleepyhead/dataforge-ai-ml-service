@@ -10,6 +10,12 @@ TASK-028 so this plugin can stay deterministic, stdlib-only and policy
 free.
 """
 
+from app.plugins.text_ocr.pii import (
+    RedactedRecord,
+    aggregate_pii,
+    detect_pii,
+    redact_record,
+)
 from app.plugins.text_ocr.validator import (
     OCR_RECORD_SCHEMA_NAME,
     SUPPORT_MESSAGE_SCHEMA_NAME,
@@ -19,6 +25,7 @@ from app.plugins.text_ocr.validator import (
     TextRecordParser,
     build_text_ocr_report,
     normalize_text,
+    produce_redacted_jsonl,
     validate_ocr_records_jsonl,
     validate_support_messages_jsonl,
 )
@@ -28,10 +35,15 @@ __all__ = [
     "OCR_RECORD_SCHEMA_NAME",
     "SUPPORT_MESSAGE_SCHEMA_NAME",
     "TEXT_OCR_REPORT_SCHEMA_VERSION",
+    "RedactedRecord",
     "TextOcrBuildRequest",
     "TextRecordParser",
+    "aggregate_pii",
     "build_text_ocr_report",
+    "detect_pii",
     "normalize_text",
+    "produce_redacted_jsonl",
+    "redact_record",
     "validate_ocr_records_jsonl",
     "validate_support_messages_jsonl",
 ]

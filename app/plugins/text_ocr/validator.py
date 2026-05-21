@@ -38,9 +38,11 @@ from app.domain import (
     TextOcrReport,
     TextOcrSourceKind,
     TextOcrSourceReport,
+    TextPiiFindingsForRecord,
     TextValidationIssue,
 )
 from app.domain.common import NonEmptyStr, Sha256Digest
+from app.plugins.text_ocr.pii import RedactedRecord, redact_record
 
 SUPPORT_MESSAGE_SCHEMA_NAME = "support_message"
 OCR_RECORD_SCHEMA_NAME = "ocr_record"
@@ -114,6 +116,7 @@ def validate_support_messages_jsonl(
     *,
     source_name: str = "support_messages.jsonl",
     min_text_length: int = _DEFAULT_MIN_TEXT_LENGTH,
+    detect_pii: bool = False,
 ) -> TextOcrSourceReport:
     parser = TextRecordParser(
         source_kind=_SUPPORT_PARSER.source_kind,
@@ -122,7 +125,9 @@ def validate_support_messages_jsonl(
         min_text_length=min_text_length,
         require_ocr_confidence=False,
     )
-    return _validate_jsonl(data, parser=parser, source_name=source_name)
+    return _validate_jsonl(
+        data, parser=parser, source_name=source_name, detect_pii=detect_pii
+    )
 
 
 def validate_ocr_records_jsonl(
@@ -130,6 +135,7 @@ def validate_ocr_records_jsonl(
     *,
     source_name: str = "ocr_records.jsonl",
     min_text_length: int = _DEFAULT_MIN_TEXT_LENGTH,
+    detect_pii: bool = False,
 ) -> TextOcrSourceReport:
     parser = TextRecordParser(
         source_kind=_OCR_PARSER.source_kind,
@@ -138,7 +144,9 @@ def validate_ocr_records_jsonl(
         min_text_length=min_text_length,
         require_ocr_confidence=_OCR_PARSER.require_ocr_confidence,
     )
-    return _validate_jsonl(data, parser=parser, source_name=source_name)
+    return _validate_jsonl(
+        data, parser=parser, source_name=source_name, detect_pii=detect_pii
+    )
 
 
 def build_text_ocr_report(
@@ -155,6 +163,12 @@ def build_text_ocr_report(
     total_issues = sum(s.issue_count for s in sources_tuple)
     total_dup_groups = sum(len(s.duplicate_groups) for s in sources_tuple)
     total_dup_records = sum(s.duplicate_record_count for s in sources_tuple)
+    total_pii_records = sum(s.pii_record_count for s in sources_tuple)
+    total_pii_tokens = sum(s.pii_token_count for s in sources_tuple)
+    total_redacted = sum(s.redacted_record_count for s in sources_tuple)
+    review_queue: list[str] = []
+    for source in sources_tuple:
+        review_queue.extend(source.review_queue_object_ids)
     report = TextOcrReport(
         report_id=report_id or f"text_ocr_report_{uuid.uuid4().hex[:16]}",
         dataset_id=request.dataset_id,
@@ -168,9 +182,61 @@ def build_text_ocr_report(
         total_issue_count=total_issues,
         total_duplicate_group_count=total_dup_groups,
         total_duplicate_record_count=total_dup_records,
+        total_pii_record_count=total_pii_records,
+        total_pii_token_count=total_pii_tokens,
+        total_redacted_record_count=total_redacted,
+        review_queue_object_ids=tuple(sorted(set(review_queue))),
         generated_at=generated_at or datetime.now(UTC),
     )
     return BuildTextOcrReportResult(report=report)
+
+
+def produce_redacted_jsonl(
+    data: bytes,
+    *,
+    detect_pii_only_records: bool = False,
+) -> tuple[bytes, list[RedactedRecord]]:
+    """Return redacted JSONL bytes and per-record findings.
+
+    Each output line carries ``object_id``, ``redacted_text``,
+    ``pii_token_count``, and ``redacted_text_sha256`` — never the raw
+    text. When ``detect_pii_only_records`` is True, only records with at
+    least one finding are included in the output (the rest stay in the
+    raw JSONL only).
+    """
+    text = data.decode("utf-8")
+    records: list[RedactedRecord] = []
+    out_lines: list[str] = []
+    for line in text.splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        object_id = payload.get("object_id")
+        raw_text = payload.get("text")
+        if not isinstance(object_id, str) or not isinstance(raw_text, str):
+            continue
+        record = redact_record(object_id=object_id, text=raw_text)
+        records.append(record)
+        if detect_pii_only_records and record.pii_token_count == 0:
+            continue
+        out_lines.append(
+            json.dumps(
+                {
+                    "object_id": record.object_id,
+                    "redacted_text": record.redacted_text,
+                    "pii_token_count": record.pii_token_count,
+                    "redacted_text_sha256": record.redacted_text_sha256,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        )
+    return ("\n".join(out_lines) + ("\n" if out_lines else "")).encode("utf-8"), records
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +249,7 @@ def _validate_jsonl(
     *,
     parser: TextRecordParser,
     source_name: str,
+    detect_pii: bool = False,
 ) -> TextOcrSourceReport:
     issues: list[TextValidationIssue] = []
     records: list[_ParsedRecord] = []
@@ -239,6 +306,32 @@ def _validate_jsonl(
         sum(ocr_confidences) / len(ocr_confidences) if ocr_confidences else None
     )
 
+    pii_findings: tuple[TextPiiFindingsForRecord, ...] = ()
+    pii_record_count = 0
+    pii_token_count = 0
+    redacted_record_count = 0
+    review_queue_object_ids: tuple[str, ...] = ()
+    if detect_pii:
+        redacted_records = [
+            redact_record(object_id=record.object_id, text=record.raw_text)
+            for record in records
+        ]
+        from app.plugins.text_ocr.pii import aggregate_pii
+
+        pii_findings, pii_record_count, pii_token_count = aggregate_pii(
+            redacted_records
+        )
+        redacted_record_count = pii_record_count
+        review_queue_object_ids = tuple(
+            sorted(
+                {
+                    record.object_id
+                    for record in redacted_records
+                    if record.pii_token_count > 0
+                }
+            )
+        )
+
     return TextOcrSourceReport(
         source_kind=parser.source_kind,
         source_name=source_name,
@@ -253,6 +346,11 @@ def _validate_jsonl(
         min_text_length=min_length,
         max_text_length=max_length,
         average_ocr_confidence=average_ocr_confidence,
+        pii_findings=pii_findings,
+        pii_token_count=pii_token_count,
+        pii_record_count=pii_record_count,
+        redacted_record_count=redacted_record_count,
+        review_queue_object_ids=review_queue_object_ids,
     )
 
 

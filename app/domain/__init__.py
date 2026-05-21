@@ -96,10 +96,14 @@ from app.domain.profile import (
     TabularProfileReport,
 )
 from app.domain.text_ocr import (
+    PiiCategory,
+    PiiFinding,
+    RedactionStatus,
     TextDuplicateGroup,
     TextOcrReport,
     TextOcrSourceKind,
     TextOcrSourceReport,
+    TextPiiFindingsForRecord,
     TextValidationIssue,
 )
 
@@ -167,6 +171,8 @@ __all__ = [
     "ObjectIdentity",
     "ObjectModelErrorSignals",
     "OutlierDiagnostics",
+    "PiiCategory",
+    "PiiFinding",
     "PlatformJobContext",
     "PlatformJobType",
     "PolicyStatus",
@@ -180,6 +186,7 @@ __all__ = [
     "ReadinessAssessment",
     "RecommendedAction",
     "RecommendedMethod",
+    "RedactionStatus",
     "RetryPolicy",
     "ReviewExportPolicy",
     "ReviewQueue",
@@ -194,6 +201,7 @@ __all__ = [
     "TextOcrReport",
     "TextOcrSourceKind",
     "TextOcrSourceReport",
+    "TextPiiFindingsForRecord",
     "TextValidationIssue",
     "ValidationGateResult",
     "WorkflowType",

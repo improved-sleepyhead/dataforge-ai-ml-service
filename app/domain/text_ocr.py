@@ -62,6 +62,52 @@ class TextDuplicateGroup(BaseModel):
     count: int = Field(ge=2)
 
 
+class PiiCategory(StrEnum):
+    """Detected PII categories in text/OCR records."""
+
+    EMAIL = "email"
+    PHONE = "phone"
+    PASSPORT = "passport"
+    PAYMENT_CARD = "payment_card"
+    BANK_ACCOUNT = "bank_account"
+    SECRET = "secret"
+
+
+class PiiFinding(BaseModel):
+    """One PII match within a text/OCR record.
+
+    The finding never echoes the raw matched value — only a stable
+    category, the position range and the count of equivalent matches in
+    the record.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    category: PiiCategory
+    occurrence_count: int = Field(ge=1)
+
+
+class TextPiiFindingsForRecord(BaseModel):
+    """Aggregate per-record PII findings."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    object_id: NonEmptyStr
+    findings: tuple[PiiFinding, ...]
+    pii_token_count: int = Field(ge=0)
+    pii_risk_score: Score
+    redacted_text_sha256: Sha256Digest
+
+
+class RedactionStatus(StrEnum):
+    """Outcome of running the redactor against a record."""
+
+    NOT_NEEDED = "not_needed"
+    REDACTED = "redacted"
+    BLOCKED = "blocked"
+    REQUIRES_REVIEW = "requires_review"
+
+
 class TextOcrSourceReport(BaseModel):
     """Per-source validation/duplicate report."""
 
@@ -80,6 +126,13 @@ class TextOcrSourceReport(BaseModel):
     min_text_length: int = Field(ge=0)
     max_text_length: int = Field(ge=0)
     average_ocr_confidence: Score | None = None
+    pii_findings: tuple[TextPiiFindingsForRecord, ...] = ()
+    pii_token_count: int = Field(default=0, ge=0)
+    pii_record_count: int = Field(default=0, ge=0)
+    redacted_record_count: int = Field(default=0, ge=0)
+    redacted_artifact_uri: str | None = None
+    redacted_artifact_hash: str | None = None
+    review_queue_object_ids: tuple[NonEmptyStr, ...] = ()
 
 
 class TextOcrReport(BaseModel):
@@ -106,13 +159,21 @@ class TextOcrReport(BaseModel):
     total_issue_count: int = Field(ge=0)
     total_duplicate_group_count: int = Field(ge=0)
     total_duplicate_record_count: int = Field(ge=0)
+    total_pii_record_count: int = Field(default=0, ge=0)
+    total_pii_token_count: int = Field(default=0, ge=0)
+    total_redacted_record_count: int = Field(default=0, ge=0)
+    review_queue_object_ids: tuple[NonEmptyStr, ...] = ()
     generated_at: datetime
 
 
 __all__ = [
+    "PiiCategory",
+    "PiiFinding",
+    "RedactionStatus",
     "TextDuplicateGroup",
     "TextOcrReport",
     "TextOcrSourceKind",
     "TextOcrSourceReport",
+    "TextPiiFindingsForRecord",
     "TextValidationIssue",
 ]
