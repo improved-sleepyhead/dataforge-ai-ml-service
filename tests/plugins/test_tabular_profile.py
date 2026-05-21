@@ -165,6 +165,116 @@ def test_pii_like_column_names_are_detected_and_sample_value_redacted() -> None:
 
 
 # ---------------------------------------------------------------------------
+# TASK-024: missingness diagnostics
+# ---------------------------------------------------------------------------
+
+
+def test_missingness_monthly_income_in_expected_range(tmp_path: Path) -> None:
+    """Step 1+2: profiler computes missing_rate for monthly_income in demo data."""
+    storage, registry, _validated, archive_path = _setup_demo(tmp_path)
+    validated = _validated_manifest(storage, registry, archive_path)
+
+    with open_archive_path(archive_path) as reader:
+        result = build_tabular_profile_report(
+            reader,
+            request=_PROFILE_REQUEST,
+            storage=storage,
+            registry=registry,
+            source_manifest_artifact=validated.artifact_ref,
+        )
+
+    report = result.profile_report
+    assert report.missingness is not None
+    missingness = report.missingness
+
+    # Target column detected and has no missing values in demo data.
+    assert missingness.target_column == "is_fraud"
+    assert missingness.target_column_missing is False
+    assert missingness.missing_target_count == 0
+
+    # Segment column detected.
+    assert missingness.segment_column == "customer_segment"
+
+    # monthly_income has ~45 missing values (39 in-segment + 6 outside);
+    # the duplicate-row injection can overwrite a small number of them, so
+    # accept a small range around the expected_counts value.
+    col_map = {cm.column: cm for cm in missingness.columns}
+    income = col_map["monthly_income"]
+    assert 35 <= income.missing_count <= 50
+    assert income.total_count == 200
+    assert 0.17 <= income.missing_rate <= 0.25
+
+    # by_target: missingness conditioned on is_fraud values.
+    assert income.by_target is not None
+    assert income.by_target.group_column == "is_fraud"
+    assert "0" in income.by_target.groups
+    assert "1" in income.by_target.groups
+
+    # by_segment: young_customers has higher missing-income ratio than
+    # the regular_customers segment (the demo intentionally injects more
+    # missingness in young_customers).
+    assert income.by_segment is not None
+    assert income.by_segment.group_column == "customer_segment"
+    young = income.by_segment.groups["young_customers"]
+    regular = income.by_segment.groups["regular_customers"]
+    assert young.missing_ratio > regular.missing_ratio
+    assert young.missing_ratio >= 0.4
+
+
+def test_missing_target_produces_hard_blocker_candidate() -> None:
+    """Step 3: fixture with missing target -> target_column_missing=True."""
+    rows = [
+        {"object_id": "r1", "is_fraud": "1", "amount": "100"},
+        {"object_id": "r2", "is_fraud": "", "amount": "200"},  # missing target
+        {"object_id": "r3", "is_fraud": "0", "amount": "300"},
+    ]
+    report = infer_tabular_profile(
+        iter(rows),
+        columns=("object_id", "is_fraud", "amount"),
+        request=_PROFILE_REQUEST,
+        source_manifest_artifact=_synthetic_manifest_artifact_ref(),
+        profile_id="tabular_profile_missing_target",
+        generated_at=datetime(2026, 5, 20, tzinfo=UTC),
+    )
+
+    assert report.missingness is not None
+    assert report.missingness.target_column == "is_fraud"
+    assert report.missingness.target_column_missing is True
+    assert report.missingness.missing_target_count == 1
+
+
+def test_missingness_no_segment_column() -> None:
+    """When segment_column is None, by_segment is None for all columns."""
+    rows = [
+        {"object_id": "r1", "is_fraud": "1", "value": "10"},
+        {"object_id": "r2", "is_fraud": "0", "value": ""},
+    ]
+    request = ProfileBuildRequest(
+        dataset_id="dataset_demo",
+        version_id="version_demo",
+        parent_version_id="version_demo_parent",
+        created_by_job_id="compute_run_profile",
+        config_hash="sha256:" + "a" * 64,
+        source_artifact_id="raw_archive:demo",
+        source_system="transactions",
+        segment_column=None,
+    )
+    report = infer_tabular_profile(
+        iter(rows),
+        columns=("object_id", "is_fraud", "value"),
+        request=request,
+        source_manifest_artifact=_synthetic_manifest_artifact_ref(),
+        profile_id="tabular_profile_no_segment",
+        generated_at=datetime(2026, 5, 20, tzinfo=UTC),
+    )
+
+    assert report.missingness is not None
+    assert report.missingness.segment_column is None
+    for cm in report.missingness.columns:
+        assert cm.by_segment is None
+
+
+# ---------------------------------------------------------------------------
 # Step 3: artifact saved with hash and contract-compatible
 # ---------------------------------------------------------------------------
 

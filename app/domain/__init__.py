@@ -65,9 +65,13 @@ from app.domain.manifest import (
     PredictionRow,
 )
 from app.domain.profile import (
+    ColumnMissingness,
     ColumnProfile,
     ColumnRole,
     ColumnType,
+    MissingnessByGroup,
+    MissingnessDiagnostics,
+    MissingnessGroupStats,
     TabularProfileLineage,
     TabularProfileReport,
 )
@@ -78,6 +82,7 @@ __all__ = [
     "ActionPlan",
     "ActionPlanStep",
     "BlockedMethod",
+    "ColumnMissingness",
     "ColumnProfile",
     "ColumnRole",
     "ColumnType",
@@ -110,6 +115,9 @@ __all__ = [
     "MethodCandidate",
     "MethodCandidateStatus",
     "MethodRecommendation",
+    "MissingnessByGroup",
+    "MissingnessDiagnostics",
+    "MissingnessGroupStats",
     "NormalizedSignal",
     "ObjectAnalyticalPassport",
     "ObjectDecisionBlock",

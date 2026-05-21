@@ -10,6 +10,16 @@ TASK-023 scope:
   ``DataForgeReport.detail_artifacts`` slot can hold an
   :class:`ArtifactRef` to the registered report.
 
+TASK-024 extension:
+
+* compute per-column missingness (``missing_rate``);
+* compute missingness conditioned on the detected target column and
+  optionally on a segment column (``customer_segment`` for the demo
+  archive, configurable via :attr:`ProfileBuildRequest.segment_column`);
+* expose ``target_column_missing`` + ``missing_target_count`` so Decision
+  Core can raise a hard-blocker candidate when the dataset has missing
+  target values (training cannot proceed without target labels).
+
 Privacy rules honored here:
 
 * the profiler never logs raw row payloads or column samples;
@@ -51,9 +61,13 @@ from app.adapters import ArtifactRegistry, RegisteredArtifact
 from app.adapters.object_storage import MinioObjectStorageAdapter
 from app.domain import (
     ArtifactRef,
+    ColumnMissingness,
     ColumnProfile,
     ColumnRole,
     ColumnType,
+    MissingnessByGroup,
+    MissingnessDiagnostics,
+    MissingnessGroupStats,
     TabularProfileLineage,
     TabularProfileReport,
 )
@@ -124,6 +138,7 @@ class ProfileBuildRequest(BaseModel):
     config_hash: Sha256Digest
     source_artifact_id: NonEmptyStr
     source_system: NonEmptyStr = "transactions"
+    segment_column: str | None = "customer_segment"
 
 
 @dataclass(frozen=True)
@@ -153,29 +168,70 @@ def infer_tabular_profile(
     if not columns:
         raise ValueError("tabular profile requires at least one column")
 
+    target_column = _select_target_column(columns)
+    segment_column = _select_segment_column(columns, request.segment_column)
+
     aggregators = {column: _ColumnAggregator(name=column) for column in columns}
+    target_missing_count = 0
+    target_total_count = 0
+    # Per-column, per-target-value missing/total counters.
+    by_target_counters: dict[str, dict[str, _MissingTotal]] = {
+        column: {} for column in columns
+    }
+    by_segment_counters: dict[str, dict[str, _MissingTotal]] = {
+        column: {} for column in columns
+    }
+
     row_count = 0
     for row in rows:
         row_count += 1
+        target_raw = row.get(target_column, "") if target_column else ""
+        segment_raw = row.get(segment_column, "") if segment_column else ""
+        target_value = target_raw if target_raw != "" else None
+        segment_value = segment_raw if segment_raw != "" else None
+
+        if target_column is not None:
+            target_total_count += 1
+            if target_raw == "":
+                target_missing_count += 1
+
         for column in columns:
             value = row.get(column, "")
             aggregators[column].observe(value)
+            is_missing = value == ""
+            if target_column is not None and target_value is not None:
+                bucket = by_target_counters[column].setdefault(
+                    target_value, _MissingTotal()
+                )
+                bucket.total += 1
+                if is_missing:
+                    bucket.missing += 1
+            if segment_column is not None and segment_value is not None:
+                bucket = by_segment_counters[column].setdefault(
+                    segment_value, _MissingTotal()
+                )
+                bucket.total += 1
+                if is_missing:
+                    bucket.missing += 1
 
     column_profiles: list[ColumnProfile] = []
-    target_column: str | None = None
     group_keys: list[str] = []
     id_columns: list[str] = []
     pii_columns: list[str] = []
+    column_missingness: list[ColumnMissingness] = []
+    target_chosen = False
+
     for column in columns:
         agg = aggregators[column]
         is_pii_like = _column_name_looks_pii(column)
         role = _detect_role(
             column,
             is_pii_like=is_pii_like,
-            target_already_chosen=target_column is not None,
+            target_already_chosen=target_chosen,
+            target_column=target_column,
         )
-        if role is ColumnRole.TARGET and target_column is None:
-            target_column = column
+        if role is ColumnRole.TARGET:
+            target_chosen = True
         if role is ColumnRole.GROUP_KEY:
             group_keys.append(column)
         if role is ColumnRole.ID:
@@ -198,6 +254,31 @@ def infer_tabular_profile(
             )
         )
 
+        column_missingness.append(
+            ColumnMissingness(
+                column=column,
+                missing_count=agg.null_count,
+                total_count=row_count,
+                missing_rate=(agg.null_count / row_count) if row_count else 0.0,
+                by_target=_build_group_block(
+                    group_column=target_column,
+                    counters=by_target_counters[column],
+                ),
+                by_segment=_build_group_block(
+                    group_column=segment_column,
+                    counters=by_segment_counters[column],
+                ),
+            )
+        )
+
+    missingness = MissingnessDiagnostics(
+        target_column=target_column,
+        target_column_missing=(target_missing_count > 0) if target_column else False,
+        missing_target_count=target_missing_count,
+        columns=tuple(column_missingness),
+        segment_column=segment_column,
+    )
+
     return TabularProfileReport(
         profile_id=profile_id or f"tabular_profile_{uuid.uuid4().hex[:16]}",
         profile_schema_version=PROFILE_REPORT_SCHEMA_VERSION,
@@ -209,6 +290,7 @@ def infer_tabular_profile(
         group_key_columns=tuple(group_keys),
         id_columns=tuple(id_columns),
         pii_like_columns=tuple(pii_columns),
+        missingness=missingness,
         lineage=TabularProfileLineage(
             dataset_id=request.dataset_id,
             version_id=request.version_id,
@@ -313,6 +395,7 @@ def _detect_role(
     *,
     is_pii_like: bool,
     target_already_chosen: bool,
+    target_column: str | None,
 ) -> ColumnRole:
     if is_pii_like:
         return ColumnRole.PII_LIKE
@@ -324,9 +407,51 @@ def _detect_role(
         return ColumnRole.ID
     if column in _GROUP_KEY_NAMES:
         return ColumnRole.GROUP_KEY
-    if not target_already_chosen and column in _TARGET_COLUMN_NAMES:
+    if column == target_column and not target_already_chosen:
         return ColumnRole.TARGET
     return ColumnRole.UNKNOWN
+
+
+def _select_target_column(columns: tuple[str, ...]) -> str | None:
+    for candidate in _TARGET_COLUMN_NAMES:
+        if candidate in columns:
+            return candidate
+    return None
+
+
+def _select_segment_column(
+    columns: tuple[str, ...],
+    requested: str | None,
+) -> str | None:
+    if requested is None or requested == "":
+        return None
+    return requested if requested in columns else None
+
+
+def _build_group_block(
+    *,
+    group_column: str | None,
+    counters: dict[str, _MissingTotal],
+) -> MissingnessByGroup | None:
+    if group_column is None or not counters:
+        return None
+    groups = {
+        value: MissingnessGroupStats(
+            missing_count=stats.missing,
+            total_count=stats.total,
+            missing_ratio=(stats.missing / stats.total) if stats.total else 0.0,
+        )
+        for value, stats in counters.items()
+    }
+    return MissingnessByGroup(group_column=group_column, groups=groups)
+
+
+@dataclass
+class _MissingTotal:
+    """Mutable missing/total counter for one group bucket."""
+
+    missing: int = 0
+    total: int = 0
 
 
 def _column_name_looks_pii(column: str) -> bool:

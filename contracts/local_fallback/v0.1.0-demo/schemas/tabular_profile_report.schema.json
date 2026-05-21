@@ -14,6 +14,7 @@
     "group_key_columns",
     "id_columns",
     "pii_like_columns",
+    "missingness",
     "lineage",
     "generated_at"
   ],
@@ -83,13 +84,123 @@
           "minimum": 0
         },
         "sample_value": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "is_constant": {
           "type": "boolean"
+        }
+      }
+    },
+    "missingness_group_stats": {
+      "type": "object",
+      "required": ["missing_count", "total_count", "missing_ratio"],
+      "additionalProperties": false,
+      "properties": {
+        "missing_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "missingness_by_group": {
+      "type": "object",
+      "required": ["group_column", "groups"],
+      "additionalProperties": false,
+      "properties": {
+        "group_column": {
+          "type": "string",
+          "minLength": 1
+        },
+        "groups": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/missingness_group_stats"
+          }
+        }
+      }
+    },
+    "column_missingness": {
+      "type": "object",
+      "required": ["column", "missing_count", "total_count", "missing_rate"],
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "type": "string",
+          "minLength": 1
+        },
+        "missing_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "missing_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "by_target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/missingness_by_group"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "by_segment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/missingness_by_group"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "missingness_diagnostics": {
+      "type": "object",
+      "required": [
+        "target_column",
+        "target_column_missing",
+        "missing_target_count",
+        "columns",
+        "segment_column"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "target_column": {
+          "type": ["string", "null"]
+        },
+        "target_column_missing": {
+          "type": "boolean"
+        },
+        "missing_target_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/column_missingness"
+          }
+        },
+        "segment_column": {
+          "type": ["string", "null"]
         }
       }
     },
@@ -192,10 +303,7 @@
       }
     },
     "target_column": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "group_key_columns": {
       "type": "array",
@@ -217,6 +325,9 @@
         "type": "string",
         "minLength": 1
       }
+    },
+    "missingness": {
+      "$ref": "#/$defs/missingness_diagnostics"
     },
     "lineage": {
       "type": "object",

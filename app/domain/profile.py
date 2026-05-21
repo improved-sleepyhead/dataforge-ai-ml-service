@@ -11,8 +11,17 @@ The report is intentionally narrow at TASK-023 scope:
 * role detection: target/label, group key, id-like, PII-like;
 * link to the validated manifest artifact and the dataset version.
 
-Subsequent tasks add missingness, duplicates, outliers, leakage, and
-business-rule signals on top of this base contract.
+TASK-024 extends the report with missingness diagnostics:
+
+* per-column ``missing_rate``;
+* per-column missingness conditioned on the target column;
+* per-column missingness conditioned on a segment column;
+* a top-level ``target_column_missing`` flag plus ``missing_target_count``
+  used by Decision Core to raise a hard-blocker candidate when the
+  target column has any missing values.
+
+Subsequent tasks add duplicates, outliers, leakage and business-rule
+signals on top of this base contract.
 """
 
 from __future__ import annotations
@@ -86,6 +95,67 @@ class TabularProfileLineage(BaseModel):
     source_artifact_id: NonEmptyStr
 
 
+class MissingnessGroupStats(BaseModel):
+    """Missing/total counts and ratio for one group bucket."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    missing_count: int = Field(ge=0)
+    total_count: int = Field(ge=0)
+    missing_ratio: Score
+
+
+class MissingnessByGroup(BaseModel):
+    """Per-group missingness breakdown for one column.
+
+    The block describes how missingness for a single column is distributed
+    over the values of a grouping column (typically the target or a
+    customer segment). For each observed group value we record the share
+    of missing entries and the absolute counts so Decision Core can decide
+    whether the missingness pattern is segment-dependent.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    group_column: NonEmptyStr
+    groups: dict[str, MissingnessGroupStats]
+
+
+class ColumnMissingness(BaseModel):
+    """Aggregate missingness signals for one column."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    column: NonEmptyStr
+    missing_count: int = Field(ge=0)
+    total_count: int = Field(ge=0)
+    missing_rate: Score
+    by_target: MissingnessByGroup | None = None
+    by_segment: MissingnessByGroup | None = None
+
+
+class MissingnessDiagnostics(BaseModel):
+    """Top-level missingness diagnostics block.
+
+    The block carries:
+
+    * per-column ``missing_rate`` (also exposed in ``ColumnProfile``,
+      duplicated here for symmetry with ``by_target`` / ``by_segment``);
+    * grouped missingness for the most informative slices;
+    * a flag and count proving whether the target column itself has
+      missing values, which Decision Core treats as a hard-blocker
+      candidate.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    target_column: str | None = None
+    target_column_missing: bool
+    missing_target_count: int = Field(ge=0)
+    columns: tuple[ColumnMissingness, ...]
+    segment_column: str | None = None
+
+
 class TabularProfileReport(BaseModel):
     """Tabular profile report contract.
 
@@ -106,14 +176,19 @@ class TabularProfileReport(BaseModel):
     group_key_columns: tuple[NonEmptyStr, ...] = ()
     id_columns: tuple[NonEmptyStr, ...] = ()
     pii_like_columns: tuple[NonEmptyStr, ...] = ()
+    missingness: MissingnessDiagnostics | None = None
     lineage: TabularProfileLineage
     generated_at: datetime
 
 
 __all__ = [
+    "ColumnMissingness",
     "ColumnProfile",
     "ColumnRole",
     "ColumnType",
+    "MissingnessByGroup",
+    "MissingnessDiagnostics",
+    "MissingnessGroupStats",
     "TabularProfileLineage",
     "TabularProfileReport",
 ]

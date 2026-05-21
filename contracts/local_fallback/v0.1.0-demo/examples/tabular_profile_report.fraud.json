@@ -95,13 +95,89 @@
     }
   ],
   "target_column": "is_fraud",
-  "group_key_columns": [
-    "customer_id_hash"
-  ],
-  "id_columns": [
-    "object_id"
-  ],
+  "group_key_columns": ["customer_id_hash"],
+  "id_columns": ["object_id"],
   "pii_like_columns": [],
+  "missingness": {
+    "target_column": "is_fraud",
+    "target_column_missing": false,
+    "missing_target_count": 0,
+    "segment_column": "customer_segment",
+    "columns": [
+      {
+        "column": "object_id",
+        "missing_count": 0,
+        "total_count": 200,
+        "missing_rate": 0.0,
+        "by_target": {
+          "group_column": "is_fraud",
+          "groups": {
+            "0": {
+              "missing_count": 0,
+              "total_count": 196,
+              "missing_ratio": 0.0
+            },
+            "1": {
+              "missing_count": 0,
+              "total_count": 4,
+              "missing_ratio": 0.0
+            }
+          }
+        },
+        "by_segment": {
+          "group_column": "customer_segment",
+          "groups": {
+            "regular_customers": {
+              "missing_count": 0,
+              "total_count": 132,
+              "missing_ratio": 0.0
+            },
+            "young_customers": {
+              "missing_count": 0,
+              "total_count": 68,
+              "missing_ratio": 0.0
+            }
+          }
+        }
+      },
+      {
+        "column": "monthly_income",
+        "missing_count": 44,
+        "total_count": 200,
+        "missing_rate": 0.22,
+        "by_target": {
+          "group_column": "is_fraud",
+          "groups": {
+            "0": {
+              "missing_count": 44,
+              "total_count": 196,
+              "missing_ratio": 0.22448979
+            },
+            "1": {
+              "missing_count": 0,
+              "total_count": 4,
+              "missing_ratio": 0.0
+            }
+          }
+        },
+        "by_segment": {
+          "group_column": "customer_segment",
+          "groups": {
+            "regular_customers": {
+              "missing_count": 5,
+              "total_count": 132,
+              "missing_ratio": 0.03787878
+            },
+            "young_customers": {
+              "missing_count": 39,
+              "total_count": 68,
+              "missing_ratio": 0.57352941
+            }
+          }
+        }
+      }
+    ]
+  },
   "lineage": {
     "dataset_id": "dataset_fraud_demo",
     "version_id": "dataset_version_v1",
