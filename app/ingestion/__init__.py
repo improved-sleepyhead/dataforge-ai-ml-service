@@ -22,6 +22,13 @@ from app.ingestion.identity import (
     compute_record_sha256,
     derive_object_id,
 )
+from app.ingestion.manifest_builder import (
+    BuildManifestRequest,
+    BuildManifestResult,
+    UnsupportedEntry,
+    build_asset_manifest,
+    manifest_rows_from_artifact,
+)
 
 __all__ = [
     "ArchiveContents",
@@ -31,9 +38,14 @@ __all__ = [
     "ArchiveSafetyError",
     "ArchiveSafetyPolicy",
     "ArchiveSafetyReport",
+    "BuildManifestRequest",
+    "BuildManifestResult",
+    "UnsupportedEntry",
+    "build_asset_manifest",
     "compute_content_sha256",
     "compute_record_sha256",
     "derive_object_id",
+    "manifest_rows_from_artifact",
     "open_archive_artifact",
     "open_archive_bytes",
     "open_archive_path",
