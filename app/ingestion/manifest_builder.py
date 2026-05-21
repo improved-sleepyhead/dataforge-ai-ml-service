@@ -275,6 +275,9 @@ def _tabular_metadata(row: dict[str, str]) -> dict[str, Any]:
             metadata[key] = value
     if "customer_segment" in row and row["customer_segment"]:
         metadata["customer_segment"] = row["customer_segment"]
+    source_object_id = row.get("object_id")
+    if source_object_id:
+        metadata["source_object_id"] = source_object_id
     return metadata
 
 
@@ -353,6 +356,9 @@ def _jsonl_metadata(record: dict[str, Any]) -> dict[str, Any]:
         metadata["language"] = record["language"]
     if "page" in record and record["page"] is not None:
         metadata["page"] = record["page"]
+    source_object_id = record.get("object_id")
+    if source_object_id:
+        metadata["source_object_id"] = str(source_object_id)
     return metadata
 
 

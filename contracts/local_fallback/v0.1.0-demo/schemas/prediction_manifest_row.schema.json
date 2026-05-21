@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/prediction_manifest_row.schema.json",
+  "title": "PredictionManifestRow",
+  "type": "object",
+  "required": [
+    "object_id",
+    "true_label",
+    "predicted_label",
+    "predicted_proba",
+    "confidence",
+    "split",
+    "model_id",
+    "model_version",
+    "inference_timestamp"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "object_id": {"type": "string", "minLength": 1},
+    "true_label": {"type": "string", "minLength": 1},
+    "predicted_label": {"type": "string", "minLength": 1},
+    "predicted_proba": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+    },
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "split": {"type": "string", "enum": ["train", "validation", "test", "holdout", "unknown"]},
+    "model_id": {"type": "string", "minLength": 1},
+    "model_version": {"type": "string", "minLength": 1},
+    "inference_timestamp": {"type": "string", "format": "date-time"}
+  }
+}

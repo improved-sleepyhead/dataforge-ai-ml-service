@@ -1,0 +1,11 @@
+{
+  "object_id": "txn_00123",
+  "true_label": "fraud",
+  "predicted_label": "not_fraud",
+  "predicted_proba": {"fraud": 0.41, "not_fraud": 0.59},
+  "confidence": 0.59,
+  "split": "validation",
+  "model_id": "fraud_baseline",
+  "model_version": "2026-05-20",
+  "inference_timestamp": "2026-05-20T07:15:00Z"
+}

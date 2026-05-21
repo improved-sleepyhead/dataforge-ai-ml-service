@@ -58,6 +58,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "dataforge_report.analyze_only",
         "export_package.ready",
         "tabular_profile_report.fraud",
+        "prediction_manifest_row.fraud",
     }
 
 
@@ -82,6 +83,7 @@ def test_all_contract_examples_validate() -> None:
         "dataforge_report.analyze_only",
         "export_package.ready",
         "tabular_profile_report.fraud",
+        "prediction_manifest_row.fraud",
     ]
 
 
