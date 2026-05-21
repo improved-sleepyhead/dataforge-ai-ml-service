@@ -427,6 +427,196 @@ def test_class_imbalance_decomposition_on_synthetic_target() -> None:
 
 
 # ---------------------------------------------------------------------------
+# TASK-026: business rule validation
+# ---------------------------------------------------------------------------
+
+
+def test_business_rule_amount_non_negative_passes_on_demo(tmp_path: Path) -> None:
+    """Step 1+2+3: profiler runs amount>=0 rule on demo data and reports
+    zero violations, with rules_config_hash present in the report."""
+    from app.domain import BusinessRuleSeverity
+    from app.plugins.tabular.rules import (
+        BusinessRule,
+        RuleFieldCheck,
+        compute_rules_config_hash,
+    )
+
+    rule = BusinessRule(
+        rule_id="amount_must_be_non_negative",
+        description="transaction amount must be >= 0",
+        severity=BusinessRuleSeverity.CRITICAL,
+        columns=("amount",),
+        checks=(RuleFieldCheck(field="amount", op="gte", value=0),),
+        message="transaction amount cannot be negative",
+    )
+    expected_hash = compute_rules_config_hash((rule,))
+
+    storage, registry, _validated, archive_path = _setup_demo(tmp_path)
+    validated = _validated_manifest(storage, registry, archive_path)
+    request = ProfileBuildRequest(
+        dataset_id="dataset_demo",
+        version_id="version_demo",
+        parent_version_id="version_demo_parent",
+        created_by_job_id="compute_run_profile",
+        config_hash="sha256:" + "a" * 64,
+        source_artifact_id="raw_archive:demo",
+        source_system="transactions",
+        business_rules=(rule,),
+    )
+
+    with open_archive_path(archive_path) as reader:
+        result = build_tabular_profile_report(
+            reader,
+            request=request,
+            storage=storage,
+            registry=registry,
+            source_manifest_artifact=validated.artifact_ref,
+        )
+
+    report = result.profile_report
+    assert report.business_rules is not None
+    br = report.business_rules
+    assert br.rules_version == "tabular_business_rules.v1"
+    assert br.rules_config_hash == expected_hash
+    assert len(br.rules) == 1
+    summary = br.rules[0]
+    assert summary.rule_id == "amount_must_be_non_negative"
+    assert summary.severity is BusinessRuleSeverity.CRITICAL
+    assert summary.evaluated_count == 200
+    assert summary.violation_count == 0
+    assert summary.pass_rate == 1.0
+    assert br.blocker_candidate_rule_ids == ()
+
+
+def test_critical_business_rule_violation_creates_blocker_candidate() -> None:
+    """A critical rule with violations adds the rule_id to
+    blocker_candidate_rule_ids (BLOCK_RULES_REVIEW signal)."""
+    from app.domain import BusinessRuleSeverity
+    from app.plugins.tabular.rules import BusinessRule, RuleFieldCheck
+
+    rule = BusinessRule(
+        rule_id="amount_must_be_non_negative",
+        severity=BusinessRuleSeverity.CRITICAL,
+        columns=("amount",),
+        checks=(RuleFieldCheck(field="amount", op="gte", value=0),),
+        message="transaction amount cannot be negative",
+    )
+    rows = [
+        {"object_id": "r1", "is_fraud": "0", "amount": "100"},
+        {"object_id": "r2", "is_fraud": "1", "amount": "-50"},
+        {"object_id": "r3", "is_fraud": "0", "amount": "0"},
+    ]
+    request = ProfileBuildRequest(
+        dataset_id="dataset_demo",
+        version_id="version_demo",
+        parent_version_id="version_demo_parent",
+        created_by_job_id="compute_run_profile",
+        config_hash="sha256:" + "a" * 64,
+        source_artifact_id="raw_archive:demo",
+        source_system="transactions",
+        business_rules=(rule,),
+    )
+    report = infer_tabular_profile(
+        iter(rows),
+        columns=("object_id", "is_fraud", "amount"),
+        request=request,
+        source_manifest_artifact=_synthetic_manifest_artifact_ref(),
+        profile_id="tabular_profile_blocker_test",
+        generated_at=datetime(2026, 5, 20, tzinfo=UTC),
+    )
+    assert report.business_rules is not None
+    br = report.business_rules
+    summary = br.rules[0]
+    assert summary.violation_count == 1
+    assert summary.evaluated_count == 3
+    assert abs(summary.pass_rate - 2 / 3) < 1e-9
+    assert "amount_must_be_non_negative" in br.blocker_candidate_rule_ids
+    # Sample violation includes the offending object_id and the column.
+    sample_ids = {v.object_id for v in br.sample_violations}
+    assert sample_ids == {"r2"}
+    assert br.sample_violations[0].column == "amount"
+    assert br.sample_violations[0].rule_id == "amount_must_be_non_negative"
+
+
+def test_warning_business_rule_does_not_block() -> None:
+    """A warning-severity rule with violations does NOT produce a blocker."""
+    from app.domain import BusinessRuleSeverity
+    from app.plugins.tabular.rules import BusinessRule, RuleFieldCheck
+
+    rule = BusinessRule(
+        rule_id="amount_under_million",
+        severity=BusinessRuleSeverity.WARNING,
+        columns=("amount",),
+        checks=(RuleFieldCheck(field="amount", op="lt", value=1_000_000),),
+    )
+    rows = [
+        {"object_id": "r1", "is_fraud": "0", "amount": "100"},
+        {"object_id": "r2", "is_fraud": "0", "amount": "5000000"},
+    ]
+    request = ProfileBuildRequest(
+        dataset_id="dataset_demo",
+        version_id="version_demo",
+        parent_version_id="version_demo_parent",
+        created_by_job_id="compute_run_profile",
+        config_hash="sha256:" + "a" * 64,
+        source_artifact_id="raw_archive:demo",
+        source_system="transactions",
+        business_rules=(rule,),
+    )
+    report = infer_tabular_profile(
+        iter(rows),
+        columns=("object_id", "is_fraud", "amount"),
+        request=request,
+        source_manifest_artifact=_synthetic_manifest_artifact_ref(),
+        profile_id="tabular_profile_warning_test",
+        generated_at=datetime(2026, 5, 20, tzinfo=UTC),
+    )
+    assert report.business_rules is not None
+    br = report.business_rules
+    assert br.rules[0].violation_count == 1
+    assert br.blocker_candidate_rule_ids == ()
+
+
+def test_rules_config_hash_is_deterministic() -> None:
+    """Same rule list produces the same hash regardless of in-memory order."""
+    from app.plugins.tabular.rules import (
+        BusinessRule,
+        RuleFieldCheck,
+        compute_rules_config_hash,
+    )
+
+    rule_a = BusinessRule(
+        rule_id="rule_a",
+        checks=(RuleFieldCheck(field="amount", op="gte", value=0),),
+    )
+    rule_b = BusinessRule(
+        rule_id="rule_b",
+        checks=(RuleFieldCheck(field="monthly_income", op="gte", value=0),),
+    )
+    h1 = compute_rules_config_hash((rule_a, rule_b))
+    h2 = compute_rules_config_hash((rule_a, rule_b))
+    assert h1 == h2
+    # Changing rule order changes the hash (rules_config_hash respects order).
+    h3 = compute_rules_config_hash((rule_b, rule_a))
+    assert h1 != h3
+
+
+def test_no_business_rules_means_no_business_rules_report(tmp_path: Path) -> None:
+    """When the request carries no rules, the report omits business_rules."""
+    storage, registry, _validated, archive_path = _setup_demo(tmp_path)
+    validated = _validated_manifest(storage, registry, archive_path)
+    with open_archive_path(archive_path) as reader:
+        result = build_tabular_profile_report(
+            reader,
+            request=_PROFILE_REQUEST,
+            storage=storage,
+            registry=registry,
+            source_manifest_artifact=validated.artifact_ref,
+        )
+    assert result.profile_report.business_rules is None
+
+
+# ---------------------------------------------------------------------------
 # Step 3: artifact saved with hash and contract-compatible
 # ---------------------------------------------------------------------------
 

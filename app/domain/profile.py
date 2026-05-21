@@ -281,6 +281,69 @@ class LeakageDiagnostics(BaseModel):
     candidates: tuple[LeakageCandidate, ...] = ()
 
 
+class BusinessRuleSeverity(StrEnum):
+    """Severity levels for business rules.
+
+    ``critical`` violations may produce a hard-blocker candidate
+    (``BLOCK_RULES_REVIEW``). ``warning`` and ``info`` violations are
+    advisory only.
+    """
+
+    CRITICAL = "critical"
+    WARNING = "warning"
+    INFO = "info"
+
+
+class BusinessRuleViolation(BaseModel):
+    """One violation occurrence for a single object_id.
+
+    The block intentionally carries no raw row payload — only stable
+    identifiers and the deterministic rule id.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rule_id: NonEmptyStr
+    object_id: NonEmptyStr | None = None
+    column: str | None = None
+    message: NonEmptyStr | None = None
+
+
+class BusinessRuleSummary(BaseModel):
+    """Per-rule aggregate summary for the profile report."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rule_id: NonEmptyStr
+    severity: BusinessRuleSeverity
+    description: NonEmptyStr | None = None
+    columns: tuple[NonEmptyStr, ...] = ()
+    violation_count: int = Field(ge=0)
+    evaluated_count: int = Field(ge=0)
+    pass_rate: Score
+
+
+class BusinessRulesReport(BaseModel):
+    """Top-level business-rule validation block.
+
+    The block reports per-rule summaries and a bounded list of sample
+    violations so the report can render concrete object_ids without
+    materializing the full per-row violation log. ``rules_version`` and
+    ``rules_config_hash`` keep the report reproducible across runs;
+    ``blocker_candidate_rule_ids`` lists rules that triggered a
+    ``BLOCK_RULES_REVIEW`` candidate (critical severity with at least
+    one violation).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    rules_version: NonEmptyStr
+    rules_config_hash: Sha256Digest
+    rules: tuple[BusinessRuleSummary, ...]
+    sample_violations: tuple[BusinessRuleViolation, ...] = ()
+    blocker_candidate_rule_ids: tuple[NonEmptyStr, ...] = ()
+
+
 class TabularProfileReport(BaseModel):
     """Tabular profile report contract.
 
@@ -306,11 +369,16 @@ class TabularProfileReport(BaseModel):
     outliers: OutlierDiagnostics | None = None
     class_imbalance: ClassImbalanceDiagnostics | None = None
     leakage: LeakageDiagnostics | None = None
+    business_rules: BusinessRulesReport | None = None
     lineage: TabularProfileLineage
     generated_at: datetime
 
 
 __all__ = [
+    "BusinessRuleSeverity",
+    "BusinessRuleSummary",
+    "BusinessRuleViolation",
+    "BusinessRulesReport",
     "ClassCount",
     "ClassImbalanceDiagnostics",
     "ColumnMissingness",

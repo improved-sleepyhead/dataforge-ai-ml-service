@@ -168,6 +168,23 @@
       }
     ]
   },
+  "business_rules": {
+    "rules_version": "tabular_business_rules.v1",
+    "rules_config_hash": "sha256:28806b1414644922ea3fcb8c1cfcf3d2b2dfff30a890c9048d4fff728dd9606f",
+    "rules": [
+      {
+        "rule_id": "amount_must_be_non_negative",
+        "severity": "critical",
+        "description": "transaction amount must be >= 0",
+        "columns": ["amount"],
+        "violation_count": 0,
+        "evaluated_count": 200,
+        "pass_rate": 1.0
+      }
+    ],
+    "sample_violations": [],
+    "blocker_candidate_rule_ids": []
+  },
   "missingness": {
     "target_column": "is_fraud",
     "target_column_missing": false,

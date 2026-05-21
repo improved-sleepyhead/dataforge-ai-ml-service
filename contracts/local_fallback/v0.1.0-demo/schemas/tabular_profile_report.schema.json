@@ -446,6 +446,106 @@
         }
       }
     },
+    "business_rule_violation": {
+      "type": "object",
+      "required": ["rule_id"],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "object_id": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "column": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": ["string", "null"],
+          "minLength": 1
+        }
+      }
+    },
+    "business_rule_summary": {
+      "type": "object",
+      "required": [
+        "rule_id",
+        "severity",
+        "violation_count",
+        "evaluated_count",
+        "pass_rate"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["critical", "warning", "info"]
+        },
+        "description": {
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "violation_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "evaluated_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pass_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "business_rules_report": {
+      "type": "object",
+      "required": ["rules_version", "rules_config_hash", "rules"],
+      "additionalProperties": false,
+      "properties": {
+        "rules_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rules_config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/business_rule_summary"
+          }
+        },
+        "sample_violations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/business_rule_violation"
+          }
+        },
+        "blocker_candidate_rule_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
     "artifact_ref": {
       "type": "object",
       "required": [
@@ -569,19 +669,28 @@
       }
     },
     "missingness": {
-      "$ref": "#/$defs/missingness_diagnostics"
+      "anyOf": [
+        { "$ref": "#/$defs/missingness_diagnostics" },
+        { "type": "null" }
+      ]
     },
     "duplicates": {
-      "$ref": "#/$defs/duplicate_diagnostics"
+      "anyOf": [{ "$ref": "#/$defs/duplicate_diagnostics" }, { "type": "null" }]
     },
     "outliers": {
-      "$ref": "#/$defs/outlier_diagnostics"
+      "anyOf": [{ "$ref": "#/$defs/outlier_diagnostics" }, { "type": "null" }]
     },
     "class_imbalance": {
-      "$ref": "#/$defs/class_imbalance_diagnostics"
+      "anyOf": [
+        { "$ref": "#/$defs/class_imbalance_diagnostics" },
+        { "type": "null" }
+      ]
     },
     "leakage": {
-      "$ref": "#/$defs/leakage_diagnostics"
+      "anyOf": [{ "$ref": "#/$defs/leakage_diagnostics" }, { "type": "null" }]
+    },
+    "business_rules": {
+      "anyOf": [{ "$ref": "#/$defs/business_rules_report" }, { "type": "null" }]
     },
     "lineage": {
       "type": "object",

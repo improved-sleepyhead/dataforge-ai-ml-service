@@ -65,6 +65,10 @@ from app.domain.manifest import (
     PredictionRow,
 )
 from app.domain.profile import (
+    BusinessRuleSeverity,
+    BusinessRulesReport,
+    BusinessRuleSummary,
+    BusinessRuleViolation,
     ClassCount,
     ClassImbalanceDiagnostics,
     ColumnMissingness,
@@ -89,6 +93,10 @@ __all__ = [
     "ActionPlan",
     "ActionPlanStep",
     "BlockedMethod",
+    "BusinessRuleSeverity",
+    "BusinessRuleSummary",
+    "BusinessRuleViolation",
+    "BusinessRulesReport",
     "ClassCount",
     "ClassImbalanceDiagnostics",
     "ColumnMissingness",

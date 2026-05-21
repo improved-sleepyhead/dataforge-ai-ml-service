@@ -76,6 +76,7 @@ from app.adapters import ArtifactRegistry, RegisteredArtifact
 from app.adapters.object_storage import MinioObjectStorageAdapter
 from app.domain import (
     ArtifactRef,
+    BusinessRulesReport,
     ClassCount,
     ClassImbalanceDiagnostics,
     ColumnMissingness,
@@ -99,6 +100,7 @@ from app.ingestion.archive_reader import (
     ArchiveFileDescriptor,
     ArchiveReader,
 )
+from app.plugins.tabular.rules import BusinessRule, BusinessRuleEvaluator
 
 if TYPE_CHECKING:  # pragma: no cover - typing-only import
     pass
@@ -171,6 +173,9 @@ class ProfileBuildRequest(BaseModel):
     segment_column: str | None = "customer_segment"
     id_column: str = "object_id"
     outlier_columns: tuple[str, ...] | None = None
+    business_rules: tuple[BusinessRule, ...] = ()
+    business_rules_version: str = "tabular_business_rules.v1"
+    business_rules_config_hash: Sha256Digest | None = None
 
 
 @dataclass(frozen=True)
@@ -207,6 +212,13 @@ def infer_tabular_profile(
         sorted(c for c in columns if c != id_column)
     )
     outlier_columns = _resolve_outlier_columns(columns, request.outlier_columns)
+    rule_evaluator: BusinessRuleEvaluator | None = None
+    if request.business_rules:
+        rule_evaluator = BusinessRuleEvaluator(
+            request.business_rules,
+            rules_version=request.business_rules_version,
+            rules_config_hash=request.business_rules_config_hash,
+        )
 
     aggregators = {column: _ColumnAggregator(name=column) for column in columns}
     target_missing_count = 0
@@ -238,6 +250,16 @@ def infer_tabular_profile(
     leakage_match_counters: dict[str, _MissingTotal] = {
         column: _MissingTotal() for column in leakage_candidate_columns
     }
+
+    rule_evaluator = (
+        BusinessRuleEvaluator(
+            request.business_rules,
+            rules_version=request.business_rules_version,
+            rules_config_hash=request.business_rules_config_hash,
+        )
+        if request.business_rules
+        else None
+    )
 
     row_count = 0
     for row in rows:
@@ -297,6 +319,9 @@ def infer_tabular_profile(
                 counter.total += 1
                 if value == target_value:
                     counter.missing += 1  # reuse "missing" slot for matches
+
+        if rule_evaluator is not None:
+            rule_evaluator.observe_row(row, row_object_id or None)
 
     column_profiles: list[ColumnProfile] = []
     group_keys: list[str] = []
@@ -377,6 +402,9 @@ def infer_tabular_profile(
         candidate_columns=leakage_candidate_columns,
         match_counters=leakage_match_counters,
     )
+    business_rules_report: BusinessRulesReport | None = (
+        rule_evaluator.build_report() if rule_evaluator is not None else None
+    )
 
     return TabularProfileReport(
         profile_id=profile_id or f"tabular_profile_{uuid.uuid4().hex[:16]}",
@@ -394,6 +422,7 @@ def infer_tabular_profile(
         outliers=outliers,
         class_imbalance=class_imbalance,
         leakage=leakage,
+        business_rules=business_rules_report,
         lineage=TabularProfileLineage(
             dataset_id=request.dataset_id,
             version_id=request.version_id,
