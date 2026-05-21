@@ -17,6 +17,11 @@ from app.ingestion.archive_safety import (
     validate_archive_bytes,
     validate_archive_path,
 )
+from app.ingestion.identity import (
+    compute_content_sha256,
+    compute_record_sha256,
+    derive_object_id,
+)
 
 __all__ = [
     "ArchiveContents",
@@ -26,6 +31,9 @@ __all__ = [
     "ArchiveSafetyError",
     "ArchiveSafetyPolicy",
     "ArchiveSafetyReport",
+    "compute_content_sha256",
+    "compute_record_sha256",
+    "derive_object_id",
     "open_archive_artifact",
     "open_archive_bytes",
     "open_archive_path",
