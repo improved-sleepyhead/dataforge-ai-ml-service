@@ -62,6 +62,10 @@
     {
       "name": "export_package",
       "path": "schemas/export_package.schema.json"
+    },
+    {
+      "name": "tabular_profile_report",
+      "path": "schemas/tabular_profile_report.schema.json"
     }
   ],
   "examples": [
@@ -144,6 +148,11 @@
       "name": "export_package.ready",
       "schema": "export_package",
       "path": "examples/export_package.ready.json"
+    },
+    {
+      "name": "tabular_profile_report.fraud",
+      "schema": "tabular_profile_report",
+      "path": "examples/tabular_profile_report.fraud.json"
     }
   ]
 }

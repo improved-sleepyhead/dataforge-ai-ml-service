@@ -64,6 +64,13 @@ from app.domain.manifest import (
     PredictionManifest,
     PredictionRow,
 )
+from app.domain.profile import (
+    ColumnProfile,
+    ColumnRole,
+    ColumnType,
+    TabularProfileLineage,
+    TabularProfileReport,
+)
 
 __all__ = [
     "ArtifactLineage",
@@ -71,6 +78,9 @@ __all__ = [
     "ActionPlan",
     "ActionPlanStep",
     "BlockedMethod",
+    "ColumnProfile",
+    "ColumnRole",
+    "ColumnType",
     "ComputeRun",
     "ComputeRunStatus",
     "CriticalBlocker",
@@ -124,6 +134,8 @@ __all__ = [
     "ReviewQueueType",
     "RiskProfile",
     "SignalStatus",
+    "TabularProfileLineage",
+    "TabularProfileReport",
     "TechnicalQualityBlock",
     "ValidationGateResult",
     "WorkflowType",

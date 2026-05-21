@@ -1,0 +1,267 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/tabular_profile_report.schema.json",
+  "title": "TabularProfileReport",
+  "type": "object",
+  "required": [
+    "profile_id",
+    "profile_schema_version",
+    "source_system",
+    "row_count",
+    "column_count",
+    "columns",
+    "target_column",
+    "group_key_columns",
+    "id_columns",
+    "pii_like_columns",
+    "lineage",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "column_profile": {
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "role",
+        "nullable",
+        "null_count",
+        "null_ratio",
+        "distinct_count",
+        "sample_value",
+        "is_constant"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "numeric_integer",
+            "numeric_float",
+            "boolean",
+            "categorical",
+            "datetime",
+            "identifier",
+            "text",
+            "unknown"
+          ]
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "target",
+            "group_key",
+            "id",
+            "pii_like",
+            "leakage_candidate"
+          ]
+        },
+        "nullable": {
+          "type": "boolean"
+        },
+        "null_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "null_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "distinct_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sample_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "is_constant": {
+          "type": "boolean"
+        }
+      }
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lineage": {
+          "type": "object",
+          "required": [
+            "parent_version_id",
+            "job_id",
+            "config_hash",
+            "created_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "job_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "config_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "profile_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "profile_schema_version": {
+      "type": "string",
+      "const": "tabular_profile_report.v1"
+    },
+    "source_system": {
+      "type": "string",
+      "minLength": 1
+    },
+    "row_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "column_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "columns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/column_profile"
+      }
+    },
+    "target_column": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "group_key_columns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "id_columns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "pii_like_columns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "dataset_id",
+        "version_id",
+        "parent_version_id",
+        "created_by_job_id",
+        "config_hash",
+        "source_manifest_artifact",
+        "source_artifact_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "dataset_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parent_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_by_job_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_manifest_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "source_artifact_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

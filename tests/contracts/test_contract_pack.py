@@ -38,6 +38,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "review_queue",
         "dataforge_report",
         "export_package",
+        "tabular_profile_report",
     } <= set(pack.schemas)
     assert {example.name for example in pack.examples} == {
         "artifact_ref.basic",
@@ -56,6 +57,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "review_queue.label_review",
         "dataforge_report.analyze_only",
         "export_package.ready",
+        "tabular_profile_report.fraud",
     }
 
 
@@ -79,6 +81,7 @@ def test_all_contract_examples_validate() -> None:
         "review_queue.label_review",
         "dataforge_report.analyze_only",
         "export_package.ready",
+        "tabular_profile_report.fraud",
     ]
 
 

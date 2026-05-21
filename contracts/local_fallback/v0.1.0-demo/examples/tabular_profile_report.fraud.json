@@ -1,0 +1,129 @@
+{
+  "profile_id": "tabular_profile_001",
+  "profile_schema_version": "tabular_profile_report.v1",
+  "source_system": "transactions",
+  "row_count": 200,
+  "column_count": 8,
+  "columns": [
+    {
+      "name": "object_id",
+      "type": "identifier",
+      "role": "id",
+      "nullable": false,
+      "null_count": 0,
+      "null_ratio": 0.0,
+      "distinct_count": 200,
+      "sample_value": "txn_00000",
+      "is_constant": false
+    },
+    {
+      "name": "customer_id_hash",
+      "type": "identifier",
+      "role": "group_key",
+      "nullable": false,
+      "null_count": 0,
+      "null_ratio": 0.0,
+      "distinct_count": 47,
+      "sample_value": "ab12cd34ef56ff00",
+      "is_constant": false
+    },
+    {
+      "name": "case_id",
+      "type": "categorical",
+      "role": "unknown",
+      "nullable": false,
+      "null_count": 0,
+      "null_ratio": 0.0,
+      "distinct_count": 31,
+      "sample_value": "case_0001",
+      "is_constant": false
+    },
+    {
+      "name": "amount",
+      "type": "numeric_float",
+      "role": "unknown",
+      "nullable": false,
+      "null_count": 0,
+      "null_ratio": 0.0,
+      "distinct_count": 198,
+      "sample_value": "112.40",
+      "is_constant": false
+    },
+    {
+      "name": "monthly_income",
+      "type": "numeric_float",
+      "role": "unknown",
+      "nullable": true,
+      "null_count": 38,
+      "null_ratio": 0.19,
+      "distinct_count": 160,
+      "sample_value": "5500.00",
+      "is_constant": false
+    },
+    {
+      "name": "customer_segment",
+      "type": "categorical",
+      "role": "unknown",
+      "nullable": false,
+      "null_count": 0,
+      "null_ratio": 0.0,
+      "distinct_count": 2,
+      "sample_value": "regular_customers",
+      "is_constant": false
+    },
+    {
+      "name": "manual_review_flag",
+      "type": "boolean",
+      "role": "leakage_candidate",
+      "nullable": false,
+      "null_count": 0,
+      "null_ratio": 0.0,
+      "distinct_count": 2,
+      "sample_value": "0",
+      "is_constant": false
+    },
+    {
+      "name": "is_fraud",
+      "type": "boolean",
+      "role": "target",
+      "nullable": false,
+      "null_count": 0,
+      "null_ratio": 0.0,
+      "distinct_count": 2,
+      "sample_value": "0",
+      "is_constant": false
+    }
+  ],
+  "target_column": "is_fraud",
+  "group_key_columns": [
+    "customer_id_hash"
+  ],
+  "id_columns": [
+    "object_id"
+  ],
+  "pii_like_columns": [],
+  "lineage": {
+    "dataset_id": "dataset_fraud_demo",
+    "version_id": "dataset_version_v1",
+    "parent_version_id": "dataset_version_raw_001",
+    "created_by_job_id": "job_profile_001",
+    "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "source_manifest_artifact": {
+      "artifact_id": "validated_manifest:abcdef0123456789",
+      "kind": "validated_manifest",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/manifest_validated.jsonl",
+      "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "media_type": "application/jsonl",
+      "size_bytes": 4096,
+      "schema_version": "manifest_row.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "job_profile_001",
+        "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at": "2026-05-20T07:45:00Z"
+      }
+    },
+    "source_artifact_id": "raw_archive:abcdef0123456789"
+  },
+  "generated_at": "2026-05-20T07:45:00Z"
+}
