@@ -13,6 +13,7 @@ Acceptance criteria covered:
 from __future__ import annotations
 
 import io
+import math
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -272,6 +273,157 @@ def test_missingness_no_segment_column() -> None:
     assert report.missingness.segment_column is None
     for cm in report.missingness.columns:
         assert cm.by_segment is None
+
+
+# ---------------------------------------------------------------------------
+# TASK-025: duplicate / outlier / class imbalance / leakage diagnostics
+# ---------------------------------------------------------------------------
+
+
+def test_duplicates_outliers_imbalance_leakage_on_demo(tmp_path: Path) -> None:
+    """Step 1+2+3+4+5: profiler reports duplicate count, rare class ratio,
+    leakage candidate reason code, effective number of samples, and
+    BalanceScore decomposition on demo data."""
+    storage, registry, _validated, archive_path = _setup_demo(tmp_path)
+    validated = _validated_manifest(storage, registry, archive_path)
+
+    with open_archive_path(archive_path) as reader:
+        result = build_tabular_profile_report(
+            reader,
+            request=_PROFILE_REQUEST,
+            storage=storage,
+            registry=registry,
+            source_manifest_artifact=validated.artifact_ref,
+        )
+
+    report = result.profile_report
+
+    # Step 2: duplicate row pairs and rare class ratio.
+    assert report.duplicates is not None
+    assert report.duplicates.duplicate_pair_count >= 4
+    assert len(report.duplicates.affected_object_ids) >= 4
+    assert "object_id" not in report.duplicates.signature_columns
+    assert report.duplicates.id_column == "object_id"
+
+    # Class imbalance: rare class is fraud=1 with ratio 0.02.
+    assert report.class_imbalance is not None
+    ci = report.class_imbalance
+    assert ci.target_column == "is_fraud"
+    assert ci.rare_class_label == "1"
+    assert ci.rare_class_count == 4
+    assert abs(ci.rare_class_ratio - 0.02) < 1e-9
+    # Step 5: minority_share, imbalance_ratio, BalanceScore decomposition.
+    assert ci.minority_class_share == ci.rare_class_ratio
+    assert abs(ci.imbalance_ratio - 49.0) < 1e-9  # 196/4
+    assert ci.balance_score_formula == "1 / log(1 + imbalance_ratio)"
+    expected_balance = 1.0 / math.log1p(49.0)
+    assert abs(ci.balance_score - expected_balance) < 1e-6
+    assert (
+        ci.balance_score_alternative_formula == "min_c(n_c) / mean_c(n_c)"
+    )
+    assert abs(ci.balance_score_alternative - 4 / (200 / 2)) < 1e-9
+    # Step 4: effective_number_of_samples for rare class follows the
+    # E_n = (1 - β^n) / (1 - β) closed form.
+    beta = ci.effective_number_beta
+    assert 0.0 < beta < 1.0
+    expected_rare = (1 - beta**ci.rare_class_count) / (1 - beta)
+    assert abs(ci.effective_number_of_samples["1"] - expected_rare) < 1e-6
+    # Effective n for the rare class must be < its raw count (down-weighted).
+    assert ci.effective_number_of_samples["1"] < ci.rare_class_count
+
+    # Step 3: leakage candidate reason code.
+    assert report.leakage is not None
+    leakage_columns = {c.column for c in report.leakage.candidates}
+    assert "manual_review_flag" in leakage_columns
+    manual_review = next(
+        c for c in report.leakage.candidates if c.column == "manual_review_flag"
+    )
+    assert manual_review.reason_code in {
+        "high_target_match_rate",
+        "name_pattern_leakage_candidate",
+    }
+
+
+def test_duplicate_diagnostics_on_synthetic_rows() -> None:
+    """Two rows with identical non-id payload yield a duplicate pair."""
+    rows = [
+        {"object_id": "r1", "is_fraud": "0", "amount": "100.00"},
+        {"object_id": "r2", "is_fraud": "0", "amount": "100.00"},  # duplicate of r1
+        {"object_id": "r3", "is_fraud": "1", "amount": "200.00"},
+    ]
+    report = infer_tabular_profile(
+        iter(rows),
+        columns=("object_id", "is_fraud", "amount"),
+        request=_PROFILE_REQUEST,
+        source_manifest_artifact=_synthetic_manifest_artifact_ref(),
+        profile_id="tabular_profile_dup_test",
+        generated_at=datetime(2026, 5, 20, tzinfo=UTC),
+    )
+    assert report.duplicates is not None
+    assert report.duplicates.duplicate_pair_count == 1
+    assert report.duplicates.duplicate_group_count == 1
+    assert set(report.duplicates.affected_object_ids) == {"r1", "r2"}
+
+
+def test_outlier_detection_on_synthetic_amount_column() -> None:
+    """IQR-based outlier detection flags far-away values."""
+    rows = [
+        {"object_id": f"r{i}", "is_fraud": "0", "amount": str(100 + i)}
+        for i in range(30)
+    ]
+    rows.append(
+        {"object_id": "r_outlier", "is_fraud": "0", "amount": "100000"}
+    )
+    request = ProfileBuildRequest(
+        dataset_id="dataset_demo",
+        version_id="version_demo",
+        parent_version_id="version_demo_parent",
+        created_by_job_id="compute_run_profile",
+        config_hash="sha256:" + "a" * 64,
+        source_artifact_id="raw_archive:demo",
+        source_system="transactions",
+        outlier_columns=("amount",),
+    )
+    report = infer_tabular_profile(
+        iter(rows),
+        columns=("object_id", "is_fraud", "amount"),
+        request=request,
+        source_manifest_artifact=_synthetic_manifest_artifact_ref(),
+        profile_id="tabular_profile_outlier_test",
+        generated_at=datetime(2026, 5, 20, tzinfo=UTC),
+    )
+    assert report.outliers is not None
+    amount_stats = next(c for c in report.outliers.columns if c.column == "amount")
+    assert amount_stats.outlier_count >= 1
+    assert "r_outlier" in amount_stats.affected_object_ids
+
+
+def test_class_imbalance_decomposition_on_synthetic_target() -> None:
+    """Imbalance decomposition matches the documented formulas."""
+    # 9 zeros, 1 one — N=10, min=1, max=9, imbalance_ratio=9.
+    rows = [{"object_id": f"r{i}", "is_fraud": "0"} for i in range(9)]
+    rows.append({"object_id": "r9", "is_fraud": "1"})
+    report = infer_tabular_profile(
+        iter(rows),
+        columns=("object_id", "is_fraud"),
+        request=_PROFILE_REQUEST,
+        source_manifest_artifact=_synthetic_manifest_artifact_ref(),
+        profile_id="tabular_profile_imbalance_test",
+        generated_at=datetime(2026, 5, 20, tzinfo=UTC),
+    )
+    assert report.class_imbalance is not None
+    ci = report.class_imbalance
+    assert ci.total_samples == 10
+    assert ci.imbalance_ratio == 9.0
+    assert abs(ci.minority_class_share - 0.1) < 1e-9
+    expected_balance = 1.0 / math.log1p(9.0)
+    assert abs(ci.balance_score - expected_balance) < 1e-9
+    # Alternative: rare_count / mean_count = 1 / (10/2) = 0.2.
+    assert abs(ci.balance_score_alternative - 0.2) < 1e-9
+    beta = ci.effective_number_beta
+    assert abs(
+        ci.effective_number_of_samples["1"] - (1 - beta**1) / (1 - beta)
+    ) < 1e-9
 
 
 # ---------------------------------------------------------------------------

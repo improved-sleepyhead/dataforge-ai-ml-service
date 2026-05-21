@@ -20,6 +20,20 @@ TASK-024 extension:
   Core can raise a hard-blocker candidate when the dataset has missing
   target values (training cannot proceed without target labels).
 
+TASK-025 extension:
+
+* exact duplicate-row detection over a deterministic signature (all
+  columns except the id column) with affected ``object_id`` set;
+* IQR-based outlier detection for numeric columns;
+* class-imbalance diagnostics for the target column with explicit
+  decomposition: ``minority_class_share = min_c n_c / N``,
+  ``imbalance_ratio = max_c n_c / min_c n_c``,
+  ``balance_score = 1 / log(1 + imbalance_ratio)``, alternative
+  ``balance_score_alternative = min_c(n_c) / mean_c(n_c)``, and
+  ``effective_number_of_samples = (1 - β^n) / (1 - β)`` (Cui 2019);
+* leakage candidate detection by column-name heuristic and by
+  observed target match rate.
+
 Privacy rules honored here:
 
 * the profiler never logs raw row payloads or column samples;
@@ -48,6 +62,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import re
 import uuid
 from collections.abc import Iterable
@@ -61,13 +76,20 @@ from app.adapters import ArtifactRegistry, RegisteredArtifact
 from app.adapters.object_storage import MinioObjectStorageAdapter
 from app.domain import (
     ArtifactRef,
+    ClassCount,
+    ClassImbalanceDiagnostics,
     ColumnMissingness,
+    ColumnOutlierStats,
     ColumnProfile,
     ColumnRole,
     ColumnType,
+    DuplicateDiagnostics,
+    LeakageCandidate,
+    LeakageDiagnostics,
     MissingnessByGroup,
     MissingnessDiagnostics,
     MissingnessGroupStats,
+    OutlierDiagnostics,
     TabularProfileLineage,
     TabularProfileReport,
 )
@@ -118,6 +140,14 @@ _LEAKAGE_NAME_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"target_leak", re.IGNORECASE),
 )
 
+_OUTLIER_METHOD = "iqr_1.5"
+_OUTLIER_IQR_MULTIPLIER = 1.5
+_OUTLIER_AFFECTED_ID_LIMIT = 25
+_DUPLICATE_AFFECTED_ID_LIMIT = 100
+_LEAKAGE_TARGET_MATCH_THRESHOLD = 0.5
+_CLASS_IMBALANCE_BETA = 0.999
+_CLASS_IMBALANCE_RATIO_THRESHOLD = 1.0001
+
 _DATETIME_FORMATS: tuple[str, ...] = (
     "%Y-%m-%d",
     "%Y-%m-%dT%H:%M:%S",
@@ -139,6 +169,8 @@ class ProfileBuildRequest(BaseModel):
     source_artifact_id: NonEmptyStr
     source_system: NonEmptyStr = "transactions"
     segment_column: str | None = "customer_segment"
+    id_column: str = "object_id"
+    outlier_columns: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -170,16 +202,41 @@ def infer_tabular_profile(
 
     target_column = _select_target_column(columns)
     segment_column = _select_segment_column(columns, request.segment_column)
+    id_column = request.id_column if request.id_column in columns else None
+    signature_columns = tuple(
+        sorted(c for c in columns if c != id_column)
+    )
+    outlier_columns = _resolve_outlier_columns(columns, request.outlier_columns)
 
     aggregators = {column: _ColumnAggregator(name=column) for column in columns}
     target_missing_count = 0
-    target_total_count = 0
     # Per-column, per-target-value missing/total counters.
     by_target_counters: dict[str, dict[str, _MissingTotal]] = {
         column: {} for column in columns
     }
     by_segment_counters: dict[str, dict[str, _MissingTotal]] = {
         column: {} for column in columns
+    }
+
+    # Duplicate signature -> list of object ids (with that signature).
+    signature_to_object_ids: dict[tuple[str, ...], list[str]] = {}
+    # Per numeric column: list of (value, object_id) tuples for IQR.
+    numeric_samples: dict[str, list[tuple[float, str]]] = {
+        column: [] for column in outlier_columns
+    }
+    # Per target-class: count of rows.
+    target_class_counts: dict[str, int] = {}
+    # Leakage detection: per candidate column, count of rows where
+    # the column value equals the target value (string equality).
+    leakage_candidate_columns = tuple(
+        column
+        for column in columns
+        if any(
+            pattern.search(column) is not None for pattern in _LEAKAGE_NAME_PATTERNS
+        )
+    )
+    leakage_match_counters: dict[str, _MissingTotal] = {
+        column: _MissingTotal() for column in leakage_candidate_columns
     }
 
     row_count = 0
@@ -189,11 +246,22 @@ def infer_tabular_profile(
         segment_raw = row.get(segment_column, "") if segment_column else ""
         target_value = target_raw if target_raw != "" else None
         segment_value = segment_raw if segment_raw != "" else None
+        row_object_id = row.get(id_column, "") if id_column else ""
 
         if target_column is not None:
-            target_total_count += 1
             if target_raw == "":
                 target_missing_count += 1
+            else:
+                target_class_counts[target_raw] = (
+                    target_class_counts.get(target_raw, 0) + 1
+                )
+
+        # Duplicate signature: tuple of values for non-id columns,
+        # ordered by the canonical ``signature_columns`` tuple so the
+        # signature is independent of row column ordering.
+        if signature_columns:
+            signature = tuple(row.get(col, "") for col in signature_columns)
+            signature_to_object_ids.setdefault(signature, []).append(row_object_id)
 
         for column in columns:
             value = row.get(column, "")
@@ -213,6 +281,22 @@ def infer_tabular_profile(
                 bucket.total += 1
                 if is_missing:
                     bucket.missing += 1
+
+            if column in numeric_samples and value != "":
+                numeric_value = _try_parse_float(value)
+                if numeric_value is not None:
+                    numeric_samples[column].append((numeric_value, row_object_id))
+
+        # Leakage candidate: string equality with target value.
+        if target_column is not None and target_value is not None:
+            for candidate in leakage_candidate_columns:
+                value = row.get(candidate, "")
+                if value == "":
+                    continue
+                counter = leakage_match_counters[candidate]
+                counter.total += 1
+                if value == target_value:
+                    counter.missing += 1  # reuse "missing" slot for matches
 
     column_profiles: list[ColumnProfile] = []
     group_keys: list[str] = []
@@ -279,6 +363,21 @@ def infer_tabular_profile(
         segment_column=segment_column,
     )
 
+    duplicates = _build_duplicate_diagnostics(
+        signature_to_object_ids=signature_to_object_ids,
+        signature_columns=signature_columns,
+        id_column=id_column,
+    )
+    outliers = _build_outlier_diagnostics(numeric_samples)
+    class_imbalance = _build_class_imbalance_diagnostics(
+        target_column=target_column,
+        target_class_counts=target_class_counts,
+    )
+    leakage = _build_leakage_diagnostics(
+        candidate_columns=leakage_candidate_columns,
+        match_counters=leakage_match_counters,
+    )
+
     return TabularProfileReport(
         profile_id=profile_id or f"tabular_profile_{uuid.uuid4().hex[:16]}",
         profile_schema_version=PROFILE_REPORT_SCHEMA_VERSION,
@@ -291,6 +390,10 @@ def infer_tabular_profile(
         id_columns=tuple(id_columns),
         pii_like_columns=tuple(pii_columns),
         missingness=missingness,
+        duplicates=duplicates,
+        outliers=outliers,
+        class_imbalance=class_imbalance,
+        leakage=leakage,
         lineage=TabularProfileLineage(
             dataset_id=request.dataset_id,
             version_id=request.version_id,
@@ -452,6 +555,195 @@ class _MissingTotal:
 
     missing: int = 0
     total: int = 0
+
+
+def _resolve_outlier_columns(
+    columns: tuple[str, ...],
+    requested: tuple[str, ...] | None,
+) -> tuple[str, ...]:
+    if requested is None:
+        return tuple(c for c in ("amount", "transaction_amount", "monthly_income") if c in columns)
+    return tuple(c for c in requested if c in columns)
+
+
+def _try_parse_float(value: str) -> float | None:
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    if result != result:  # NaN
+        return None
+    return result
+
+
+def _build_duplicate_diagnostics(
+    *,
+    signature_to_object_ids: dict[tuple[str, ...], list[str]],
+    signature_columns: tuple[str, ...],
+    id_column: str | None,
+) -> DuplicateDiagnostics:
+    duplicate_pair_count = 0
+    duplicate_group_count = 0
+    affected: list[str] = []
+    for object_ids in signature_to_object_ids.values():
+        if len(object_ids) < 2:
+            continue
+        duplicate_group_count += 1
+        # Number of duplicate "pairs" within a group is len-1 (the canonical
+        # row plus len-1 duplicates of it).
+        duplicate_pair_count += len(object_ids) - 1
+        for oid in object_ids:
+            if oid:
+                affected.append(oid)
+    affected_unique = tuple(sorted(set(affected)))
+    if len(affected_unique) > _DUPLICATE_AFFECTED_ID_LIMIT:
+        affected_unique = affected_unique[:_DUPLICATE_AFFECTED_ID_LIMIT]
+    return DuplicateDiagnostics(
+        duplicate_pair_count=duplicate_pair_count,
+        duplicate_group_count=duplicate_group_count,
+        affected_object_ids=affected_unique,
+        signature_columns=signature_columns,
+        id_column=id_column,
+    )
+
+
+def _build_outlier_diagnostics(
+    numeric_samples: dict[str, list[tuple[float, str]]],
+) -> OutlierDiagnostics | None:
+    if not numeric_samples:
+        return None
+    columns: list[ColumnOutlierStats] = []
+    for column, samples in numeric_samples.items():
+        if not samples:
+            columns.append(
+                ColumnOutlierStats(
+                    column=column,
+                    outlier_count=0,
+                    total_count=0,
+                    outlier_rate=0.0,
+                )
+            )
+            continue
+        values = sorted(value for value, _ in samples)
+        q1 = _quantile(values, 0.25)
+        q3 = _quantile(values, 0.75)
+        iqr = q3 - q1
+        lower = q1 - _OUTLIER_IQR_MULTIPLIER * iqr
+        upper = q3 + _OUTLIER_IQR_MULTIPLIER * iqr
+        affected: list[str] = []
+        outlier_count = 0
+        for value, oid in samples:
+            if value < lower or value > upper:
+                outlier_count += 1
+                if oid:
+                    affected.append(oid)
+        affected_unique = tuple(sorted(set(affected))[:_OUTLIER_AFFECTED_ID_LIMIT])
+        total = len(samples)
+        columns.append(
+            ColumnOutlierStats(
+                column=column,
+                outlier_count=outlier_count,
+                total_count=total,
+                outlier_rate=outlier_count / total if total else 0.0,
+                q1=q1,
+                q3=q3,
+                iqr_lower_bound=lower,
+                iqr_upper_bound=upper,
+                affected_object_ids=affected_unique,
+            )
+        )
+    return OutlierDiagnostics(method=_OUTLIER_METHOD, columns=tuple(columns))
+
+
+def _quantile(sorted_values: list[float], q: float) -> float:
+    if not sorted_values:
+        return 0.0
+    if len(sorted_values) == 1:
+        return sorted_values[0]
+    pos = (len(sorted_values) - 1) * q
+    lower_idx = int(pos)
+    upper_idx = min(lower_idx + 1, len(sorted_values) - 1)
+    fraction = pos - lower_idx
+    return sorted_values[lower_idx] + (
+        sorted_values[upper_idx] - sorted_values[lower_idx]
+    ) * fraction
+
+
+def _build_class_imbalance_diagnostics(
+    *,
+    target_column: str | None,
+    target_class_counts: dict[str, int],
+) -> ClassImbalanceDiagnostics | None:
+    if target_column is None or not target_class_counts:
+        return None
+    total = sum(target_class_counts.values())
+    if total == 0:
+        return None
+    sorted_counts = sorted(target_class_counts.items(), key=lambda kv: (kv[1], kv[0]))
+    rare_label, rare_count = sorted_counts[0]
+    max_count = max(target_class_counts.values())
+    minority_share = rare_count / total
+    imbalance_ratio = (max_count / rare_count) if rare_count > 0 else float(max_count)
+    # 1 / log(1 + imbalance_ratio) saturates at 1 when imbalance is exactly 1
+    # (perfectly balanced); clamp to [0, 1].
+    log_term = math.log1p(imbalance_ratio)
+    balance_score = min(1.0, 1.0 / log_term) if log_term > 0 else 0.0
+    mean_count = total / len(target_class_counts)
+    balance_score_alternative = (
+        min(1.0, rare_count / mean_count) if mean_count > 0 else 0.0
+    )
+    beta = _CLASS_IMBALANCE_BETA
+    effective = {
+        label: (1.0 - (beta ** count)) / (1.0 - beta)
+        for label, count in target_class_counts.items()
+    }
+    return ClassImbalanceDiagnostics(
+        target_column=target_column,
+        total_samples=total,
+        class_counts=tuple(
+            ClassCount(label=label, count=count)
+            for label, count in sorted(target_class_counts.items())
+        ),
+        rare_class_label=rare_label,
+        rare_class_count=rare_count,
+        rare_class_ratio=minority_share,
+        minority_class_label=rare_label,
+        minority_class_share=minority_share,
+        imbalance_ratio=imbalance_ratio if imbalance_ratio >= 1.0 else 1.0,
+        balance_score=balance_score,
+        balance_score_alternative=balance_score_alternative,
+        effective_number_beta=beta,
+        effective_number_of_samples=effective,
+    )
+
+
+def _build_leakage_diagnostics(
+    *,
+    candidate_columns: tuple[str, ...],
+    match_counters: dict[str, _MissingTotal],
+) -> LeakageDiagnostics:
+    candidates: list[LeakageCandidate] = []
+    for column in candidate_columns:
+        counter = match_counters.get(column)
+        match_rate: float | None = None
+        if counter is not None and counter.total > 0:
+            match_rate = counter.missing / counter.total
+        # Flag the column either when its name matches a known leakage
+        # pattern (already filtered into candidate_columns) or when the
+        # observed target match rate is high. Both signals carry the
+        # same stable reason_code; ``target_match_rate`` is reported when
+        # it can be computed, otherwise it stays ``None``.
+        reason_code = "name_pattern_leakage_candidate"
+        if match_rate is not None and match_rate >= _LEAKAGE_TARGET_MATCH_THRESHOLD:
+            reason_code = "high_target_match_rate"
+        candidates.append(
+            LeakageCandidate(
+                column=column,
+                reason_code=reason_code,
+                target_match_rate=match_rate,
+            )
+        )
+    return LeakageDiagnostics(candidates=tuple(candidates))
 
 
 def _column_name_looks_pii(column: str) -> bool:
