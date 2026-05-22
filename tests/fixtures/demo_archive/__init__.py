@@ -8,10 +8,10 @@ contract-shaped:
   segment-dependent missing ``monthly_income``, exact duplicates, numeric
   outliers, and a target-leakage candidate column.
 * ``predictions.jsonl`` — model predictions joined to transactions by
-  ``object_id`` with ``true_label``, ``predicted_label``, ``predicted_proba``
-  (sums to 1.0), ``confidence``, ``split``, ``model_id``, ``model_version``,
-  ``inference_timestamp``. Includes at least one ambiguous object and one
-  probable-label-error candidate.
+  canonical Asset Manifest ``object_id`` with ``true_label``,
+  ``predicted_label``, ``predicted_proba`` (sums to 1.0), ``confidence``,
+  ``split``, ``model_id``, ``model_version``, ``inference_timestamp``. Includes
+  at least one ambiguous object and one probable-label-error candidate.
 * ``support_messages.jsonl`` and ``ocr_records.jsonl`` — text/OCR proof data
   with PII-like tokens and exact duplicates. The PII-like tokens use only
   fake/synthetic values so the fixture is safe to commit.
@@ -22,6 +22,7 @@ are present.
 
 from tests.fixtures.demo_archive.builder import (
     DEFAULT_SEED,
+    DEMO_DATASET_VERSION_ID,
     DemoArchive,
     build_demo_archive,
     load_expected_counts,
@@ -29,6 +30,7 @@ from tests.fixtures.demo_archive.builder import (
 
 __all__ = [
     "DEFAULT_SEED",
+    "DEMO_DATASET_VERSION_ID",
     "DemoArchive",
     "build_demo_archive",
     "load_expected_counts",

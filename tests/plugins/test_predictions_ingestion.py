@@ -155,6 +155,34 @@ def test_prediction_coverage_unmatched_and_missing_rows() -> None:
     assert set(coverage.missing_prediction_object_ids) == {"c", "d"}
 
 
+def test_raw_transaction_ids_do_not_join_to_canonical_manifest_ids(
+    tmp_path: Path,
+) -> None:
+    """Regression: predictions must join to ManifestRow.object_id, not metadata ids."""
+    storage, registry, archive_path = _setup_demo(tmp_path)
+    validated = _validated_manifest_artifact(storage, registry, archive_path)
+    raw_predictions = _persist_demo_predictions(storage, registry, archive_path)
+
+    canonical_ids = _manifest_object_ids_from_artifact(storage, validated)
+    raw_transaction_ids = _manifest_source_object_ids_from_artifact(storage, validated)
+    _rows_report, prediction_rows = validate_predictions_jsonl(
+        storage.get(raw_predictions.uri).data
+    )
+    raw_id_rows = [
+        row.model_copy(update={"object_id": raw_transaction_ids[index]})
+        for index, row in enumerate(prediction_rows)
+    ]
+
+    coverage = compute_prediction_coverage(
+        manifest_object_ids=canonical_ids,
+        prediction_rows=raw_id_rows,
+    )
+
+    assert len(raw_transaction_ids) == len(prediction_rows)
+    assert coverage.matched_object_ids == ()
+    assert len(coverage.unmatched_prediction_object_ids) == len(prediction_rows)
+
+
 # ---------------------------------------------------------------------------
 # Step 3: invalid probability map → CONTRACT/PREDICTION_VALIDATION_FAILED
 # ---------------------------------------------------------------------------
@@ -420,20 +448,30 @@ def _manifest_object_ids_from_artifact(
     storage: MinioObjectStorageAdapter,
     validated: Any,
 ) -> list[str]:
-    """Return source_object_id (raw key) values from validated manifest.
-
-    Predictions reference the source object_id (e.g. txn_NNNNN), not the
-    derived obj_<24hex>; manifest builder preserves the original key in
-    metadata.source_object_id so downstream join logic can use it.
-    """
+    """Return canonical ManifestRow.object_id values from validated manifest."""
     raw = storage.get(validated.uri).data.decode("utf-8")
     object_ids: list[str] = []
     for line in raw.splitlines():
         if not line.strip():
             continue
         record = json.loads(line)
-        metadata = record.get("metadata", {})
-        source_id = metadata.get("source_object_id")
+        object_ids.append(record["object_id"])
+    return object_ids
+
+
+def _manifest_source_object_ids_from_artifact(
+    storage: MinioObjectStorageAdapter,
+    validated: Any,
+) -> list[str]:
+    raw = storage.get(validated.uri).data.decode("utf-8")
+    object_ids: list[str] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        record = json.loads(line)
+        if record.get("source_system") != "transactions":
+            continue
+        source_id = record.get("metadata", {}).get("source_object_id")
         if source_id is not None:
             object_ids.append(source_id)
     return object_ids

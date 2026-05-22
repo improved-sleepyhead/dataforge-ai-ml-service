@@ -98,7 +98,11 @@ def test_skeleton_analyze_job_materializes_and_records_stage_events() -> None:
     }
     actual_stages = {event.stage for event in snapshot.job_events}
     assert expected_stages.issubset(actual_stages)
-    assert all(event.status is ComputeRunStatus.RUNNING for event in snapshot.job_events)
+    assert snapshot.job_events[-1].status is ComputeRunStatus.COMPLETED
+    assert all(
+        event.status in {ComputeRunStatus.RUNNING, ComputeRunStatus.COMPLETED}
+        for event in snapshot.job_events
+    )
     assert all(
         event.platform_job_id == "platform_job_demo" for event in snapshot.job_events
     )

@@ -24,6 +24,7 @@ from app.plugins.text_ocr import (
     validate_ocr_records_jsonl,
     validate_support_messages_jsonl,
 )
+from app.validation.contracts import load_contract_pack, validate_contract_payload
 from tests.fixtures.demo_archive import build_demo_archive
 
 _DATASET_ID = "dataset_demo"
@@ -98,6 +99,31 @@ def test_build_text_ocr_report_aggregates_sources(tmp_path: Path) -> None:
     assert report.total_valid_record_count == 15 + 10
     assert report.total_duplicate_group_count >= 2
     assert report.total_duplicate_record_count >= 4
+
+
+def test_text_ocr_report_validates_against_contract_pack(tmp_path: Path) -> None:
+    support_payload = _read_archive_entry(tmp_path, "support_messages.jsonl")
+    ocr_payload = _read_archive_entry(tmp_path, "ocr_records.jsonl")
+    request = TextOcrBuildRequest(
+        dataset_id=_DATASET_ID,
+        version_id=_VERSION_ID,
+        parent_version_id=_PARENT_VERSION_ID,
+        created_by_job_id=_JOB_ID,
+        config_hash=_CONFIG_HASH,
+    )
+    result = build_text_ocr_report(
+        request=request,
+        sources=[
+            validate_support_messages_jsonl(support_payload, detect_pii=True),
+            validate_ocr_records_jsonl(ocr_payload, detect_pii=True),
+        ],
+    )
+
+    validate_contract_payload(
+        load_contract_pack(),
+        "text_ocr_report",
+        result.report.model_dump(mode="json"),
+    )
 
 
 # ---------------------------------------------------------------------------

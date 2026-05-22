@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/text_ocr_report.schema.json",
+  "title": "TextOcrReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_schema_version",
+    "dataset_id",
+    "version_id",
+    "parent_version_id",
+    "created_by_job_id",
+    "config_hash",
+    "sources",
+    "total_record_count",
+    "total_valid_record_count",
+    "total_issue_count",
+    "total_duplicate_group_count",
+    "total_duplicate_record_count",
+    "total_pii_record_count",
+    "total_pii_token_count",
+    "total_redacted_record_count",
+    "review_queue_object_ids",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "report_id": {"type": "string", "minLength": 1},
+    "report_schema_version": {"type": "string", "const": "text_ocr_report.v1"},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "version_id": {"type": "string", "minLength": 1},
+    "parent_version_id": {"type": "string", "minLength": 1},
+    "created_by_job_id": {"type": "string", "minLength": 1},
+    "config_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "sources": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/source_report"}
+    },
+    "total_record_count": {"type": "integer", "minimum": 0},
+    "total_valid_record_count": {"type": "integer", "minimum": 0},
+    "total_issue_count": {"type": "integer", "minimum": 0},
+    "total_duplicate_group_count": {"type": "integer", "minimum": 0},
+    "total_duplicate_record_count": {"type": "integer", "minimum": 0},
+    "total_pii_record_count": {"type": "integer", "minimum": 0},
+    "total_pii_token_count": {"type": "integer", "minimum": 0},
+    "total_redacted_record_count": {"type": "integer", "minimum": 0},
+    "review_queue_object_ids": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "generated_at": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "source_report": {
+      "type": "object",
+      "required": [
+        "source_kind",
+        "source_name",
+        "record_count",
+        "valid_record_count",
+        "issue_count",
+        "issues",
+        "duplicate_groups",
+        "duplicate_record_count",
+        "duplicate_object_ids",
+        "average_text_length",
+        "min_text_length",
+        "max_text_length",
+        "average_ocr_confidence",
+        "pii_findings",
+        "pii_token_count",
+        "pii_record_count",
+        "redacted_record_count",
+        "redacted_artifact_uri",
+        "redacted_artifact_hash",
+        "review_queue_object_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {"type": "string", "enum": ["support_messages", "ocr_records"]},
+        "source_name": {"type": "string", "minLength": 1},
+        "record_count": {"type": "integer", "minimum": 0},
+        "valid_record_count": {"type": "integer", "minimum": 0},
+        "issue_count": {"type": "integer", "minimum": 0},
+        "issues": {"type": "array", "items": {"$ref": "#/$defs/issue"}},
+        "duplicate_groups": {"type": "array", "items": {"$ref": "#/$defs/duplicate_group"}},
+        "duplicate_record_count": {"type": "integer", "minimum": 0},
+        "duplicate_object_ids": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "average_text_length": {"type": "number", "minimum": 0},
+        "min_text_length": {"type": "integer", "minimum": 0},
+        "max_text_length": {"type": "integer", "minimum": 0},
+        "average_ocr_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "pii_findings": {"type": "array", "items": {"$ref": "#/$defs/pii_record"}},
+        "pii_token_count": {"type": "integer", "minimum": 0},
+        "pii_record_count": {"type": "integer", "minimum": 0},
+        "redacted_record_count": {"type": "integer", "minimum": 0},
+        "redacted_artifact_uri": {"type": ["string", "null"], "pattern": "^s3://[^\\s]+$"},
+        "redacted_artifact_hash": {"type": ["string", "null"], "pattern": "^sha256:[a-f0-9]{64}$"},
+        "review_queue_object_ids": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "issue": {
+      "type": "object",
+      "required": ["line_number", "object_id", "reason_code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "line_number": {"type": "integer", "minimum": 1},
+        "object_id": {"type": ["string", "null"]},
+        "reason_code": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1}
+      }
+    },
+    "duplicate_group": {
+      "type": "object",
+      "required": ["text_sha256", "object_ids", "count"],
+      "additionalProperties": false,
+      "properties": {
+        "text_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "object_ids": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "count": {"type": "integer", "minimum": 2}
+      }
+    },
+    "pii_record": {
+      "type": "object",
+      "required": [
+        "object_id",
+        "findings",
+        "pii_token_count",
+        "pii_risk_score",
+        "redacted_text_sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "object_id": {"type": "string", "minLength": 1},
+        "findings": {"type": "array", "items": {"$ref": "#/$defs/pii_finding"}},
+        "pii_token_count": {"type": "integer", "minimum": 0},
+        "pii_risk_score": {"type": "number", "minimum": 0, "maximum": 1},
+        "redacted_text_sha256": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+      }
+    },
+    "pii_finding": {
+      "type": "object",
+      "required": ["category", "occurrence_count"],
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["email", "phone", "passport", "payment_card", "bank_account", "secret"]
+        },
+        "occurrence_count": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

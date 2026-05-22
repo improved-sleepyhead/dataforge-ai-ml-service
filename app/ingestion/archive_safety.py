@@ -157,8 +157,24 @@ def validate_archive_bytes(
     Useful for streaming validation when bytes are obtained from object
     storage and have not been written to disk yet.
     """
+    import io
+
+    return validate_archive_seekable(
+        io.BytesIO(archive_bytes),
+        compressed_size=len(archive_bytes),
+        policy=policy,
+    )
+
+
+def validate_archive_seekable(
+    stream: IO[bytes],
+    *,
+    compressed_size: int,
+    policy: ArchiveSafetyPolicy | None = None,
+) -> ArchiveSafetyReport:
+    """Validate a seekable zip stream against the safety policy."""
     effective_policy = policy or ArchiveSafetyPolicy()
-    if len(archive_bytes) > effective_policy.max_compressed_bytes:
+    if compressed_size > effective_policy.max_compressed_bytes:
         raise ArchiveSafetyError(
             code=ErrorCode.ARCHIVE_SAFETY_VIOLATION,
             reason_code="compressed_size_exceeded",
@@ -166,12 +182,10 @@ def validate_archive_bytes(
         )
 
     try:
-        import io
-
         return _validate_zip_stream(
-            io.BytesIO(archive_bytes),
+            stream,
             policy=effective_policy,
-            compressed_size=len(archive_bytes),
+            compressed_size=compressed_size,
         )
     except zipfile.BadZipFile as exc:
         raise ArchiveSafetyError(
@@ -192,8 +206,15 @@ def validate_archive_artifact(
     The adapter enforces tenant/project/dataset prefix scoping, so passing
     out-of-scope URIs already fails before this function reads any bytes.
     """
-    stored = storage.get(artifact_uri)
-    return validate_archive_bytes(stored.data, policy=policy)
+    stored = storage.download_to_seekable(artifact_uri)
+    try:
+        return validate_archive_seekable(
+            stored.file,
+            compressed_size=stored.info.size_bytes,
+            policy=policy,
+        )
+    finally:
+        stored.file.close()
 
 
 def _validate_zip_stream(
@@ -317,4 +338,5 @@ __all__ = [
     "validate_archive_artifact",
     "validate_archive_bytes",
     "validate_archive_path",
+    "validate_archive_seekable",
 ]

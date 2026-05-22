@@ -5,6 +5,7 @@ from app.adapters.object_storage import (
     MinioObjectStorageAdapter,
     ObjectStorageError,
     ObjectStorageScope,
+    SeekableStoredObject,
     StoredObject,
     StoredObjectInfo,
 )
@@ -28,6 +29,7 @@ __all__ = [
     "PlatformAuditEvent",
     "PlatformJobEvent",
     "RegisteredArtifact",
+    "SeekableStoredObject",
     "StoredObject",
     "StoredObjectInfo",
     "create_fake_platform_app",

@@ -101,6 +101,7 @@ def test_run_status_bridge_emits_started_running_completed_pipeline() -> None:
         JobStage.RUNNING_DECISION_CORE.value,
         JobStage.COMPLETED.value,
     ]
+    assert snapshot.job_events[0].status is ComputeRunStatus.QUEUED
     assert snapshot.job_events[-1].status is ComputeRunStatus.COMPLETED
 
 
@@ -131,7 +132,7 @@ def test_run_status_bridge_emits_cancelled_event() -> None:
     snapshot = fake_platform.snapshot()
     [event] = snapshot.job_events
     assert event.stage == JobStage.CANCELLED.value
-    assert event.status is ComputeRunStatus.FAILED
+    assert event.status is ComputeRunStatus.CANCELLED
 
 
 def test_analyze_job_emits_canonical_lifecycle_stages() -> None:
@@ -158,11 +159,14 @@ def test_analyze_job_emits_canonical_lifecycle_stages() -> None:
         JobStage.PROFILING_TABULAR.value,
         JobStage.BUILDING_EVIDENCE.value,
         JobStage.RUNNING_DECISION_CORE.value,
+        JobStage.COMPLETED.value,
     }
     assert expected.issubset(stages)
     # All analyze events monotonically advance the progress between [0, 1].
     progresses = [event.details["progress"] for event in snapshot.job_events]
     assert all(0.0 <= value <= 1.0 for value in progresses)
+    assert snapshot.job_events[-1].stage == JobStage.COMPLETED.value
+    assert snapshot.job_events[-1].status is ComputeRunStatus.COMPLETED
 
 
 def test_apply_job_emits_completed_terminal_event() -> None:

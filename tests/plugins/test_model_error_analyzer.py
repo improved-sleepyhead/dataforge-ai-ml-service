@@ -18,19 +18,33 @@ Acceptance criteria covered:
 
 from __future__ import annotations
 
+import io
 import math
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
+from app.adapters import (
+    ArtifactRegistry,
+    MinioObjectStorageAdapter,
+    ObjectStorageScope,
+)
+from app.adapters.object_storage import ObjectStorageError, S3CompatibleClient
 from app.domain import (
+    DataModality,
     DataSplit,
+    ErrorCode,
     ModelErrorReportStatus,
     ModelErrorThresholds,
     PredictionRow,
 )
 from app.ingestion import (
+    BuildManifestRequest,
+    build_asset_manifest,
+    manifest_rows_from_artifact,
     open_archive_path,
     validate_predictions_jsonl,
 )
@@ -40,10 +54,12 @@ from app.plugins.predictions import (
     compute_object_signals,
 )
 from app.plugins.predictions.analyzer import ManifestRowSummary
-from tests.fixtures.demo_archive import build_demo_archive
+from tests.fixtures.demo_archive import DEMO_DATASET_VERSION_ID, build_demo_archive
 
 _DATASET_ID = "dataset_demo"
-_VERSION_ID = "version_demo"
+_VERSION_ID = DEMO_DATASET_VERSION_ID
+_PARENT_VERSION_ID = "dataset_version_parent"
+_JOB_ID = "compute_run_model_error"
 _CONFIG_HASH = "sha256:" + "a" * 64
 _MODEL_ID = "fraud_baseline"
 _MODEL_VERSION = "2026-05-14"
@@ -121,6 +137,37 @@ def test_probable_label_error_score_high_for_high_confidence_conflict() -> None:
     assert "probable_label_error" in signals.reason_codes
     assert "high_confidence_label_conflict" in signals.reason_codes
     assert "label_conflict" in signals.reason_codes
+    assert signals.label_support_status == "not_applicable"
+    assert "neighbor_label_support_not_available" in signals.reason_codes
+
+
+def test_neighbor_support_adds_disagreement_reason() -> None:
+    row = _row("obj_err", "dog", "cat", {"cat": 0.92, "dog": 0.05, "wolf": 0.03})
+    signals = compute_object_signals(
+        row,
+        label_override="dog",
+        neighbor_label_distribution={"cat": 0.8, "dog": 0.2},
+        cluster_label_distribution={"cat": 0.7, "dog": 0.3},
+    )
+    assert signals.label_support_status == "available"
+    assert signals.neighbor_label_support == pytest.approx(0.8)
+    assert signals.cluster_label_support == pytest.approx(0.7)
+    assert "neighbor_label_disagreement" in signals.reason_codes
+    assert "neighbor_label_support_not_available" not in signals.reason_codes
+
+
+def test_neighbor_support_for_manifest_label_reduces_label_error_score() -> None:
+    row = _row("obj_err", "dog", "cat", {"cat": 0.92, "dog": 0.05, "wolf": 0.03})
+    no_support = compute_object_signals(row, label_override="dog")
+    manifest_supported = compute_object_signals(
+        row,
+        label_override="dog",
+        neighbor_label_distribution={"cat": 0.1, "dog": 0.9},
+    )
+    assert manifest_supported.label_support_status == "available"
+    assert manifest_supported.neighbor_label_support == pytest.approx(0.1)
+    assert manifest_supported.probable_label_error_score < no_support.probable_label_error_score
+    assert "neighbor_label_disagreement" not in manifest_supported.reason_codes
 
 
 def test_low_confidence_label_conflict_does_not_raise_probable_label_error() -> None:
@@ -297,23 +344,101 @@ def _load_demo_inputs(
             payload = handle.read()
     _report, rows = validate_predictions_jsonl(payload)
 
-    # Build manifest_index from transactions.csv: object_id (raw) → label,
-    # segment.
-    import csv
-    import io
-    import zipfile
-
-    with zipfile.ZipFile(built.archive_path) as zf:
-        with zf.open("transactions.csv") as raw:
-            with io.TextIOWrapper(raw, encoding="utf-8", newline="") as wrapper:
-                tabular = list(csv.DictReader(wrapper))
-
-    manifest_index = {
-        record["object_id"]: ManifestRowSummary(
-            object_id=record["object_id"],
-            label="fraud" if record["is_fraud"] == "1" else "not_fraud",
-            segment=record.get("customer_segment") or None,
+    storage = MinioObjectStorageAdapter(
+        client=_InMemoryS3Client(),
+        bucket_name="dataforge-local",
+        prefix_root="dataforge",
+        scope=ObjectStorageScope(
+            organization_id="org_test",
+            project_id="project_test",
+            dataset_id=_DATASET_ID,
+        ),
+    )
+    registry = ArtifactRegistry(storage=storage)
+    request = BuildManifestRequest(
+        dataset_id=_DATASET_ID,
+        version_id=_VERSION_ID,
+        parent_version_id=_PARENT_VERSION_ID,
+        created_by_job_id=_JOB_ID,
+        config_hash=_CONFIG_HASH,
+    )
+    with open_archive_path(built.archive_path) as reader:
+        manifest_result = build_asset_manifest(
+            reader, request=request, registry=registry
         )
-        for record in tabular
+    manifest_rows = manifest_rows_from_artifact(
+        storage.get(manifest_result.manifest_artifact.uri).data
+    )
+    manifest_index = {
+        row.object_id: ManifestRowSummary(
+            object_id=row.object_id,
+            label=row.label,
+            segment=str(row.metadata.get("customer_segment") or "") or None,
+        )
+        for row in manifest_rows
+        if row.modality is DataModality.TABULAR
     }
     return rows, manifest_index
+
+
+class _InMemoryS3Client(S3CompatibleClient):
+    def __init__(self) -> None:
+        self._objects: dict[tuple[str, str], dict[str, Any]] = {}
+
+    def put_object(
+        self,
+        *,
+        Bucket: str,
+        Key: str,
+        Body: bytes,
+        ContentType: str,
+        Metadata: Mapping[str, str],
+    ) -> Mapping[str, Any]:
+        self._objects[(Bucket, Key)] = {
+            "Body": Body,
+            "ContentType": ContentType,
+            "Metadata": dict(Metadata),
+            "LastModified": datetime(2026, 5, 20, 12, 0, tzinfo=UTC),
+        }
+        return {"ETag": "fake-etag"}
+
+    def get_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
+        record = self._object(Bucket, Key)
+        body = record["Body"]
+        assert isinstance(body, bytes)
+        return {
+            "Body": io.BytesIO(body),
+            "ContentLength": len(body),
+            "ContentType": record["ContentType"],
+            "Metadata": record["Metadata"],
+            "LastModified": record["LastModified"],
+        }
+
+    def head_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
+        record = self._object(Bucket, Key)
+        body = record["Body"]
+        assert isinstance(body, bytes)
+        return {
+            "ContentLength": len(body),
+            "ContentType": record["ContentType"],
+            "Metadata": record["Metadata"],
+            "LastModified": record["LastModified"],
+        }
+
+    def list_objects_v2(self, *, Bucket: str, Prefix: str) -> Mapping[str, Any]:
+        return {
+            "Contents": [
+                {"Key": key, "Size": len(record["Body"])}
+                for (bucket, key), record in sorted(self._objects.items())
+                if bucket == Bucket and key.startswith(Prefix)
+            ]
+        }
+
+    def _object(self, bucket: str, key: str) -> dict[str, Any]:
+        try:
+            return self._objects[(bucket, key)]
+        except KeyError as exc:
+            raise ObjectStorageError(
+                code=ErrorCode.ARTIFACT_NOT_FOUND,
+                message="Object does not exist",
+            ) from exc

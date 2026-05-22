@@ -161,6 +161,7 @@ def test_open_archive_artifact_uses_object_storage_scope(tmp_path: Path) -> None
 
     assert "transactions.csv" in descriptors
     assert header_line.startswith(b"object_id,")
+    assert storage_client.get_object_calls == 1
 
 
 def _build_zip_payload(files: dict[str, bytes]) -> bytes:
@@ -176,6 +177,7 @@ def _build_zip_payload(files: dict[str, bytes]) -> bytes:
 class _InMemoryS3Client(S3CompatibleClient):
     def __init__(self) -> None:
         self._objects: dict[tuple[str, str], dict[str, Any]] = {}
+        self.get_object_calls = 0
 
     def put_object(
         self,
@@ -195,6 +197,7 @@ class _InMemoryS3Client(S3CompatibleClient):
         return {"ETag": "fake-etag"}
 
     def get_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
+        self.get_object_calls += 1
         record = self._objects[(Bucket, Key)]
         body = record["Body"]
         assert isinstance(body, bytes)

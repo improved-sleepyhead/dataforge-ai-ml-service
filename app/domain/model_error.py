@@ -62,6 +62,9 @@ class ObjectModelErrorSignals(BaseModel):
     label_conflict: bool
     ambiguous_object_score: Score
     probable_label_error_score: Score
+    neighbor_label_support: Score | None = None
+    cluster_label_support: Score | None = None
+    label_support_status: NonEmptyStr = "not_applicable"
     reason_codes: tuple[NonEmptyStr, ...] = ()
 
 
@@ -112,6 +115,7 @@ class ModelErrorThresholds(BaseModel):
     ambiguous_max_confidence: Score = 0.6
     ambiguous_min_normalized_entropy: Score = 0.7
     ambiguous_max_margin: Score = 0.2
+    label_support_threshold: Score = 0.6
 
 
 class ModelErrorReport(BaseModel):

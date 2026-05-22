@@ -70,6 +70,10 @@
     {
       "name": "prediction_manifest_row",
       "path": "schemas/prediction_manifest_row.schema.json"
+    },
+    {
+      "name": "text_ocr_report",
+      "path": "schemas/text_ocr_report.schema.json"
     }
   ],
   "examples": [
@@ -162,6 +166,11 @@
       "name": "prediction_manifest_row.fraud",
       "schema": "prediction_manifest_row",
       "path": "examples/prediction_manifest_row.fraud.json"
+    },
+    {
+      "name": "text_ocr_report.privacy",
+      "schema": "text_ocr_report",
+      "path": "examples/text_ocr_report.privacy.json"
     }
   ]
 }
