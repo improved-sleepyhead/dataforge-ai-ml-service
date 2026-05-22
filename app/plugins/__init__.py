@@ -12,15 +12,27 @@ from app.plugins.tabular import (
     build_tabular_profile_report,
     infer_tabular_profile,
 )
+from app.plugins.text_ocr import (
+    BuildTextOcrReportResult,
+    TextOcrBuildRequest,
+    build_text_ocr_report,
+    validate_ocr_records_jsonl,
+    validate_support_messages_jsonl,
+)
 
 __all__ = [
     "BuildProfileResult",
+    "BuildTextOcrReportResult",
     "ProfileBuildRequest",
+    "TextOcrBuildRequest",
     "analyze_model_errors",
     "build_not_applicable_report",
     "build_static_plugin_manager",
     "build_static_plugin_registry",
     "build_tabular_profile_report",
+    "build_text_ocr_report",
     "compute_object_signals",
     "infer_tabular_profile",
+    "validate_ocr_records_jsonl",
+    "validate_support_messages_jsonl",
 ]
