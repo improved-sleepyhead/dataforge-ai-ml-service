@@ -1,5 +1,5 @@
 {
-  "object_id": "txn_00123",
+  "object_id": "obj_000000000000000000000001",
   "true_label": "fraud",
   "predicted_label": "not_fraud",
   "predicted_proba": {"fraud": 0.41, "not_fraud": 0.59},

@@ -8,6 +8,7 @@ from app.ingestion.archive_reader import (
     open_archive_artifact,
     open_archive_bytes,
     open_archive_path,
+    validate_and_open_archive_artifact,
 )
 from app.ingestion.archive_safety import (
     ArchiveSafetyError,
@@ -16,6 +17,7 @@ from app.ingestion.archive_safety import (
     validate_archive_artifact,
     validate_archive_bytes,
     validate_archive_path,
+    validate_archive_seekable,
 )
 from app.ingestion.identity import (
     compute_content_sha256,
@@ -105,6 +107,8 @@ __all__ = [
     "open_archive_path",
     "validate_archive_artifact",
     "validate_archive_bytes",
+    "validate_archive_seekable",
+    "validate_and_open_archive_artifact",
     "validate_archive_path",
     "validate_manifest_jsonl",
     "validate_predictions_jsonl",

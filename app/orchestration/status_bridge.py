@@ -70,7 +70,7 @@ class RunStatusBridge:
             stage=stage,
             status=ComputeRunStatus.RUNNING
             if stage is not JobStage.QUEUED
-            else ComputeRunStatus.ACCEPTED,
+            else ComputeRunStatus.QUEUED,
             progress=progress,
             artifact_refs=(),
         )
@@ -134,7 +134,7 @@ class RunStatusBridge:
         return self._emit(
             run_context=run_context,
             stage=JobStage.CANCELLED,
-            status=ComputeRunStatus.FAILED,
+            status=ComputeRunStatus.CANCELLED,
             progress=progress,
             artifact_refs=(),
         )
@@ -206,6 +206,8 @@ def emit_stage_event(
         )
     if status is ComputeRunStatus.FAILED:
         return bridge.emit_failed(run_context=run_context, progress=progress)
+    if status is ComputeRunStatus.CANCELLED:
+        return bridge.emit_cancelled(run_context=run_context, progress=progress)
     return bridge.emit_started(
         run_context=run_context,
         stage=stage,

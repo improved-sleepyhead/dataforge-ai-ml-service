@@ -55,10 +55,14 @@
     "status": {
       "type": "string",
       "enum": [
+        "QUEUED",
         "ACCEPTED",
         "RUNNING",
         "COMPLETED",
-        "FAILED"
+        "FAILED",
+        "CANCELLED",
+        "SKIPPED",
+        "WAITING_APPROVAL"
       ]
     },
     "contract_pack_version": {

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import posixpath
+import tempfile
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol, cast
+from typing import IO, Any, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,7 +27,7 @@ class ObjectStorageError(ValueError):
 class S3Body(Protocol):
     """Readable body returned by boto3-compatible get_object calls."""
 
-    def read(self) -> bytes: ...
+    def read(self, amt: int | None = None) -> bytes: ...
 
 
 class S3CompatibleClient(Protocol):
@@ -82,6 +84,14 @@ class StoredObject(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     data: bytes
+    info: StoredObjectInfo
+
+
+@dataclass(frozen=True)
+class SeekableStoredObject:
+    """Seekable local copy of an object plus safe storage metadata."""
+
+    file: IO[bytes]
     info: StoredObjectInfo
 
 
@@ -171,6 +181,48 @@ class MinioObjectStorageAdapter:
         data = cast(S3Body, body).read()
         return StoredObject(data=data, info=self._info_from_response(key, response, data=data))
 
+    def download_to_seekable(
+        self,
+        uri: str,
+        *,
+        spool_max_size: int = 8 * 1024 * 1024,
+        chunk_size: int = 64 * 1024,
+    ) -> SeekableStoredObject:
+        """Download an object once into a seekable spooled file.
+
+        Python's ``zipfile.ZipFile`` needs seekable input for the central
+        directory. This method avoids repeated full-object reads while still
+        bounding memory through ``SpooledTemporaryFile``: small archives stay
+        in memory, larger archives roll over to a temporary file.
+        """
+        key = self._key_for_uri(uri)
+        response = self._client.get_object(Bucket=self._bucket_name, Key=key)
+        body = response.get("Body")
+        if not hasattr(body, "read"):
+            raise ObjectStorageError(
+                code=ErrorCode.ARTIFACT_NOT_FOUND,
+                message="Object body is unavailable",
+            )
+        reader = cast(S3Body, body)
+        digest = hashlib.sha256()
+        size_bytes = 0
+        spooled = tempfile.SpooledTemporaryFile(max_size=spool_max_size, mode="w+b")
+        while True:
+            chunk = reader.read(chunk_size)
+            if not chunk:
+                break
+            digest.update(chunk)
+            size_bytes += len(chunk)
+            spooled.write(chunk)
+        spooled.seek(0)
+        info = self._info_from_response(
+            key,
+            response,
+            hash_override=f"sha256:{digest.hexdigest()}",
+            size_override=size_bytes,
+        )
+        return SeekableStoredObject(file=spooled, info=info)
+
     def head(self, uri: str) -> StoredObjectInfo:
         """Return safe object metadata by scoped s3 URI."""
         key = self._key_for_uri(uri)
@@ -235,11 +287,15 @@ class MinioObjectStorageAdapter:
         response: Mapping[str, Any],
         *,
         data: bytes | None = None,
+        hash_override: str | None = None,
+        size_override: int | None = None,
     ) -> StoredObjectInfo:
         metadata = _string_metadata(response.get("Metadata", {}))
         digest = metadata.get("sha256")
         if data is not None:
             digest = _sha256(data)
+        if hash_override is not None:
+            digest = hash_override
         if not digest:
             digest = "sha256:" + "0" * 64
         updated_at = response.get("LastModified")
@@ -248,7 +304,9 @@ class MinioObjectStorageAdapter:
         return StoredObjectInfo(
             uri=self._uri_for_key(key),
             hash=digest,
-            size_bytes=_content_length(response, data),
+            size_bytes=size_override
+            if size_override is not None
+            else _content_length(response, data),
             content_type=str(response.get("ContentType") or "application/octet-stream"),
             updated_at=updated_at,
             metadata=metadata,

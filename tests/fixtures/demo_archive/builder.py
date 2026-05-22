@@ -28,7 +28,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.ingestion.identity import compute_record_sha256, derive_object_id
+
 DEFAULT_SEED = 20260520
+DEMO_DATASET_VERSION_ID = "dataset_version_demo"
 
 # Tunables. Changing these requires regenerating expected_counts.json.
 _TOTAL_TRANSACTIONS = 200
@@ -309,9 +312,14 @@ def _build_predictions(
 
         split = "train" if idx % 5 != 0 else "validation"
 
+        canonical_object_id = derive_object_id(
+            dataset_version_id=DEMO_DATASET_VERSION_ID,
+            row_key=transaction["object_id"],
+            content_hash=compute_record_sha256(transaction),
+        )
         rows.append(
             {
-                "object_id": transaction["object_id"],
+                "object_id": canonical_object_id,
                 "true_label": true_label,
                 "predicted_label": predicted_label,
                 "predicted_proba": {

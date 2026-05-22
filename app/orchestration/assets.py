@@ -113,6 +113,8 @@ def _materialize_skeleton(
 
     bridge = RunStatusBridge(fake_platform=fake_platform)
     bridge.emit_stage(run_context=run_context, stage=stage, progress=progress)
+    if asset_name == "review_queue":
+        bridge.emit_completed(run_context=run_context)
 
     metadata = _materialization_metadata(
         run_context=run_context,

@@ -22,10 +22,14 @@ class WorkflowType(StrEnum):
 class ComputeRunStatus(StrEnum):
     """Lifecycle states for compute-plane runs."""
 
+    QUEUED = "QUEUED"
     ACCEPTED = "ACCEPTED"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+    SKIPPED = "SKIPPED"
+    WAITING_APPROVAL = "WAITING_APPROVAL"
 
 
 class ComputeRun(BaseModel):

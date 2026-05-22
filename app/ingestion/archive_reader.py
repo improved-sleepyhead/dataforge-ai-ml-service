@@ -42,9 +42,9 @@ from app.ingestion.archive_safety import (
     ArchiveSafetyError,
     ArchiveSafetyPolicy,
     ArchiveSafetyReport,
-    validate_archive_artifact,
     validate_archive_bytes,
     validate_archive_path,
+    validate_archive_seekable,
 )
 
 _REQUIRED_ENTRY = "transactions.csv"
@@ -160,9 +160,11 @@ class ArchiveReader:
         *,
         archive: zipfile.ZipFile,
         contents: ArchiveContents,
+        closeable: IO[bytes] | None = None,
     ) -> None:
         self._archive = archive
         self._contents = contents
+        self._closeable = closeable
 
     @property
     def contents(self) -> ArchiveContents:
@@ -184,6 +186,8 @@ class ArchiveReader:
         traceback: TracebackType | None,
     ) -> None:
         self._archive.close()
+        if self._closeable is not None:
+            self._closeable.close()
 
 
 def open_archive_path(
@@ -215,20 +219,44 @@ def open_archive_artifact(
     policy: ArchiveSafetyPolicy | None = None,
 ) -> ArchiveReader:
     """Validate and open an archive identified by a scoped object-storage URI."""
-    safety_report = validate_archive_artifact(
+    stored = storage.download_to_seekable(artifact_uri)
+    try:
+        safety_report = validate_archive_seekable(
+            stored.file,
+            compressed_size=stored.info.size_bytes,
+            policy=policy,
+        )
+        stored.file.seek(0)
+        archive = zipfile.ZipFile(stored.file, mode="r")
+        return _build_reader(
+            archive=archive,
+            safety_report=safety_report,
+            closeable=stored.file,
+        )
+    except Exception:
+        stored.file.close()
+        raise
+
+
+def validate_and_open_archive_artifact(
+    *,
+    storage: MinioObjectStorageAdapter,
+    artifact_uri: str,
+    policy: ArchiveSafetyPolicy | None = None,
+) -> ArchiveReader:
+    """Backward-compatible alias for callers that want validation semantics."""
+    return open_archive_artifact(
         storage=storage,
         artifact_uri=artifact_uri,
         policy=policy,
     )
-    stored = storage.get(artifact_uri)
-    archive = zipfile.ZipFile(io.BytesIO(stored.data), mode="r")
-    return _build_reader(archive=archive, safety_report=safety_report)
 
 
 def _build_reader(
     *,
     archive: zipfile.ZipFile,
     safety_report: ArchiveSafetyReport,
+    closeable: IO[bytes] | None = None,
 ) -> ArchiveReader:
     descriptors = tuple(
         _descriptor_for_member(archive, info)
@@ -237,13 +265,15 @@ def _build_reader(
     )
     if not any(d.kind is ArchiveEntryKind.TRANSACTIONS for d in descriptors):
         archive.close()
+        if closeable is not None:
+            closeable.close()
         raise ArchiveSafetyError(
             code=ErrorCode.INVALID_ARCHIVE_STRUCTURE,
             reason_code="missing_required_entry",
             message="Archive does not contain the required transactions.csv entry.",
         )
     contents = ArchiveContents(descriptors=descriptors, safety_report=safety_report)
-    return ArchiveReader(archive=archive, contents=contents)
+    return ArchiveReader(archive=archive, contents=contents, closeable=closeable)
 
 
 def _descriptor_for_member(
@@ -290,4 +320,5 @@ __all__ = [
     "open_archive_artifact",
     "open_archive_bytes",
     "open_archive_path",
+    "validate_and_open_archive_artifact",
 ]

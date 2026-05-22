@@ -39,6 +39,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "dataforge_report",
         "export_package",
         "tabular_profile_report",
+        "text_ocr_report",
     } <= set(pack.schemas)
     assert {example.name for example in pack.examples} == {
         "artifact_ref.basic",
@@ -59,6 +60,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "export_package.ready",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
+        "text_ocr_report.privacy",
     }
 
 
@@ -84,6 +86,7 @@ def test_all_contract_examples_validate() -> None:
         "export_package.ready",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
+        "text_ocr_report.privacy",
     ]
 
 

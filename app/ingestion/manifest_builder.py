@@ -81,6 +81,8 @@ class UnsupportedEntry:
     name: str
     kind: ArchiveEntryKind
     file_size: int
+    line_number: int | None = None
+    reason_code: str = "unsupported_entry"
 
 
 @dataclass(frozen=True)
@@ -131,6 +133,7 @@ def build_asset_manifest(
                 source_artifact_id=source_artifact_id,
                 modality=DataModality.TEXT,
                 source_system="support_messages",
+                unsupported=unsupported,
             ):
                 rows.append(row)
                 rows_by_modality[row.modality] = (
@@ -143,6 +146,7 @@ def build_asset_manifest(
                 source_artifact_id=source_artifact_id,
                 modality=DataModality.DOCUMENT_OCR,
                 source_system="ocr_records",
+                unsupported=unsupported,
             ):
                 rows.append(row)
                 rows_by_modality[row.modality] = (
@@ -155,6 +159,7 @@ def build_asset_manifest(
                 source_artifact_id=source_artifact_id,
                 modality=DataModality.IMAGE,
                 source_system="image_manifest",
+                unsupported=unsupported,
             ):
                 rows.append(row)
                 rows_by_modality[row.modality] = (
@@ -284,8 +289,17 @@ def _tabular_metadata(row: dict[str, str]) -> dict[str, Any]:
 def _label_and_split_from_row(row: dict[str, str]) -> tuple[str | None, None]:
     for key in _TABULAR_TARGET_KEYS:
         if key in row and row[key] != "":
-            return row[key], None
+            return _canonical_label(key=key, value=row[key]), None
     return None, None
+
+
+def _canonical_label(*, key: str, value: str) -> str:
+    if key == "is_fraud":
+        if value == "1":
+            return "fraud"
+        if value == "0":
+            return "not_fraud"
+    return value
 
 
 # ---------------------------------------------------------------------------
@@ -300,6 +314,7 @@ def _build_jsonl_rows(
     source_artifact_id: str,
     modality: DataModality,
     source_system: str,
+    unsupported: list[UnsupportedEntry],
 ) -> Iterable[ManifestRow]:
     asset_uri_prefix = _manifest_asset_uri_prefix(request, source_system=source_system)
     with descriptor.open() as handle:
@@ -309,11 +324,26 @@ def _build_jsonl_rows(
             try:
                 record = json.loads(raw_line)
             except json.JSONDecodeError:
-                # Malformed JSONL lines are surfaced as skeleton "unsupported"
-                # rows in a future task; for now we deliberately skip them
-                # rather than fail the whole manifest build.
+                unsupported.append(
+                    UnsupportedEntry(
+                        name=descriptor.name,
+                        kind=descriptor.kind,
+                        file_size=descriptor.file_size,
+                        line_number=line_number,
+                        reason_code="invalid_jsonl",
+                    )
+                )
                 continue
             if not isinstance(record, dict):
+                unsupported.append(
+                    UnsupportedEntry(
+                        name=descriptor.name,
+                        kind=descriptor.kind,
+                        file_size=descriptor.file_size,
+                        line_number=line_number,
+                        reason_code="jsonl_row_not_object",
+                    )
+                )
                 continue
             content_hash = compute_record_sha256(record)
             row_key = (

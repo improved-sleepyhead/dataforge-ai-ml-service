@@ -97,7 +97,7 @@ def test_tabular_rows_surface_link_keys_into_metadata(tmp_path: Path) -> None:
     sample = tabular_rows[0]
     assert "case_id" in sample.metadata
     assert "customer_id_hash" in sample.metadata
-    assert sample.label in {"0", "1"}
+    assert sample.label in {"fraud", "not_fraud"}
 
 
 def test_text_and_ocr_rows_use_correct_modalities_and_source_system(
@@ -142,6 +142,35 @@ def test_unsupported_archive_entries_are_reported_not_dropped(tmp_path: Path) ->
     assert all("extra/payload.csv" not in row.asset_uri for row in rows)
 
 
+def test_malformed_jsonl_rows_are_reported_not_silently_dropped(
+    tmp_path: Path,
+) -> None:
+    archive_path = tmp_path / "malformed_jsonl.zip"
+    archive_path.write_bytes(
+        _zip_bytes(
+            {
+                "transactions.csv": b"object_id,is_fraud\ntxn_00001,1\n",
+                "support_messages.jsonl": (
+                    b'{"object_id":"support_0001","text":"valid message"}\n'
+                    b"{not-json}\n"
+                    b'["not", "an", "object"]\n'
+                ),
+            }
+        )
+    )
+    _archive_path, registry, storage = _archive_and_registry(tmp_path / "storage")
+
+    with open_archive_path(archive_path) as reader:
+        result = build_asset_manifest(reader, request=_REQUEST, registry=registry)
+
+    reason_codes = {entry.reason_code for entry in result.unsupported_entries}
+    assert {"invalid_jsonl", "jsonl_row_not_object"}.issubset(reason_codes)
+    assert any(entry.line_number == 2 for entry in result.unsupported_entries)
+    assert any(entry.line_number == 3 for entry in result.unsupported_entries)
+    rows = manifest_rows_from_artifact(storage.get(result.manifest_artifact.uri).data)
+    assert len([row for row in rows if row.modality is DataModality.TEXT]) == 1
+
+
 def test_repeated_manifest_build_is_idempotent(tmp_path: Path) -> None:
     archive_path, registry, storage = _archive_and_registry(tmp_path)
 
@@ -182,6 +211,16 @@ def _augment_archive(archive_bytes: bytes, *, extra_files: dict[str, bytes]) -> 
                 dst.writestr(member, src.read(member.filename))
             for name, payload in extra_files.items():
                 dst.writestr(name, payload)
+    return output.getvalue()
+
+
+def _zip_bytes(files: dict[str, bytes]) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, payload in files.items():
+            info = zipfile.ZipInfo(filename=name)
+            info.external_attr = 0o644 << 16
+            archive.writestr(info, payload)
     return output.getvalue()
 
 

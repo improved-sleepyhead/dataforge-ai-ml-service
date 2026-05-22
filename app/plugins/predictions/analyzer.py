@@ -55,6 +55,8 @@ _REASON_HIGH_CONFIDENCE_LABEL_CONFLICT = "high_confidence_label_conflict"
 _REASON_LARGE_MARGIN_LABEL_CONFLICT = "large_margin_label_conflict"
 _REASON_LOW_ENTROPY_LABEL_CONFLICT = "low_entropy_label_conflict"
 _REASON_LABEL_CONFLICT = "label_conflict"
+_REASON_NEIGHBOR_LABEL_DISAGREEMENT = "neighbor_label_disagreement"
+_REASON_LABEL_SUPPORT_NOT_AVAILABLE = "neighbor_label_support_not_available"
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,8 @@ class ManifestRowSummary:
     object_id: str
     label: str | None = None
     segment: str | None = None
+    neighbor_label_distribution: Mapping[str, float] | None = None
+    cluster_label_distribution: Mapping[str, float] | None = None
 
 
 _DEFAULT_THRESHOLDS = ModelErrorThresholds()
@@ -81,6 +85,8 @@ def compute_object_signals(
     row: PredictionRow,
     *,
     label_override: str | None = None,
+    neighbor_label_distribution: Mapping[str, float] | None = None,
+    cluster_label_distribution: Mapping[str, float] | None = None,
     thresholds: ModelErrorThresholds | None = None,
 ) -> ObjectModelErrorSignals:
     """Compute uncertainty and label-error signals for one prediction row.
@@ -104,6 +110,17 @@ def compute_object_signals(
 
     true_label = label_override if label_override is not None else row.true_label
     label_conflict = row.predicted_label != true_label
+    neighbor_label_support = _label_support(
+        neighbor_label_distribution, row.predicted_label
+    )
+    cluster_label_support = _label_support(
+        cluster_label_distribution, row.predicted_label
+    )
+    label_support_status = (
+        "available"
+        if neighbor_label_distribution is not None or cluster_label_distribution is not None
+        else "not_applicable"
+    )
 
     # Ambiguous object: low confidence, low margin, high normalized
     # entropy. Build a smooth score in [0, 1] from these three soft
@@ -120,12 +137,16 @@ def compute_object_signals(
     # with the manifest label AND the model is confident (high
     # confidence, large margin, low normalized_entropy).
     if label_conflict:
-        confidence_component = confidence
-        margin_component = margin
-        entropy_component = max(0.0, 1.0 - normalized_entropy)
-        probable_label_error_score = (
-            confidence_component + margin_component + entropy_component
-        ) / 3.0
+        score_components = [
+            confidence,
+            margin,
+            max(0.0, 1.0 - normalized_entropy),
+        ]
+        if neighbor_label_distribution is not None:
+            score_components.append(neighbor_label_support or 0.0)
+        if cluster_label_distribution is not None:
+            score_components.append(cluster_label_support or 0.0)
+        probable_label_error_score = sum(score_components) / len(score_components)
     else:
         probable_label_error_score = 0.0
     probable_label_error_score = min(
@@ -145,6 +166,19 @@ def compute_object_signals(
         reasons.append(_REASON_LOW_PREDICTION_MARGIN)
     if label_conflict:
         reasons.append(_REASON_LABEL_CONFLICT)
+        if label_support_status == "not_applicable":
+            reasons.append(_REASON_LABEL_SUPPORT_NOT_AVAILABLE)
+        if (
+            (
+                neighbor_label_support is not None
+                and neighbor_label_support >= thresholds.label_support_threshold
+            )
+            or (
+                cluster_label_support is not None
+                and cluster_label_support >= thresholds.label_support_threshold
+            )
+        ):
+            reasons.append(_REASON_NEIGHBOR_LABEL_DISAGREEMENT)
         if confidence >= thresholds.label_error_confidence:
             reasons.append(_REASON_PROBABLE_LABEL_ERROR)
             reasons.append(_REASON_HIGH_CONFIDENCE_LABEL_CONFLICT)
@@ -172,6 +206,9 @@ def compute_object_signals(
         label_conflict=label_conflict,
         ambiguous_object_score=ambiguous_object_score,
         probable_label_error_score=probable_label_error_score,
+        neighbor_label_support=neighbor_label_support,
+        cluster_label_support=cluster_label_support,
+        label_support_status=label_support_status,
         reason_codes=tuple(unique_reasons),
     )
 
@@ -222,7 +259,11 @@ def analyze_model_errors(
         if summary is None or summary.label is None:
             continue
         signals = compute_object_signals(
-            row, label_override=summary.label, thresholds=thresholds
+            row,
+            label_override=summary.label,
+            neighbor_label_distribution=summary.neighbor_label_distribution,
+            cluster_label_distribution=summary.cluster_label_distribution,
+            thresholds=thresholds,
         )
         object_signals.append(signals)
         classes_seen.add(signals.true_label)
@@ -345,6 +386,18 @@ def build_not_applicable_report(
 class _BucketStats:
     total: int = 0
     errors: int = 0
+
+
+def _label_support(
+    distribution: Mapping[str, float] | None,
+    label: str,
+) -> float | None:
+    if distribution is None:
+        return None
+    value = distribution.get(label)
+    if value is None:
+        return 0.0
+    return min(1.0, max(0.0, float(value)))
 
 
 __all__ = [

@@ -11,12 +11,22 @@ Acceptance criteria covered:
 
 from __future__ import annotations
 
+import io
 import json
+from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
+from app.adapters import ArtifactRegistry, MinioObjectStorageAdapter, ObjectStorageScope
+from app.adapters.object_storage import ObjectStorageError, S3CompatibleClient
 from app.domain import PiiCategory
+from app.domain.errors import ErrorCode
 from app.ingestion import open_archive_path
 from app.plugins.text_ocr import (
+    TEXT_OCR_REDACTED_ARTIFACT_KIND,
+    TEXT_OCR_REDACTED_SCHEMA_VERSION,
+    TextOcrBuildRequest,
     aggregate_pii,
     detect_pii,
     produce_redacted_jsonl,
@@ -34,6 +44,7 @@ _FAKE_PASSPORT = "1234 567890"
 _FAKE_CARD = "4111 1111 1111 1111"  # valid Luhn
 _FAKE_NON_CARD = "1234 5678 9012 3457"  # invalid Luhn -> not flagged as card
 _FAKE_SECRET = "api_key=AKIAIOSFODNN7EXAMPLE"
+_CONFIG_HASH = "sha256:" + "a" * 64
 
 
 def test_detect_pii_email_phone_passport_card_secret() -> None:
@@ -120,6 +131,52 @@ def test_validator_with_pii_detection_flags_demo_records(tmp_path: Path) -> None
     for finding in report.pii_findings:
         for sub in finding.findings:
             assert sub.occurrence_count >= 1
+
+
+def test_validator_persists_redacted_artifact_for_risky_records(
+    tmp_path: Path,
+) -> None:
+    payload = _read_archive_entry(tmp_path, "support_messages.jsonl")
+    storage = MinioObjectStorageAdapter(
+        client=_InMemoryS3Client(),
+        bucket_name="dataforge-local",
+        prefix_root="dataforge",
+        scope=ObjectStorageScope(
+            organization_id="org_test",
+            project_id="project_test",
+            dataset_id="dataset_demo",
+        ),
+    )
+    registry = ArtifactRegistry(storage=storage)
+    request = TextOcrBuildRequest(
+        dataset_id="dataset_demo",
+        version_id="dataset_version_demo",
+        parent_version_id="dataset_version_parent",
+        created_by_job_id="compute_run_text_ocr",
+        config_hash=_CONFIG_HASH,
+    )
+
+    report = validate_support_messages_jsonl(
+        payload,
+        detect_pii=True,
+        registry=registry,
+        build_request=request,
+    )
+
+    assert report.redacted_artifact_uri is not None
+    assert report.redacted_artifact_hash is not None
+    stored = storage.get(report.redacted_artifact_uri)
+    redacted_text = stored.data.decode("utf-8")
+    assert stored.info.metadata["artifact-kind"] == TEXT_OCR_REDACTED_ARTIFACT_KIND
+    assert stored.info.metadata["schema-version"] == TEXT_OCR_REDACTED_SCHEMA_VERSION
+    assert stored.info.metadata["source-kind"] == "support_messages"
+    assert "alex@example.test" not in redacted_text
+    assert "+10000001234" not in redacted_text
+    assert "[REDACTED_EMAIL]" in redacted_text
+    assert scan_log_text(redacted_text).passed
+    output_lines = [json.loads(line) for line in redacted_text.splitlines() if line]
+    assert len(output_lines) == report.redacted_record_count
+    assert all("redacted_text" in line for line in output_lines)
 
 
 def test_ocr_validator_pii_detection_passport_tokens(tmp_path: Path) -> None:
@@ -211,3 +268,66 @@ def _read_archive_entry(tmp_path: Path, name: str) -> bytes:
 
 def _make_jsonl(records: list[dict[str, object]]) -> bytes:
     return ("\n".join(json.dumps(r) for r in records) + "\n").encode("utf-8")
+
+
+class _InMemoryS3Client(S3CompatibleClient):
+    def __init__(self) -> None:
+        self._objects: dict[tuple[str, str], dict[str, Any]] = {}
+
+    def put_object(
+        self,
+        *,
+        Bucket: str,
+        Key: str,
+        Body: bytes,
+        ContentType: str,
+        Metadata: Mapping[str, str],
+    ) -> Mapping[str, Any]:
+        self._objects[(Bucket, Key)] = {
+            "Body": Body,
+            "ContentType": ContentType,
+            "Metadata": dict(Metadata),
+            "LastModified": datetime(2026, 5, 20, 12, 0, tzinfo=UTC),
+        }
+        return {"ETag": "fake-etag"}
+
+    def get_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
+        record = self._object(Bucket, Key)
+        body = record["Body"]
+        assert isinstance(body, bytes)
+        return {
+            "Body": io.BytesIO(body),
+            "ContentLength": len(body),
+            "ContentType": record["ContentType"],
+            "Metadata": record["Metadata"],
+            "LastModified": record["LastModified"],
+        }
+
+    def head_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
+        record = self._object(Bucket, Key)
+        body = record["Body"]
+        assert isinstance(body, bytes)
+        return {
+            "ContentLength": len(body),
+            "ContentType": record["ContentType"],
+            "Metadata": record["Metadata"],
+            "LastModified": record["LastModified"],
+        }
+
+    def list_objects_v2(self, *, Bucket: str, Prefix: str) -> Mapping[str, Any]:
+        return {
+            "Contents": [
+                {"Key": key, "Size": len(record["Body"])}
+                for (bucket, key), record in sorted(self._objects.items())
+                if bucket == Bucket and key.startswith(Prefix)
+            ]
+        }
+
+    def _object(self, bucket: str, key: str) -> dict[str, Any]:
+        try:
+            return self._objects[(bucket, key)]
+        except KeyError as exc:
+            raise ObjectStorageError(
+                code=ErrorCode.ARTIFACT_NOT_FOUND,
+                message="Object does not exist",
+            ) from exc

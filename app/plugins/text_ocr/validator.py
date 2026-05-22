@@ -33,6 +33,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.adapters import ArtifactRegistry, RegisteredArtifact
 from app.domain import (
     TextDuplicateGroup,
     TextOcrReport,
@@ -47,6 +48,10 @@ from app.plugins.text_ocr.pii import RedactedRecord, redact_record
 SUPPORT_MESSAGE_SCHEMA_NAME = "support_message"
 OCR_RECORD_SCHEMA_NAME = "ocr_record"
 TEXT_OCR_REPORT_SCHEMA_VERSION = "text_ocr_report.v1"
+TEXT_OCR_REDACTED_ARTIFACT_KIND = "text_ocr_redacted_jsonl"
+TEXT_OCR_REDACTED_SCHEMA_VERSION = "text_ocr_redacted_jsonl.v1"
+TEXT_OCR_REDACTED_FORMAT = "jsonl"
+TEXT_OCR_REDACTED_MEDIA_TYPE = "application/jsonl"
 
 _DEFAULT_MIN_TEXT_LENGTH = 1
 _WHITESPACE_RE = re.compile(r"\s+")
@@ -100,6 +105,14 @@ class BuildTextOcrReportResult:
     report: TextOcrReport
 
 
+@dataclass(frozen=True)
+class PersistedRedactedJsonl:
+    """Persisted redacted JSONL artifact and rows used to create it."""
+
+    artifact: RegisteredArtifact
+    redacted_records: tuple[RedactedRecord, ...]
+
+
 def normalize_text(text: str) -> str:
     """Lowercase + whitespace-collapse normalization for duplicate hashing.
 
@@ -117,6 +130,8 @@ def validate_support_messages_jsonl(
     source_name: str = "support_messages.jsonl",
     min_text_length: int = _DEFAULT_MIN_TEXT_LENGTH,
     detect_pii: bool = False,
+    registry: ArtifactRegistry | None = None,
+    build_request: TextOcrBuildRequest | None = None,
 ) -> TextOcrSourceReport:
     parser = TextRecordParser(
         source_kind=_SUPPORT_PARSER.source_kind,
@@ -126,7 +141,12 @@ def validate_support_messages_jsonl(
         require_ocr_confidence=False,
     )
     return _validate_jsonl(
-        data, parser=parser, source_name=source_name, detect_pii=detect_pii
+        data,
+        parser=parser,
+        source_name=source_name,
+        detect_pii=detect_pii,
+        registry=registry,
+        build_request=build_request,
     )
 
 
@@ -136,6 +156,8 @@ def validate_ocr_records_jsonl(
     source_name: str = "ocr_records.jsonl",
     min_text_length: int = _DEFAULT_MIN_TEXT_LENGTH,
     detect_pii: bool = False,
+    registry: ArtifactRegistry | None = None,
+    build_request: TextOcrBuildRequest | None = None,
 ) -> TextOcrSourceReport:
     parser = TextRecordParser(
         source_kind=_OCR_PARSER.source_kind,
@@ -145,7 +167,12 @@ def validate_ocr_records_jsonl(
         require_ocr_confidence=_OCR_PARSER.require_ocr_confidence,
     )
     return _validate_jsonl(
-        data, parser=parser, source_name=source_name, detect_pii=detect_pii
+        data,
+        parser=parser,
+        source_name=source_name,
+        detect_pii=detect_pii,
+        registry=registry,
+        build_request=build_request,
     )
 
 
@@ -239,6 +266,47 @@ def produce_redacted_jsonl(
     return ("\n".join(out_lines) + ("\n" if out_lines else "")).encode("utf-8"), records
 
 
+def persist_redacted_jsonl(
+    data: bytes,
+    *,
+    registry: ArtifactRegistry,
+    build_request: TextOcrBuildRequest,
+    source_kind: TextOcrSourceKind,
+    source_name: str,
+    detect_pii_only_records: bool = True,
+) -> PersistedRedactedJsonl | None:
+    """Persist redacted JSONL for risky records as an immutable artifact."""
+    redacted_bytes, redacted_records = produce_redacted_jsonl(
+        data,
+        detect_pii_only_records=detect_pii_only_records,
+    )
+    risky_records = tuple(
+        record for record in redacted_records if record.pii_token_count > 0
+    )
+    if not risky_records or not redacted_bytes:
+        return None
+    artifact = registry.save_artifact(
+        artifact_kind=TEXT_OCR_REDACTED_ARTIFACT_KIND,
+        data=redacted_bytes,
+        artifact_format=TEXT_OCR_REDACTED_FORMAT,
+        media_type=TEXT_OCR_REDACTED_MEDIA_TYPE,
+        schema_version=TEXT_OCR_REDACTED_SCHEMA_VERSION,
+        dataset_version_id=build_request.version_id,
+        created_by_job_id=build_request.created_by_job_id,
+        config_hash=build_request.config_hash,
+        metadata={
+            "source-kind": source_kind.value,
+            "source-name": source_name,
+            "redacted-record-count": str(len(risky_records)),
+            "parent-version-id": build_request.parent_version_id,
+        },
+    )
+    return PersistedRedactedJsonl(
+        artifact=artifact,
+        redacted_records=tuple(redacted_records),
+    )
+
+
 # ---------------------------------------------------------------------------
 # core JSONL walker
 # ---------------------------------------------------------------------------
@@ -250,6 +318,8 @@ def _validate_jsonl(
     parser: TextRecordParser,
     source_name: str,
     detect_pii: bool = False,
+    registry: ArtifactRegistry | None = None,
+    build_request: TextOcrBuildRequest | None = None,
 ) -> TextOcrSourceReport:
     issues: list[TextValidationIssue] = []
     records: list[_ParsedRecord] = []
@@ -311,6 +381,8 @@ def _validate_jsonl(
     pii_token_count = 0
     redacted_record_count = 0
     review_queue_object_ids: tuple[str, ...] = ()
+    redacted_artifact_uri: str | None = None
+    redacted_artifact_hash: str | None = None
     if detect_pii:
         redacted_records = [
             redact_record(object_id=record.object_id, text=record.raw_text)
@@ -331,6 +403,18 @@ def _validate_jsonl(
                 }
             )
         )
+        if registry is not None and build_request is not None:
+            persisted = persist_redacted_jsonl(
+                data,
+                registry=registry,
+                build_request=build_request,
+                source_kind=parser.source_kind,
+                source_name=source_name,
+                detect_pii_only_records=True,
+            )
+            if persisted is not None:
+                redacted_artifact_uri = persisted.artifact.uri
+                redacted_artifact_hash = persisted.artifact.hash
 
     return TextOcrSourceReport(
         source_kind=parser.source_kind,
@@ -350,6 +434,8 @@ def _validate_jsonl(
         pii_token_count=pii_token_count,
         pii_record_count=pii_record_count,
         redacted_record_count=redacted_record_count,
+        redacted_artifact_uri=redacted_artifact_uri,
+        redacted_artifact_hash=redacted_artifact_hash,
         review_queue_object_ids=review_queue_object_ids,
     )
 
@@ -496,12 +582,19 @@ def _build_duplicate_groups(
 __all__ = [
     "BuildTextOcrReportResult",
     "OCR_RECORD_SCHEMA_NAME",
+    "PersistedRedactedJsonl",
     "SUPPORT_MESSAGE_SCHEMA_NAME",
     "TEXT_OCR_REPORT_SCHEMA_VERSION",
+    "TEXT_OCR_REDACTED_ARTIFACT_KIND",
+    "TEXT_OCR_REDACTED_FORMAT",
+    "TEXT_OCR_REDACTED_MEDIA_TYPE",
+    "TEXT_OCR_REDACTED_SCHEMA_VERSION",
     "TextOcrBuildRequest",
     "TextRecordParser",
     "build_text_ocr_report",
     "normalize_text",
+    "persist_redacted_jsonl",
+    "produce_redacted_jsonl",
     "validate_ocr_records_jsonl",
     "validate_support_messages_jsonl",
 ]
