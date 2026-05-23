@@ -36,15 +36,30 @@ from app.kernel.decision_report import (
     BuildDecisionReportRequest,
     build_decision_report,
 )
+from app.kernel.method_selection import (
+    IMPUTATION_POLICY_COMPONENT_WEIGHTS,
+    METHOD_SCORE_FORMULA,
+    METHOD_SCORE_FORMULA_WEIGHTS,
+    METHOD_SCORE_NOTATION_FORMULA,
+    METHOD_SELECTION_POLICY_VERSION,
+    BuildMethodRecommendationsRequest,
+    build_method_recommendations,
+)
 
 __all__ = [
     "DECISION_REPORT_SCHEMA_VERSION",
     "DECISION_POLICY_VERSION",
+    "IMPUTATION_POLICY_COMPONENT_WEIGHTS",
     "METHOD_POLICY_VERSION",
+    "METHOD_SCORE_FORMULA",
+    "METHOD_SCORE_FORMULA_WEIGHTS",
+    "METHOD_SCORE_NOTATION_FORMULA",
+    "METHOD_SELECTION_POLICY_VERSION",
     "OBJECT_VALUE_POLICY_VERSION",
     "PRIVACY_POLICY_VERSION",
     "REASON_CODE_REGISTRY_VERSION",
     "BuildDecisionReportRequest",
+    "BuildMethodRecommendationsRequest",
     "DecisionPolicy",
     "EvidenceRecommendation",
     "HardGateEvaluation",
@@ -64,6 +79,7 @@ __all__ = [
     "RecommendedActionType",
     "compute_object_value_score",
     "build_decision_report",
+    "build_method_recommendations",
     "disabled_outlier_capping_reason",
     "evaluate_object_decision",
     "evaluate_hard_gates",

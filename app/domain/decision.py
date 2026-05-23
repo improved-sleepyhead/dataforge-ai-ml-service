@@ -204,8 +204,25 @@ class MethodCandidate(BaseModel):
     status: MethodCandidateStatus
     quality_score: Score | None
     risk_score: Score | None
+    method_score: MethodScore
     policy_status: PolicyStatus
     reason: str | None = None
+
+
+class MethodScore(BaseModel):
+    """Policy-scored method selection output with full decomposition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    value: Score
+    policy_version: NonEmptyStr
+    formula: NonEmptyStr
+    notation_formula: NonEmptyStr
+    formula_weights: dict[NonEmptyStr, float]
+    components: dict[NonEmptyStr, Score]
+    weighted_components: dict[NonEmptyStr, float]
+    policy_component_weights: dict[NonEmptyStr, float]
+    reason_codes: tuple[NonEmptyStr, ...]
 
 
 class BlockedMethod(BaseModel):
@@ -218,6 +235,18 @@ class BlockedMethod(BaseModel):
     reason: NonEmptyStr
 
 
+class MethodRecommendationExplanation(BaseModel):
+    """Human-readable but structured explanation for a recommendation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    recommended_method: NonEmptyStr
+    why_this_method: NonEmptyStr
+    alternatives: tuple[NonEmptyStr, ...]
+    blocked_methods: tuple[NonEmptyStr, ...]
+    reason_codes: tuple[NonEmptyStr, ...]
+
+
 class MethodRecommendation(BaseModel):
     """Method selection contract for action planning and UI explanation."""
 
@@ -226,19 +255,29 @@ class MethodRecommendation(BaseModel):
     recommendation_id: NonEmptyStr
     issue_id: NonEmptyStr
     action_type: NonEmptyStr
+    policy_version: NonEmptyStr
     target: dict[str, Any] = Field(default_factory=dict)
     recommended_method: RecommendedMethod
     candidate_methods: tuple[MethodCandidate, ...]
     blocked_methods: tuple[BlockedMethod, ...]
+    explanation: MethodRecommendationExplanation
     expected_outputs: tuple[NonEmptyStr, ...]
     model_impact_required: bool
 
     @model_validator(mode="after")
     def validate_recommended_method_is_candidate(self) -> Self:
-        if self.recommended_method.method_id not in {
-            candidate.method_id for candidate in self.candidate_methods
-        }:
+        candidates = {candidate.method_id: candidate for candidate in self.candidate_methods}
+        if self.recommended_method.method_id not in candidates:
             raise ValueError("recommended_method must appear in candidate_methods")
+        if (
+            candidates[self.recommended_method.method_id].status
+            is not MethodCandidateStatus.RECOMMENDED
+        ):
+            raise ValueError("recommended_method candidate must have recommended status")
+        if self.recommended_method.method_id in {
+            blocked.method_id for blocked in self.blocked_methods
+        }:
+            raise ValueError("recommended_method must not be blocked")
         return self
 
 
