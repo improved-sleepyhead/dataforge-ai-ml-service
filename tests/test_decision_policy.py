@@ -16,12 +16,15 @@ from app.domain import (
 )
 from app.kernel import (
     DECISION_POLICY_VERSION,
+    OBJECT_VALUE_POLICY_VERSION,
     HardGateId,
     MethodAvailability,
     PolicyInputEnvelope,
     RecommendedActionType,
+    compute_object_value_score,
     disabled_outlier_capping_reason,
     evaluate_hard_gates,
+    evaluate_object_decision,
     load_decision_policy_v0,
     load_reason_code_registry,
     recommend_from_evidence,
@@ -34,6 +37,7 @@ def test_policy_loading_exposes_required_gates_inputs_registry_and_hash() -> Non
     registry = load_reason_code_registry()
 
     assert policy.policy_version == DECISION_POLICY_VERSION
+    assert policy.object_value_policy.policy_version == OBJECT_VALUE_POLICY_VERSION
     assert policy.config_hash.startswith("sha256:")
     assert len(policy.config_hash) == len("sha256:" + "a" * 64)
     assert {gate.gate_id for gate in policy.hard_gates} == set(HardGateId)
@@ -177,6 +181,103 @@ def test_ambiguous_and_probable_label_error_reason_codes() -> None:
         probable_codes
     )
     assert "ambiguous_object" not in probable_codes
+
+
+def test_high_privacy_high_learning_is_blocked_before_soft_score() -> None:
+    """TASK-032 step 1+2+5: high score cannot override BLOCK_PRIVACY_REVIEW."""
+    policy = load_decision_policy_v0()
+    evidence = _evidence_bundle(
+        object_id="obj_sensitive_high_value",
+        privacy_risk=0.92,
+        rare_segment_score=1.0,
+        model_uncertainty=1.0,
+        ambiguous_object_score=1.0,
+        technical_quality=1.0,
+    )
+
+    evaluation = evaluate_object_decision(policy=policy, evidence=evidence)
+
+    assert evaluation.hard_gates_evaluated_before_score is True
+    assert evaluation.hard_blocked is True
+    assert evaluation.action == "BLOCK_PRIVACY_REVIEW"
+    assert "pii_unmasked" in evaluation.reason_codes
+    assert evaluation.object_value_score.hard_blocked is True
+    assert "BLOCK_PRIVACY_REVIEW" in evaluation.object_value_score.blocker_actions
+    # The score is still computed for explanation, but it cannot override the gate.
+    assert evaluation.object_value_score.value > 0.0
+
+
+def test_object_value_score_decomposition_formula_and_weights() -> None:
+    """TASK-032 step 3+5: decomposition uses DATASETS.md weights and formula."""
+    policy = load_decision_policy_v0()
+    evidence = _evidence_bundle(
+        object_id="obj_score",
+        technical_quality=0.8,
+        duplicate_score=0.4,
+        privacy_risk=0.3,
+        label_issue_score=0.2,
+        rare_segment_score=0.7,
+        model_uncertainty=0.6,
+        ambiguous_object_score=0.5,
+        probable_label_error_score=0.2,
+    )
+
+    score = compute_object_value_score(policy=policy, evidence=evidence)
+
+    assert score.policy_version == OBJECT_VALUE_POLICY_VERSION
+    assert score.weights == {
+        "learning_value": 0.25,
+        "rarity": 0.20,
+        "uncertainty": 0.20,
+        "diversity": 0.15,
+        "business_importance": 0.10,
+        "duplicate_penalty": -0.15,
+        "quality_penalty": -0.10,
+        "privacy_risk_penalty": -0.25,
+        "label_risk_penalty": -0.10,
+    }
+    assert score.components["learning_value"] == 0.7
+    assert score.components["rarity"] == 0.7
+    assert score.components["uncertainty"] == 0.6
+    assert score.components["duplicate_penalty"] == 0.4
+    assert score.components["quality_penalty"] == pytest.approx(0.2)
+    assert score.components["privacy_risk_penalty"] == 0.3
+    assert score.components["label_risk_penalty"] == 0.2
+    expected_raw = (
+        0.25 * 0.7
+        + 0.20 * 0.7
+        + 0.20 * 0.6
+        + 0.15 * 0.0
+        + 0.10 * 0.0
+        - 0.15 * 0.4
+        - 0.10 * 0.2
+        - 0.25 * 0.3
+        - 0.10 * 0.2
+    )
+    assert score.raw_value == pytest.approx(expected_raw)
+    assert score.value == pytest.approx(expected_raw)
+    assert score.weighted_components["uncertainty"] == pytest.approx(0.12)
+
+
+def test_uncertainty_contribution_records_probability_notation_and_formulas() -> None:
+    """TASK-032 step 4: uncertainty contribution and probability notation."""
+    policy = load_decision_policy_v0()
+    evidence = _evidence_bundle(
+        object_id="obj_uncertain",
+        model_uncertainty=None,
+        prediction_confidence=0.55,
+        prediction_entropy=0.88,
+        ambiguous_object_score=0.7,
+    )
+
+    score = compute_object_value_score(policy=policy, evidence=evidence)
+
+    assert score.components["uncertainty"] == 0.88
+    assert score.weighted_components["uncertainty"] == pytest.approx(0.176)
+    assert score.uncertainty_probability_notation == "p_i,k = P(Y = k | x_i)"
+    assert "U(x_i) = 1 - max_k p_i,k" in score.uncertainty_formulas
+    assert "H(x_i) = - sum_k p_i,k * log(p_i,k)" in score.uncertainty_formulas
+    assert "H_norm(x_i) = H(x_i) / log(K)" in score.uncertainty_formulas
 
 
 def _evidence_bundle(

@@ -20,6 +20,7 @@ from app.domain.common import NonEmptyStr, Score, Sha256Digest
 
 DECISION_POLICY_VERSION = "decision_policy_v0"
 REASON_CODE_REGISTRY_VERSION = "reason_code_registry_v0"
+OBJECT_VALUE_POLICY_VERSION = "object_value_policy_v0"
 
 
 class ReasonCodeSeverity(StrEnum):
@@ -120,6 +121,37 @@ class OutlierPolicy(BaseModel):
     disabled_reason_code: NonEmptyStr = "outlier_capping_disabled_by_policy"
 
 
+class ObjectValueWeights(BaseModel):
+    """Configurable ObjectValueScore weights from DATASETS.md."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    learning_value: float = 0.25
+    rarity: float = 0.20
+    uncertainty: float = 0.20
+    diversity: float = 0.15
+    business_importance: float = 0.10
+    duplicate_penalty: float = -0.15
+    quality_penalty: float = -0.10
+    privacy_risk_penalty: float = -0.25
+    label_risk_penalty: float = -0.10
+
+
+class ObjectValuePolicy(BaseModel):
+    """Versioned object-value scoring policy."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    policy_version: NonEmptyStr = OBJECT_VALUE_POLICY_VERSION
+    weights: ObjectValueWeights = ObjectValueWeights()
+    uncertainty_probability_notation: NonEmptyStr = "p_i,k = P(Y = k | x_i)"
+    uncertainty_formulas: tuple[NonEmptyStr, ...] = (
+        "U(x_i) = 1 - max_k p_i,k",
+        "H(x_i) = - sum_k p_i,k * log(p_i,k)",
+        "H_norm(x_i) = H(x_i) / log(K)",
+    )
+
+
 class MethodAvailability(BaseModel):
     """Normalized method availability supplied by platform/policy inputs."""
 
@@ -171,6 +203,39 @@ class HardGateEvaluation(BaseModel):
     reason_code: NonEmptyStr
 
 
+class ObjectValueScore(BaseModel):
+    """Object-level score with full decomposition and blocker metadata."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    object_id: NonEmptyStr
+    value: Score
+    raw_value: float
+    policy_version: NonEmptyStr
+    weights: dict[NonEmptyStr, float]
+    components: dict[NonEmptyStr, float]
+    weighted_components: dict[NonEmptyStr, float]
+    hard_blocked: bool
+    blocker_actions: tuple[NonEmptyStr, ...] = ()
+    reason_codes: tuple[NonEmptyStr, ...] = ()
+    uncertainty_probability_notation: NonEmptyStr
+    uncertainty_formulas: tuple[NonEmptyStr, ...]
+
+
+class ObjectDecisionEvaluation(BaseModel):
+    """DecisionPolicy evaluation for one EvidenceBundle."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    object_id: NonEmptyStr
+    hard_gates_evaluated_before_score: bool
+    hard_gates: tuple[HardGateEvaluation, ...]
+    object_value_score: ObjectValueScore
+    hard_blocked: bool
+    action: NonEmptyStr | None
+    reason_codes: tuple[NonEmptyStr, ...]
+
+
 class EvidenceRecommendation(BaseModel):
     """Policy recommendation reason emitted for one EvidenceBundle."""
 
@@ -191,6 +256,7 @@ class DecisionPolicy(BaseModel):
     hard_gates: tuple[HardGateRule, ...]
     recommendation_rules: tuple[RecommendationRule, ...]
     outlier_policy: OutlierPolicy
+    object_value_policy: ObjectValuePolicy
     policy_input_names: tuple[NonEmptyStr, ...]
     config_hash: Sha256Digest
 
@@ -404,6 +470,7 @@ def load_decision_policy_v0() -> DecisionPolicy:
             ),
         ],
         "outlier_policy": OutlierPolicy().model_dump(mode="json"),
+        "object_value_policy": ObjectValuePolicy().model_dump(mode="json"),
         "policy_input_names": [
             "normalized_dataset_profile",
             "plugin_readiness",
@@ -471,6 +538,84 @@ def disabled_outlier_capping_reason(policy: DecisionPolicy) -> str | None:
     return policy.outlier_policy.disabled_reason_code
 
 
+def evaluate_object_decision(
+    *,
+    policy: DecisionPolicy,
+    evidence: EvidenceBundle,
+    inputs: PolicyInputEnvelope | None = None,
+) -> ObjectDecisionEvaluation:
+    """Evaluate hard gates first, then compute ObjectValueScore.
+
+    The returned score is explanatory only when a hard blocker fired. A high
+    score cannot override ``hard_blocked=True`` or the selected blocker action.
+    """
+    policy_inputs = inputs or PolicyInputEnvelope()
+    hard_gates = _object_hard_gates(policy=policy, evidence=evidence, inputs=policy_inputs)
+    triggered = tuple(gate for gate in hard_gates if gate.triggered)
+    score = compute_object_value_score(
+        policy=policy,
+        evidence=evidence,
+        hard_gates=hard_gates,
+    )
+    reason_codes = tuple(dict.fromkeys(gate.reason_code for gate in triggered))
+    action = triggered[0].action if triggered else None
+    return ObjectDecisionEvaluation(
+        object_id=evidence.object_id,
+        hard_gates_evaluated_before_score=True,
+        hard_gates=hard_gates,
+        object_value_score=score,
+        hard_blocked=bool(triggered),
+        action=action,
+        reason_codes=reason_codes,
+    )
+
+
+def compute_object_value_score(
+    *,
+    policy: DecisionPolicy,
+    evidence: EvidenceBundle,
+    hard_gates: tuple[HardGateEvaluation, ...] = (),
+) -> ObjectValueScore:
+    """Compute ObjectValueScore from EvidenceBundle using policy weights."""
+    components = _object_value_components(evidence)
+    weights = policy.object_value_policy.weights.model_dump(mode="python")
+    weighted = {
+        component: float(value) * float(weights[component])
+        for component, value in components.items()
+    }
+    raw = sum(weighted.values())
+    clamped = min(1.0, max(0.0, raw))
+    triggered = tuple(gate for gate in hard_gates if gate.triggered)
+    reason_codes = tuple(
+        dict.fromkeys(
+            [
+                *(
+                    code
+                    for code, value in _component_reason_codes(components).items()
+                    if value
+                ),
+                *(gate.reason_code for gate in triggered),
+            ]
+        )
+    )
+    return ObjectValueScore(
+        object_id=evidence.object_id,
+        value=clamped,
+        raw_value=raw,
+        policy_version=policy.object_value_policy.policy_version,
+        weights={str(key): float(value) for key, value in weights.items()},
+        components=components,
+        weighted_components=weighted,
+        hard_blocked=bool(triggered),
+        blocker_actions=tuple(dict.fromkeys(gate.action for gate in triggered)),
+        reason_codes=reason_codes,
+        uncertainty_probability_notation=(
+            policy.object_value_policy.uncertainty_probability_notation
+        ),
+        uncertainty_formulas=policy.object_value_policy.uncertainty_formulas,
+    )
+
+
 def _gate(gate_id: HardGateId, action: str) -> dict[str, Any]:
     return {
         "gate_id": gate_id.value,
@@ -529,6 +674,82 @@ def _gate_triggered(gate_id: HardGateId, inputs: PolicyInputEnvelope) -> bool:
     return False
 
 
+def _object_hard_gates(
+    *,
+    policy: DecisionPolicy,
+    evidence: EvidenceBundle,
+    inputs: PolicyInputEnvelope,
+) -> tuple[HardGateEvaluation, ...]:
+    input_gates = {gate.gate_id: gate for gate in evaluate_hard_gates(policy=policy, inputs=inputs)}
+    results: list[HardGateEvaluation] = []
+    for rule in policy.hard_gates:
+        input_gate = input_gates.get(rule.gate_id)
+        triggered = input_gate.triggered if input_gate is not None else False
+        if rule.gate_id is HardGateId.PII_UNMASKED:
+            triggered = triggered or _signal_at_least(evidence.signals.privacy_risk, 0.80)
+        results.append(
+            HardGateEvaluation(
+                gate_id=rule.gate_id,
+                triggered=triggered,
+                action=rule.action,
+                reason_code=rule.reason_code,
+            )
+        )
+    return tuple(results)
+
+
+def _object_value_components(evidence: EvidenceBundle) -> dict[str, float]:
+    signals = evidence.signals
+    rare = _signal_value(signals.rare_segment_score)
+    uncertainty = _uncertainty_component(evidence)
+    label_risk = _signal_value(signals.label_issue_score)
+    probable_label_error = _signal_value(signals.probable_label_error_score)
+    ambiguous = _signal_value(signals.ambiguous_object_score)
+    learning_value = max(rare, uncertainty, ambiguous, probable_label_error, label_risk)
+    quality_penalty = 1.0 - _signal_value(signals.technical_quality, default=1.0)
+    return {
+        "learning_value": learning_value,
+        "rarity": rare,
+        "uncertainty": uncertainty,
+        "diversity": 0.0,
+        "business_importance": _signal_value(signals.business_importance),
+        "duplicate_penalty": _signal_value(signals.duplicate_score),
+        "quality_penalty": quality_penalty,
+        "privacy_risk_penalty": _signal_value(signals.privacy_risk),
+        "label_risk_penalty": max(label_risk, probable_label_error),
+    }
+
+
+def _uncertainty_component(evidence: EvidenceBundle) -> float:
+    signals = evidence.signals
+    if signals.model_uncertainty.status is SignalStatus.AVAILABLE:
+        return _signal_value(signals.model_uncertainty)
+    if signals.prediction_entropy.status is SignalStatus.AVAILABLE:
+        return _signal_value(signals.prediction_entropy)
+    if signals.ambiguous_object_score.status is SignalStatus.AVAILABLE:
+        return _signal_value(signals.ambiguous_object_score)
+    if signals.prediction_confidence.status is SignalStatus.AVAILABLE:
+        return 1.0 - _signal_value(signals.prediction_confidence)
+    return 0.0
+
+
+def _signal_value(signal: Any, *, default: float = 0.0) -> float:
+    if signal.status is not SignalStatus.AVAILABLE or signal.value is None:
+        return default
+    return float(signal.value)
+
+
+def _component_reason_codes(components: dict[str, float]) -> dict[str, bool]:
+    return {
+        "exact_duplicate": components["duplicate_penalty"] >= 0.5,
+        "rare_class_underrepresented": components["rarity"] >= 0.7,
+        "text_pii_detected": components["privacy_risk_penalty"] > 0.0,
+        "severe_outlier": components["quality_penalty"] >= 0.75,
+        "ambiguous_object": components["uncertainty"] >= 0.5,
+        "probable_label_error": components["label_risk_penalty"] >= 0.5,
+    }
+
+
 def _rule_matches(rule: RecommendationRule, evidence: EvidenceBundle) -> bool:
     threshold = rule.threshold or 0.0
     signals = evidence.signals
@@ -571,6 +792,7 @@ def _config_hash(payload: dict[str, Any]) -> str:
 
 __all__ = [
     "DECISION_POLICY_VERSION",
+    "OBJECT_VALUE_POLICY_VERSION",
     "REASON_CODE_REGISTRY_VERSION",
     "DecisionPolicy",
     "EvidenceRecommendation",
@@ -578,6 +800,10 @@ __all__ = [
     "HardGateId",
     "HardGateRule",
     "MethodAvailability",
+    "ObjectDecisionEvaluation",
+    "ObjectValuePolicy",
+    "ObjectValueScore",
+    "ObjectValueWeights",
     "OutlierPolicy",
     "PolicyInputEnvelope",
     "ReasonCodeDefinition",
@@ -585,7 +811,9 @@ __all__ = [
     "ReasonCodeSeverity",
     "RecommendationRule",
     "RecommendedActionType",
+    "compute_object_value_score",
     "disabled_outlier_capping_reason",
+    "evaluate_object_decision",
     "evaluate_hard_gates",
     "load_decision_policy_v0",
     "load_reason_code_registry",
