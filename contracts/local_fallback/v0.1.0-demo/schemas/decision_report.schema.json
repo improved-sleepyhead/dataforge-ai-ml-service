@@ -13,12 +13,27 @@
     "critical_blockers",
     "safe_actions_available",
     "recommended_next_job",
+    "object_decisions",
     "recommended_actions",
     "policy_versions",
     "generated_at"
   ],
   "additionalProperties": false,
   "$defs": {
+    "decision_action": {
+      "type": "string",
+      "enum": [
+        "KEEP",
+        "REMOVE_DUPLICATE",
+        "SEND_TO_LABEL_REVIEW",
+        "SEND_TO_PRIVACY_REVIEW",
+        "IMPUTE_MISSING_VALUES",
+        "AUGMENT_RARE_CLASS",
+        "GENERATE_SYNTHETIC_CANDIDATE",
+        "BLOCK_EXPORT",
+        "EXPORT_READY"
+      ]
+    },
     "evidence_ref": {
       "type": "object",
       "required": ["kind", "uri"],
@@ -42,6 +57,48 @@
         }
       }
     },
+    "blocked_decision_action": {
+      "type": "object",
+      "required": ["action", "reason", "reason_codes"],
+      "additionalProperties": false,
+      "properties": {
+        "action": {"$ref": "#/$defs/decision_action"},
+        "reason": {"type": "string", "minLength": 1},
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "object_level_decision": {
+      "type": "object",
+      "required": [
+        "object_id",
+        "modality",
+        "action",
+        "reasons",
+        "blocked_actions",
+        "object_value_score"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "object_id": {"type": "string", "minLength": 1},
+        "modality": {
+          "type": "string",
+          "enum": ["tabular", "text", "image", "video", "audio", "document_ocr", "multimodal"]
+        },
+        "action": {"$ref": "#/$defs/decision_action"},
+        "reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "blocked_actions": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/blocked_decision_action"}
+        },
+        "object_value_score": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
     "recommended_action": {
       "type": "object",
       "required": [
@@ -58,7 +115,7 @@
       "additionalProperties": false,
       "properties": {
         "recommendation_id": {"type": "string", "minLength": 1},
-        "action": {"type": "string", "minLength": 1},
+        "action": {"$ref": "#/$defs/decision_action"},
         "modality": {
           "type": "string",
           "enum": ["tabular", "text", "image", "video", "audio", "document_ocr", "multimodal"]
@@ -123,6 +180,10 @@
     "recommended_actions": {
       "type": "array",
       "items": {"$ref": "#/$defs/recommended_action"}
+    },
+    "object_decisions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/object_level_decision"}
     },
     "policy_versions": {
       "type": "object",

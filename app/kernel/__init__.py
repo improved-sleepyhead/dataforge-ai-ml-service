@@ -29,11 +29,22 @@ from app.kernel.decision_policy import (
     load_reason_code_registry,
     recommend_from_evidence,
 )
+from app.kernel.decision_report import (
+    DECISION_REPORT_SCHEMA_VERSION,
+    METHOD_POLICY_VERSION,
+    PRIVACY_POLICY_VERSION,
+    BuildDecisionReportRequest,
+    build_decision_report,
+)
 
 __all__ = [
+    "DECISION_REPORT_SCHEMA_VERSION",
     "DECISION_POLICY_VERSION",
+    "METHOD_POLICY_VERSION",
     "OBJECT_VALUE_POLICY_VERSION",
+    "PRIVACY_POLICY_VERSION",
     "REASON_CODE_REGISTRY_VERSION",
+    "BuildDecisionReportRequest",
     "DecisionPolicy",
     "EvidenceRecommendation",
     "HardGateEvaluation",
@@ -52,6 +63,7 @@ __all__ = [
     "RecommendationRule",
     "RecommendedActionType",
     "compute_object_value_score",
+    "build_decision_report",
     "disabled_outlier_capping_reason",
     "evaluate_object_decision",
     "evaluate_hard_gates",

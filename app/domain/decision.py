@@ -33,6 +33,20 @@ class DatasetReadiness(StrEnum):
     BLOCKED = "BLOCKED"
 
 
+class DecisionAction(StrEnum):
+    """Allowed Decision Core action taxonomy."""
+
+    KEEP = "KEEP"
+    REMOVE_DUPLICATE = "REMOVE_DUPLICATE"
+    SEND_TO_LABEL_REVIEW = "SEND_TO_LABEL_REVIEW"
+    SEND_TO_PRIVACY_REVIEW = "SEND_TO_PRIVACY_REVIEW"
+    IMPUTE_MISSING_VALUES = "IMPUTE_MISSING_VALUES"
+    AUGMENT_RARE_CLASS = "AUGMENT_RARE_CLASS"
+    GENERATE_SYNTHETIC_CANDIDATE = "GENERATE_SYNTHETIC_CANDIDATE"
+    BLOCK_EXPORT = "BLOCK_EXPORT"
+    EXPORT_READY = "EXPORT_READY"
+
+
 class MethodCandidateStatus(StrEnum):
     """Method availability status in MethodRecommendation."""
 
@@ -116,7 +130,7 @@ class RecommendedAction(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     recommendation_id: NonEmptyStr
-    action: NonEmptyStr
+    action: DecisionAction
     modality: DataModality
     count: int = Field(ge=0)
     reason_codes: tuple[NonEmptyStr, ...]
@@ -124,6 +138,29 @@ class RecommendedAction(BaseModel):
     segment: str | None = None
     method_recommendation_id: str | None = None
     requires_approval: bool
+
+
+class BlockedDecisionAction(BaseModel):
+    """Object-level action blocked by policy/readiness."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    action: DecisionAction
+    reason: NonEmptyStr
+    reason_codes: tuple[NonEmptyStr, ...]
+
+
+class ObjectLevelDecision(BaseModel):
+    """Decision Core action and score for a single object."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    object_id: NonEmptyStr
+    modality: DataModality
+    action: DecisionAction
+    reasons: tuple[NonEmptyStr, ...]
+    blocked_actions: tuple[BlockedDecisionAction, ...]
+    object_value_score: Score
 
 
 class DecisionReport(BaseModel):
@@ -140,6 +177,7 @@ class DecisionReport(BaseModel):
     critical_blockers: tuple[CriticalBlocker, ...]
     safe_actions_available: bool
     recommended_next_job: WorkflowType | None = None
+    object_decisions: tuple[ObjectLevelDecision, ...]
     recommended_actions: tuple[RecommendedAction, ...]
     policy_versions: PolicyVersions
     generated_at: datetime

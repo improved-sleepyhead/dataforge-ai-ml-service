@@ -27,6 +27,37 @@
   ],
   "safe_actions_available": true,
   "recommended_next_job": "PREVIEW_ACTION_PLAN",
+  "object_decisions": [
+    {
+      "object_id": "txn_00123",
+      "modality": "tabular",
+      "action": "SEND_TO_LABEL_REVIEW",
+      "reasons": [
+        "high_model_uncertainty",
+        "ambiguous_object"
+      ],
+      "blocked_actions": [],
+      "object_value_score": 0.82
+    },
+    {
+      "object_id": "support_msg_0042",
+      "modality": "text",
+      "action": "SEND_TO_PRIVACY_REVIEW",
+      "reasons": [
+        "text_pii_detected"
+      ],
+      "blocked_actions": [
+        {
+          "action": "EXPORT_READY",
+          "reason": "Privacy review must complete before export.",
+          "reason_codes": [
+            "text_pii_detected"
+          ]
+        }
+      ],
+      "object_value_score": 0.24
+    }
+  ],
   "recommended_actions": [
     {
       "recommendation_id": "rec_label_review_001",
