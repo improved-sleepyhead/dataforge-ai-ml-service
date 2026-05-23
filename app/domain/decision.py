@@ -393,14 +393,31 @@ class ReviewQueue(BaseModel):
     created_at: datetime
 
 
+class DataForgeScorePenalty(BaseModel):
+    """Penalty applied after weighted DataForgeScore components."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    reason_code: NonEmptyStr
+    value: float = Field(le=0.0)
+    applied: bool
+
+
 class DataForgeScore(BaseModel):
     """Dataset-level score with decomposition and reason codes."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     value: Score
+    raw_score: float = Field(ge=0.0, le=100.0)
     policy_version: NonEmptyStr
+    formula: NonEmptyStr
+    weights: dict[NonEmptyStr, float]
     components: dict[NonEmptyStr, Score]
+    weighted_components: dict[NonEmptyStr, float]
+    penalties: tuple[DataForgeScorePenalty, ...] = ()
+    hard_blocked: bool
+    readiness_status: DatasetReadiness
     reason_codes: tuple[NonEmptyStr, ...]
 
 

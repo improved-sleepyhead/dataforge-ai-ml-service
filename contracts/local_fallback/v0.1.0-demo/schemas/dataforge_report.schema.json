@@ -114,6 +114,25 @@
         "method_recommendation_id": {"type": ["string", "null"]},
         "requires_approval": {"type": "boolean"}
       }
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "number_map": {
+      "type": "object",
+      "additionalProperties": {"type": "number"}
+    },
+    "score_penalty": {
+      "type": "object",
+      "required": ["reason_code", "value", "applied"],
+      "additionalProperties": false,
+      "properties": {
+        "reason_code": {"type": "string", "minLength": 1},
+        "value": {"type": "number", "maximum": 0},
+        "applied": {"type": "boolean"}
+      }
     }
   },
   "properties": {
@@ -129,14 +148,33 @@
     "overview": {"type": "object"},
     "score": {
       "type": "object",
-      "required": ["value", "policy_version", "components", "reason_codes"],
+      "required": [
+        "value",
+        "raw_score",
+        "policy_version",
+        "formula",
+        "weights",
+        "components",
+        "weighted_components",
+        "penalties",
+        "hard_blocked",
+        "readiness_status",
+        "reason_codes"
+      ],
       "additionalProperties": false,
       "properties": {
-        "value": {"type": "number", "minimum": 0, "maximum": 1},
+        "value": {"$ref": "#/$defs/score"},
+        "raw_score": {"type": "number", "minimum": 0, "maximum": 100},
         "policy_version": {"type": "string", "minLength": 1},
-        "components": {
-          "type": "object",
-          "additionalProperties": {"type": "number", "minimum": 0, "maximum": 1}
+        "formula": {"type": "string", "minLength": 1},
+        "weights": {"$ref": "#/$defs/number_map"},
+        "components": {"type": "object", "additionalProperties": {"$ref": "#/$defs/score"}},
+        "weighted_components": {"$ref": "#/$defs/number_map"},
+        "penalties": {"type": "array", "items": {"$ref": "#/$defs/score_penalty"}},
+        "hard_blocked": {"type": "boolean"},
+        "readiness_status": {
+          "type": "string",
+          "enum": ["READY_FOR_EXPORT", "READY_WITH_WARNINGS", "NOT_READY_FOR_EXPORT", "BLOCKED"]
         },
         "reason_codes": {
           "type": "array",

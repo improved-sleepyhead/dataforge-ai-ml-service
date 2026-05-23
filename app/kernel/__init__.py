@@ -1,5 +1,13 @@
 """Dataset intelligence kernel: policies, contracts, decisions, and planning."""
 
+from app.kernel.dataforge_score import (
+    DATAFORGE_SCORE_FORMULA,
+    DATAFORGE_SCORE_PENALTIES,
+    DATAFORGE_SCORE_POLICY_VERSION,
+    DATAFORGE_SCORE_WEIGHTS,
+    BuildDataForgeScoreRequest,
+    build_dataforge_score,
+)
 from app.kernel.decision_policy import (
     DECISION_POLICY_VERSION,
     OBJECT_VALUE_POLICY_VERSION,
@@ -47,6 +55,10 @@ from app.kernel.method_selection import (
 )
 
 __all__ = [
+    "DATAFORGE_SCORE_FORMULA",
+    "DATAFORGE_SCORE_PENALTIES",
+    "DATAFORGE_SCORE_POLICY_VERSION",
+    "DATAFORGE_SCORE_WEIGHTS",
     "DECISION_REPORT_SCHEMA_VERSION",
     "DECISION_POLICY_VERSION",
     "IMPUTATION_POLICY_COMPONENT_WEIGHTS",
@@ -59,6 +71,7 @@ __all__ = [
     "PRIVACY_POLICY_VERSION",
     "REASON_CODE_REGISTRY_VERSION",
     "BuildDecisionReportRequest",
+    "BuildDataForgeScoreRequest",
     "BuildMethodRecommendationsRequest",
     "DecisionPolicy",
     "EvidenceRecommendation",
@@ -79,6 +92,7 @@ __all__ = [
     "RecommendedActionType",
     "compute_object_value_score",
     "build_decision_report",
+    "build_dataforge_score",
     "build_method_recommendations",
     "disabled_outlier_capping_reason",
     "evaluate_object_decision",
