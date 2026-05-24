@@ -2,9 +2,14 @@
 
 from app.kernel.action_plan import (
     ACTION_PLAN_SCHEMA_VERSION,
+    ActionPlanApprovalMetadata,
+    ActionPlanExecutionError,
     ActionPlanPreviewError,
     BuildActionPlanPreviewRequest,
+    ValidateActionPlanExecutionRequest,
+    action_plan_integrity_hash,
     build_action_plan_preview,
+    validate_action_plan_execution,
 )
 from app.kernel.dataforge_score import (
     DATAFORGE_SCORE_FORMULA,
@@ -81,6 +86,9 @@ __all__ = [
     "BuildDataForgeScoreRequest",
     "BuildActionPlanPreviewRequest",
     "BuildMethodRecommendationsRequest",
+    "ValidateActionPlanExecutionRequest",
+    "ActionPlanApprovalMetadata",
+    "ActionPlanExecutionError",
     "ActionPlanPreviewError",
     "DecisionPolicy",
     "EvidenceRecommendation",
@@ -97,11 +105,13 @@ __all__ = [
     "ReasonCodeDefinition",
     "ReasonCodeRegistry",
     "ReasonCodeSeverity",
+    "action_plan_integrity_hash",
     "RecommendationRule",
     "RecommendedActionType",
     "compute_object_value_score",
     "build_action_plan_preview",
     "build_decision_report",
+    "validate_action_plan_execution",
     "build_dataforge_score",
     "build_method_recommendations",
     "disabled_outlier_capping_reason",

@@ -61,6 +61,25 @@ class ActionPlanPreviewError(ValueError):
         self.details = {} if details is None else details
 
 
+class ActionPlanExecutionError(ValueError):
+    """Raised when an approved ActionPlan cannot enter execution."""
+
+    def __init__(
+        self,
+        *,
+        reason_code: str,
+        message: str,
+        code: ErrorCode = ErrorCode.ACTION_PLAN_PRECONDITION_FAILED,
+        status_code: int = 422,
+        details: dict[str, object] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.reason_code = reason_code
+        self.code = code
+        self.status_code = status_code
+        self.details = {} if details is None else details
+
+
 class BuildActionPlanPreviewRequest(BaseModel):
     """Inputs for deterministic ActionPlan preview generation."""
 
@@ -75,6 +94,35 @@ class BuildActionPlanPreviewRequest(BaseModel):
     input_artifacts: tuple[S3Uri, ...]
     target_version_name: NonEmptyStr | None = None
     created_at: datetime | None = None
+
+
+class ActionPlanApprovalMetadata(BaseModel):
+    """Platform-owned approval metadata carried into execute-approved calls.
+
+    Python validates only references and integrity. Business validity of the
+    approval remains owned by the platform/control plane.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    approval_id: NonEmptyStr
+    approval_request_id: NonEmptyStr
+    approved_by_user_id: NonEmptyStr
+    approved_at: datetime
+    action_plan_id: NonEmptyStr
+    action_plan_hash: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    decision_report_id: NonEmptyStr
+    source_dataset_version_id: NonEmptyStr
+
+
+class ValidateActionPlanExecutionRequest(BaseModel):
+    """Inputs needed to validate an ActionPlan before execution is accepted."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    action_plan: ActionPlan
+    source_dataset_version_id: NonEmptyStr
+    approval_metadata: ActionPlanApprovalMetadata | None = None
 
 
 def build_action_plan_preview(request: BuildActionPlanPreviewRequest) -> ActionPlan:
@@ -135,6 +183,65 @@ def build_action_plan_preview(request: BuildActionPlanPreviewRequest) -> ActionP
         expected_outputs=expected_outputs,
         created_at=request.created_at or datetime.now(UTC),
     )
+
+
+def action_plan_integrity_hash(action_plan: ActionPlan) -> str:
+    """Return the canonical hash that approval metadata binds to an ActionPlan."""
+    return _stable_hash(action_plan.model_dump(mode="json"))
+
+
+def validate_action_plan_execution(request: ValidateActionPlanExecutionRequest) -> str:
+    """Validate signed-platform approved ActionPlan integrity before execution.
+
+    This function does not decide whether the approval is business-valid. It
+    only verifies that the platform-supplied approval metadata references this
+    exact ActionPlan and that the plan still has deterministic step integrity.
+    """
+    action_plan = request.action_plan
+    if action_plan.source_dataset_version_id != request.source_dataset_version_id:
+        raise ActionPlanExecutionError(
+            reason_code="source_dataset_version_mismatch",
+            message="ActionPlan source dataset version does not match the execute request.",
+            details={
+                "action_plan_id": action_plan.action_plan_id,
+                "source_dataset_version_id": request.source_dataset_version_id,
+            },
+        )
+    if action_plan.execution_mode is not WorkflowType.PREVIEW_ACTION_PLAN:
+        raise ActionPlanExecutionError(
+            reason_code="action_plan_not_preview_mode",
+            message="Only previewed ActionPlans can be accepted for approved execution.",
+            details={
+                "action_plan_id": action_plan.action_plan_id,
+                "execution_mode": action_plan.execution_mode.value,
+            },
+        )
+    if not action_plan.steps:
+        raise ActionPlanExecutionError(
+            reason_code="action_plan_has_no_steps",
+            message="ActionPlan must contain at least one executable step.",
+            details={"action_plan_id": action_plan.action_plan_id},
+        )
+
+    _validate_step_integrity(action_plan)
+    integrity_hash = action_plan_integrity_hash(action_plan)
+
+    metadata = request.approval_metadata
+    if action_plan.requires_approval and metadata is None:
+        raise ActionPlanExecutionError(
+            reason_code="approval_metadata_required",
+            message="Approval-required ActionPlan cannot be executed without approval metadata.",
+            code=ErrorCode.ACTION_PLAN_REQUIRES_APPROVAL,
+            status_code=403,
+            details={"action_plan_id": action_plan.action_plan_id},
+        )
+    if metadata is not None:
+        _validate_approval_metadata(
+            action_plan=action_plan,
+            metadata=metadata,
+            integrity_hash=integrity_hash,
+        )
+    return integrity_hash
 
 
 def _recommendations_by_id(
@@ -348,6 +455,82 @@ def _stable_hash(payload: object) -> str:
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
+def _validate_step_integrity(action_plan: ActionPlan) -> None:
+    for step in action_plan.steps:
+        expected_idempotency_key = _stable_hash(
+            {
+                "config_hash": step.config_hash,
+                "depends_on": step.depends_on,
+                "step_id": step.step_id,
+            }
+        )
+        if step.idempotency_key != expected_idempotency_key:
+            raise ActionPlanExecutionError(
+                reason_code="step_idempotency_key_mismatch",
+                message="ActionPlan step idempotency key does not match step integrity.",
+                details={
+                    "action_plan_id": action_plan.action_plan_id,
+                    "step_id": step.step_id,
+                },
+            )
+        if step.promotion_scope != "candidate_only":
+            raise ActionPlanExecutionError(
+                reason_code="invalid_promotion_scope",
+                message="ActionPlan steps may only produce candidate artifacts in ML service.",
+                details={
+                    "action_plan_id": action_plan.action_plan_id,
+                    "step_id": step.step_id,
+                    "promotion_scope": step.promotion_scope,
+                },
+            )
+
+
+def _validate_approval_metadata(
+    *,
+    action_plan: ActionPlan,
+    metadata: ActionPlanApprovalMetadata,
+    integrity_hash: str,
+) -> None:
+    expected_approval_request_id = action_plan.approval_request_id
+    if (
+        expected_approval_request_id
+        and metadata.approval_request_id != expected_approval_request_id
+    ):
+        raise ActionPlanExecutionError(
+            reason_code="approval_request_mismatch",
+            message="Approval metadata does not match the ActionPlan approval request.",
+            code=ErrorCode.ACTION_PLAN_SIGNATURE_INVALID,
+            status_code=401,
+            details={"action_plan_id": action_plan.action_plan_id},
+        )
+    expected_values = {
+        "action_plan_id": action_plan.action_plan_id,
+        "action_plan_hash": integrity_hash,
+        "decision_report_id": action_plan.created_from_decision_report,
+        "source_dataset_version_id": action_plan.source_dataset_version_id,
+    }
+    actual_values = {
+        "action_plan_id": metadata.action_plan_id,
+        "action_plan_hash": metadata.action_plan_hash,
+        "decision_report_id": metadata.decision_report_id,
+        "source_dataset_version_id": metadata.source_dataset_version_id,
+    }
+    mismatched = tuple(
+        field for field, expected in expected_values.items() if actual_values[field] != expected
+    )
+    if mismatched:
+        raise ActionPlanExecutionError(
+            reason_code="approval_metadata_integrity_mismatch",
+            message="Approval metadata does not match the ActionPlan integrity.",
+            code=ErrorCode.ACTION_PLAN_SIGNATURE_INVALID,
+            status_code=401,
+            details={
+                "action_plan_id": action_plan.action_plan_id,
+                "mismatched_fields": mismatched,
+            },
+        )
+
+
 def _ordered_unique(values: Any) -> tuple[str, ...]:
     result: list[str] = []
     seen: set[str] = set()
@@ -371,7 +554,12 @@ def _slug(value: str) -> str:
 
 __all__ = [
     "ACTION_PLAN_SCHEMA_VERSION",
+    "ActionPlanApprovalMetadata",
+    "ActionPlanExecutionError",
     "ActionPlanPreviewError",
     "BuildActionPlanPreviewRequest",
+    "ValidateActionPlanExecutionRequest",
+    "action_plan_integrity_hash",
     "build_action_plan_preview",
+    "validate_action_plan_execution",
 ]

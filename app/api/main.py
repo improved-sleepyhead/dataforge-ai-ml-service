@@ -12,6 +12,8 @@ from starlette.middleware.base import RequestResponseEndpoint
 
 from app.adapters import FakePlatformMetadataClient
 from app.api.schemas import (
+    ActionPlanExecuteApprovedRequest,
+    ActionPlanExecuteApprovedResponse,
     ActionPlanPreviewRequest,
     ActionPlanPreviewResponse,
     AnalyzeDatasetAcceptedResponse,
@@ -19,11 +21,14 @@ from app.api.schemas import (
     HealthResponse,
 )
 from app.api.security import PlatformIdentityDep, ServiceSignatureError
-from app.domain import ComputeRunStatus, ErrorBody, ErrorCode, ErrorResponse
+from app.domain import ComputeRunStatus, ErrorBody, ErrorCode, ErrorResponse, WorkflowType
 from app.kernel import (
+    ActionPlanExecutionError,
     ActionPlanPreviewError,
     BuildActionPlanPreviewRequest,
+    ValidateActionPlanExecutionRequest,
     build_action_plan_preview,
+    validate_action_plan_execution,
 )
 from app.kernel.config import ServiceConfig, load_config
 from app.orchestration.analyze_workflow import launch_analyze_dataset_workflow
@@ -121,6 +126,20 @@ def create_app(
             details={"reason_code": exc.reason_code, **exc.details},
         )
 
+    @application.exception_handler(ActionPlanExecutionError)
+    async def action_plan_execution_exception_handler(
+        request: Request,
+        exc: ActionPlanExecutionError,
+    ) -> JSONResponse:
+        return error_json_response(
+            status_code=exc.status_code,
+            code=exc.code,
+            message="ActionPlan execution could not be accepted.",
+            recoverable=True,
+            stage="api.action_plan_execute_approved",
+            details={"reason_code": exc.reason_code, **exc.details},
+        )
+
     @application.get(
         f"{API_PREFIX}/health",
         response_model=HealthResponse,
@@ -199,6 +218,39 @@ def create_app(
             job_id=payload.platform_job_id,
             action_plan=action_plan,
             mutates_dataset=False,
+        )
+
+    @application.post(
+        f"{API_PREFIX}/action-plans/execute-approved",
+        status_code=202,
+        response_model=ActionPlanExecuteApprovedResponse,
+        responses={
+            401: {"model": ErrorResponse},
+            403: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["action-plans"],
+    )
+    async def execute_approved_action_plan(
+        payload: ActionPlanExecuteApprovedRequest,
+        identity: PlatformIdentityDep,
+    ) -> ActionPlanExecuteApprovedResponse:
+        del identity
+        action_plan_hash = validate_action_plan_execution(
+            ValidateActionPlanExecutionRequest(
+                action_plan=payload.action_plan,
+                source_dataset_version_id=payload.source_dataset_version_id,
+                approval_metadata=payload.approval_metadata,
+            )
+        )
+        return ActionPlanExecuteApprovedResponse(
+            status=ComputeRunStatus.ACCEPTED,
+            job_id=payload.platform_job_id,
+            workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
+            action_plan_id=payload.action_plan.action_plan_id,
+            action_plan_hash=action_plan_hash,
+            accepted_step_ids=tuple(step.step_id for step in payload.action_plan.steps),
+            mutates_dataset=True,
         )
 
     if include_test_error_route:

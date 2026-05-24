@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from typing import cast
 
 from fastapi.testclient import TestClient
 
@@ -22,8 +23,15 @@ from app.domain import (
     ComputeRunStatus,
     ErrorCode,
     TabularProfileReport,
+    WorkflowType,
 )
-from app.kernel import BuildMethodRecommendationsRequest, build_method_recommendations
+from app.kernel import (
+    BuildActionPlanPreviewRequest,
+    BuildMethodRecommendationsRequest,
+    action_plan_integrity_hash,
+    build_action_plan_preview,
+    build_method_recommendations,
+)
 from app.kernel.config import ServiceConfig, load_config
 from app.orchestration.analyze_workflow import expected_analyze_outputs
 from app.validation.contracts import load_contract_pack, validate_contract_payload
@@ -78,9 +86,11 @@ def test_openapi_generates_health_and_error_schemas() -> None:
     schema = response.json()
     assert "/api/v1/health" in schema["paths"]
     assert "/api/v1/jobs/analyze-dataset" in schema["paths"]
+    assert "/api/v1/action-plans/execute-approved" in schema["paths"]
     assert "HealthResponse" in schema["components"]["schemas"]
     assert "AnalyzeDatasetAcceptedResponse" in schema["components"]["schemas"]
     assert "ActionPlanPreviewResponse" in schema["components"]["schemas"]
+    assert "ActionPlanExecuteApprovedResponse" in schema["components"]["schemas"]
     assert "ErrorResponse" in schema["components"]["schemas"]
 
 
@@ -184,6 +194,74 @@ def test_action_plan_preview_endpoint_builds_steps_and_validation_gates() -> Non
     assert "model_impact_check" in steps[1]["validation_gates"]
 
 
+def test_execute_approved_rejects_unsigned_request() -> None:
+    """TASK-040 step 1: execute-approved without platform signature is rejected."""
+    config = _test_config()
+    payload = _action_plan_execute_payload()
+    body = _body_bytes(payload)
+    client = TestClient(create_app(config=config), raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/v1/action-plans/execute-approved",
+        content=body,
+        headers={"content-type": "application/json"},
+    )
+
+    assert response.status_code == 401
+    error = response.json()["error"]
+    assert error["code"] == ErrorCode.ACTION_PLAN_SIGNATURE_INVALID
+    assert error["details"]["reason_code"] == "missing_service_identity"
+
+
+def test_execute_approved_accepts_valid_approval_metadata() -> None:
+    """TASK-040 step 2-3: fake valid approval metadata yields accepted state."""
+    config = _test_config()
+    payload = _action_plan_execute_payload()
+    body = _body_bytes(payload)
+    client = TestClient(create_app(config=config), raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/v1/action-plans/execute-approved",
+        content=body,
+        headers=_signed_headers(config=config, body=body, payload=payload),
+    )
+
+    assert response.status_code == 202
+    data = response.json()
+    action_plan = cast(dict[str, object], payload["action_plan"])
+    approval_metadata = cast(dict[str, object], payload["approval_metadata"])
+    steps = cast(list[dict[str, object]], action_plan["steps"])
+    assert data["status"] == ComputeRunStatus.ACCEPTED
+    assert data["job_id"] == "platform_job_001"
+    assert data["workflow_type"] == WorkflowType.APPLY_SELECTED_ACTIONS
+    assert data["action_plan_id"] == action_plan["action_plan_id"]
+    assert data["action_plan_hash"] == approval_metadata["action_plan_hash"]
+    assert data["accepted_step_ids"] == [step["step_id"] for step in steps]
+    assert data["mutates_dataset"] is True
+
+
+def test_execute_approved_rejects_approval_hash_mismatch() -> None:
+    config = _test_config()
+    payload = _action_plan_execute_payload()
+    approval_metadata = dict(cast(dict[str, object], payload["approval_metadata"]))
+    approval_metadata["action_plan_hash"] = "sha256:" + "e" * 64
+    payload["approval_metadata"] = approval_metadata
+    body = _body_bytes(payload)
+    client = TestClient(create_app(config=config), raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/v1/action-plans/execute-approved",
+        content=body,
+        headers=_signed_headers(config=config, body=body, payload=payload),
+    )
+
+    assert response.status_code == 401
+    error = response.json()["error"]
+    assert error["code"] == ErrorCode.ACTION_PLAN_SIGNATURE_INVALID
+    assert error["details"]["reason_code"] == "approval_metadata_integrity_mismatch"
+    assert "raw" not in response.text.lower()
+
+
 def test_action_plan_preview_rejects_disabled_ctgan_override() -> None:
     config = _test_config()
     recommendations = _method_recommendations()
@@ -245,6 +323,48 @@ def _analyze_payload(
         "prediction_artifact_refs": []
         if prediction_artifact_refs is None
         else prediction_artifact_refs,
+    }
+
+
+def _action_plan_execute_payload() -> dict[str, object]:
+    recommendations = build_method_recommendations(
+        BuildMethodRecommendationsRequest(tabular_profile=_demo_tabular_profile())
+    )
+    plan = build_action_plan_preview(
+        BuildActionPlanPreviewRequest(
+            decision_report_id="decision_report_001",
+            source_dataset_version_id="dataset_version_1",
+            selected_decision_ids=(recommendations[0].recommendation_id,),
+            selected_method_overrides={},
+            method_recommendations=(recommendations[0],),
+            created_by_user_id="platform_user_123",
+            input_artifacts=(
+                "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/manifest.jsonl",
+            ),
+            target_version_name="dataset_version_2_preview",
+            created_at=datetime(2026, 5, 24, 12, 0, tzinfo=UTC),
+        )
+    ).model_copy(
+        update={"requires_approval": True, "approval_request_id": "approval_request_001"}
+    )
+    action_plan = plan.model_dump(mode="json")
+    return {
+        "platform_job_id": "platform_job_001",
+        "organization_id": "org_1",
+        "project_id": "project_1",
+        "dataset_id": "dataset_1",
+        "source_dataset_version_id": "dataset_version_1",
+        "action_plan": action_plan,
+        "approval_metadata": {
+            "approval_id": "approval_001",
+            "approval_request_id": "approval_request_001",
+            "approved_by_user_id": "platform_owner_001",
+            "approved_at": "2026-05-24T12:05:00Z",
+            "action_plan_id": action_plan["action_plan_id"],
+            "action_plan_hash": action_plan_integrity_hash(plan),
+            "decision_report_id": action_plan["created_from_decision_report"],
+            "source_dataset_version_id": action_plan["source_dataset_version_id"],
+        },
     }
 
 

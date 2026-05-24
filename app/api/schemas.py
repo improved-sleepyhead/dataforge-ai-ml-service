@@ -6,8 +6,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain import ActionPlan, ArtifactRef, ComputeRunStatus, MethodRecommendation
-from app.domain.common import NonEmptyStr, S3Uri
+from app.domain import ActionPlan, ArtifactRef, ComputeRunStatus, MethodRecommendation, WorkflowType
+from app.domain.common import NonEmptyStr, S3Uri, Sha256Digest
+from app.kernel import ActionPlanApprovalMetadata
 
 
 class HealthResponse(BaseModel):
@@ -75,3 +76,31 @@ class ActionPlanPreviewResponse(BaseModel):
     job_id: NonEmptyStr
     action_plan: ActionPlan
     mutates_dataset: Literal[False] = False
+
+
+class ActionPlanExecuteApprovedRequest(BaseModel):
+    """Signed platform request to accept an approved ActionPlan for execution."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    platform_job_id: NonEmptyStr
+    organization_id: NonEmptyStr
+    project_id: NonEmptyStr
+    dataset_id: NonEmptyStr
+    source_dataset_version_id: NonEmptyStr
+    action_plan: ActionPlan
+    approval_metadata: ActionPlanApprovalMetadata | None = None
+
+
+class ActionPlanExecuteApprovedResponse(BaseModel):
+    """Accepted execution state after signature and integrity validation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    status: Literal[ComputeRunStatus.ACCEPTED]
+    job_id: NonEmptyStr
+    workflow_type: Literal[WorkflowType.APPLY_SELECTED_ACTIONS]
+    action_plan_id: NonEmptyStr
+    action_plan_hash: Sha256Digest
+    accepted_step_ids: tuple[NonEmptyStr, ...]
+    mutates_dataset: Literal[True] = True
