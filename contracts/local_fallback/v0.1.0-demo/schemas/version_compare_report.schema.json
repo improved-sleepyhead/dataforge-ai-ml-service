@@ -1,0 +1,914 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/version_compare_report.schema.json",
+  "title": "VersionCompareReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_schema_version",
+    "base_version_id",
+    "candidate_version_id",
+    "object_counts",
+    "changed_objects",
+    "imputed_fields",
+    "pii_risk",
+    "duplicate_counts",
+    "class_balance",
+    "model_metrics",
+    "score",
+    "validation_gates",
+    "action_plan_id",
+    "lineage",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "score_value": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "compare_status": {
+      "type": "string",
+      "enum": [
+        "available",
+        "not_applicable"
+      ]
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "kind": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "lineage": {
+          "type": "object",
+          "required": [
+            "parent_version_id",
+            "job_id",
+            "config_hash",
+            "created_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "job_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "config_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "object_counts": {
+      "type": "object",
+      "required": [
+        "before",
+        "after",
+        "delta"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "before": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "after": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "delta": {
+          "type": "integer"
+        }
+      }
+    },
+    "changed_objects": {
+      "type": "object",
+      "required": [
+        "changed_objects_total",
+        "imputed_object_count",
+        "duplicate_marked_count",
+        "duplicate_removed_count",
+        "redacted_object_count",
+        "synthetic_added_count",
+        "removed_or_blocked_count"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "changed_objects_total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "imputed_object_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicate_marked_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicate_removed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "redacted_object_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "synthetic_added_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "removed_or_blocked_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "imputed_field": {
+      "type": "object",
+      "required": [
+        "column",
+        "method",
+        "before_missing_count",
+        "after_missing_count",
+        "imputed_count"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "method": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "before_missing_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "after_missing_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "imputed_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "pii_risk": {
+      "type": "object",
+      "required": [
+        "status",
+        "pii_record_count_before",
+        "pii_record_count_after",
+        "redacted_record_count_before",
+        "redacted_record_count_after",
+        "unredacted_pii_record_count_before",
+        "unredacted_pii_record_count_after",
+        "pii_record_count_delta"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/compare_status"
+        },
+        "not_applicable_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "pii_record_count_before": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pii_record_count_after": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "redacted_record_count_before": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "redacted_record_count_after": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unredacted_pii_record_count_before": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unredacted_pii_record_count_after": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "pii_record_count_delta": {
+          "type": "integer"
+        }
+      }
+    },
+    "duplicate_counts": {
+      "type": "object",
+      "required": [
+        "status",
+        "duplicate_pair_count_before",
+        "duplicate_pair_count_after",
+        "duplicate_pair_count_delta"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/compare_status"
+        },
+        "not_applicable_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duplicate_pair_count_before": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicate_pair_count_after": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "duplicate_pair_count_delta": {
+          "type": "integer"
+        }
+      }
+    },
+    "class_entry": {
+      "type": "object",
+      "required": [
+        "label",
+        "count_before",
+        "count_after"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "count_before": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "count_after": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "class_balance": {
+      "type": "object",
+      "required": [
+        "status",
+        "classes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/compare_status"
+        },
+        "not_applicable_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_column": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rare_class_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rare_class_count_before": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "rare_class_count_after": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "rare_class_ratio_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rare_class_ratio_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rare_class_ratio_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "imbalance_ratio_before": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "imbalance_ratio_after": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "imbalance_ratio_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "minority_share_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "minority_share_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "classes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/class_entry"
+          }
+        }
+      }
+    },
+    "model_metrics": {
+      "type": "object",
+      "required": [
+        "status",
+        "pr_auc_status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/compare_status"
+        },
+        "not_applicable_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "verdict": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rare_class_recall_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rare_class_recall_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rare_class_recall_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "macro_f1_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "macro_f1_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "macro_f1_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "weighted_f1_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "weighted_f1_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "weighted_f1_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "pr_auc_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pr_auc_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pr_auc_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "pr_auc_status": {
+          "$ref": "#/$defs/compare_status"
+        },
+        "pr_auc_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "model_impact_report": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/artifact_ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "score_component": {
+      "type": "object",
+      "required": [
+        "component",
+        "weight",
+        "value_before",
+        "value_after",
+        "weighted_before",
+        "weighted_after",
+        "delta"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "component": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "weight": {
+          "type": "number"
+        },
+        "value_before": {
+          "$ref": "#/$defs/score_value"
+        },
+        "value_after": {
+          "$ref": "#/$defs/score_value"
+        },
+        "weighted_before": {
+          "type": "number"
+        },
+        "weighted_after": {
+          "type": "number"
+        },
+        "delta": {
+          "type": "number"
+        }
+      }
+    },
+    "score_penalty": {
+      "type": "object",
+      "required": [
+        "reason_code",
+        "value_before",
+        "value_after",
+        "applied_before",
+        "applied_after"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "reason_code": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "value_before": {
+          "type": "number"
+        },
+        "value_after": {
+          "type": "number"
+        },
+        "applied_before": {
+          "type": "boolean"
+        },
+        "applied_after": {
+          "type": "boolean"
+        }
+      }
+    },
+    "score": {
+      "type": "object",
+      "required": [
+        "status",
+        "components",
+        "penalties"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/compare_status"
+        },
+        "not_applicable_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "policy_version": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "formula": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "raw_score_before": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "raw_score_after": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "raw_score_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "value_before": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score_value"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "value_delta": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/score_component"
+          }
+        },
+        "penalties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/score_penalty"
+          }
+        },
+        "readiness_status_before": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "readiness_status_after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "validation_gates": {
+      "type": "object",
+      "required": [
+        "overall_status",
+        "candidate_status",
+        "raw_artifact_unchanged",
+        "blocker_present",
+        "blocker_gate_types",
+        "block_export",
+        "block_model_evaluation",
+        "block_training",
+        "blocker_reason_codes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "overall_status": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "candidate_status": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "raw_artifact_unchanged": {
+          "type": "boolean"
+        },
+        "blocker_present": {
+          "type": "boolean"
+        },
+        "blocker_gate_types": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        },
+        "block_export": {
+          "type": "boolean"
+        },
+        "block_model_evaluation": {
+          "type": "boolean"
+        },
+        "block_training": {
+          "type": "boolean"
+        },
+        "blocker_reason_codes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        },
+        "validation_gates_report": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/artifact_ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "organization_id",
+        "project_id",
+        "dataset_id",
+        "parent_version_id",
+        "candidate_dataset_version_id",
+        "action_plan_id",
+        "created_by_job_id",
+        "config_hash"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "organization_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "project_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "dataset_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "parent_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "candidate_dataset_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "candidate_version_artifact": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/artifact_ref"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "action_plan_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "decision_report_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_by_job_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "config_hash": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  },
+  "properties": {
+    "report_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "report_schema_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "base_version_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "candidate_version_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "object_counts": {
+      "$ref": "#/$defs/object_counts"
+    },
+    "changed_objects": {
+      "$ref": "#/$defs/changed_objects"
+    },
+    "imputed_fields": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/imputed_field"
+      }
+    },
+    "pii_risk": {
+      "$ref": "#/$defs/pii_risk"
+    },
+    "duplicate_counts": {
+      "$ref": "#/$defs/duplicate_counts"
+    },
+    "class_balance": {
+      "$ref": "#/$defs/class_balance"
+    },
+    "model_metrics": {
+      "$ref": "#/$defs/model_metrics"
+    },
+    "score": {
+      "$ref": "#/$defs/score"
+    },
+    "validation_gates": {
+      "$ref": "#/$defs/validation_gates"
+    },
+    "action_plan_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
