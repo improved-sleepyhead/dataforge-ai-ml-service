@@ -84,6 +84,10 @@
       "path": "schemas/validation_gates_report.schema.json"
     },
     {
+      "name": "candidate_dataset_version",
+      "path": "schemas/candidate_dataset_version.schema.json"
+    },
+    {
       "name": "tabular_profile_report",
       "path": "schemas/tabular_profile_report.schema.json"
     },
@@ -210,6 +214,11 @@
       "name": "validation_gates_report.demo",
       "schema": "validation_gates_report",
       "path": "examples/validation_gates_report.demo.json"
+    },
+    {
+      "name": "candidate_dataset_version.smote_proposed",
+      "schema": "candidate_dataset_version",
+      "path": "examples/candidate_dataset_version.smote_proposed.json"
     },
     {
       "name": "tabular_profile_report.fraud",

@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/candidate_dataset_version.schema.json",
+  "title": "CandidateDatasetVersion",
+  "type": "object",
+  "required": [
+    "candidate_version_id",
+    "candidate_version_schema_version",
+    "status",
+    "policy_versions",
+    "lineage",
+    "candidate_artifacts",
+    "primary_dataset_artifact",
+    "block_export",
+    "block_model_evaluation",
+    "block_training",
+    "action_plan_steps",
+    "proposed_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "non_empty_string": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["proposed", "blocked", "failed"] },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id","kind","uri","hash","media_type","size_bytes","schema_version","lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/non_empty_string" },
+        "kind": { "$ref": "#/$defs/non_empty_string" },
+        "uri": { "type": "string", "pattern": "^s3://[^\\s]+$" },
+        "hash": { "$ref": "#/$defs/sha256" },
+        "media_type": { "$ref": "#/$defs/non_empty_string" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "schema_version": { "$ref": "#/$defs/non_empty_string" },
+        "lineage": {
+          "type": "object",
+          "required": ["parent_version_id","job_id","config_hash","created_at"],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": { "$ref": "#/$defs/non_empty_string" },
+            "job_id": { "$ref": "#/$defs/non_empty_string" },
+            "config_hash": { "$ref": "#/$defs/sha256" },
+            "created_at": { "type": "string", "format": "date-time" }
+          }
+        }
+      }
+    },
+    "policy_versions": {
+      "type": "object",
+      "required": [
+        "profile_policy_version",
+        "decision_policy_version",
+        "score_policy_version",
+        "method_policy_version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "profile_policy_version": { "$ref": "#/$defs/non_empty_string" },
+        "decision_policy_version": { "$ref": "#/$defs/non_empty_string" },
+        "score_policy_version": { "$ref": "#/$defs/non_empty_string" },
+        "method_policy_version": { "$ref": "#/$defs/non_empty_string" },
+        "validation_gates_policy_version": {
+          "anyOf": [ { "$ref": "#/$defs/non_empty_string" }, { "type": "null" } ]
+        }
+      }
+    },
+    "step_summary": {
+      "type": "object",
+      "required": [
+        "step_id","step_type","method_id","plugin_id","plugin_version","config_hash","output_artifact_kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "step_id": { "$ref": "#/$defs/non_empty_string" },
+        "step_type": { "$ref": "#/$defs/non_empty_string" },
+        "method_id": { "$ref": "#/$defs/non_empty_string" },
+        "plugin_id": { "$ref": "#/$defs/non_empty_string" },
+        "plugin_version": { "$ref": "#/$defs/non_empty_string" },
+        "config_hash": { "$ref": "#/$defs/sha256" },
+        "output_artifact_kind": { "$ref": "#/$defs/non_empty_string" },
+        "random_seed": { "type": ["integer","null"] }
+      }
+    },
+    "synthetic_metadata": {
+      "type": "object",
+      "required": [
+        "method_id","plugin_id","plugin_version","random_seed","config_hash",
+        "source_split","generated_count","sampling_strategy","policy_version",
+        "validation_report","synthetic_dataset_report"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "method_id": { "$ref": "#/$defs/non_empty_string" },
+        "plugin_id": { "$ref": "#/$defs/non_empty_string" },
+        "plugin_version": { "$ref": "#/$defs/non_empty_string" },
+        "random_seed": { "type": "integer" },
+        "config_hash": { "$ref": "#/$defs/sha256" },
+        "source_split": { "$ref": "#/$defs/non_empty_string" },
+        "source_cohort": { "type": ["string","null"] },
+        "source_object_ids": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        },
+        "source_object_ids_truncated": { "type": "boolean" },
+        "full_source_object_ids_count": { "type": "integer", "minimum": 0 },
+        "generated_count": { "type": "integer", "minimum": 0 },
+        "sampling_strategy": { "type": "number", "minimum": 0.0 },
+        "policy_version": { "$ref": "#/$defs/non_empty_string" },
+        "validation_report": { "$ref": "#/$defs/artifact_ref" },
+        "model_impact_report": {
+          "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ]
+        },
+        "synthetic_dataset_report": { "$ref": "#/$defs/artifact_ref" }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "organization_id","project_id","dataset_id","parent_version_id",
+        "proposed_version_name","action_plan_id","created_by_job_id",
+        "config_hash","input_artifact_hashes","output_artifact_hashes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "organization_id": { "$ref": "#/$defs/non_empty_string" },
+        "project_id": { "$ref": "#/$defs/non_empty_string" },
+        "dataset_id": { "$ref": "#/$defs/non_empty_string" },
+        "parent_version_id": { "$ref": "#/$defs/non_empty_string" },
+        "proposed_version_name": { "$ref": "#/$defs/non_empty_string" },
+        "action_plan_id": { "$ref": "#/$defs/non_empty_string" },
+        "decision_report_id": {
+          "anyOf": [ { "$ref": "#/$defs/non_empty_string" }, { "type": "null" } ]
+        },
+        "created_by_job_id": { "$ref": "#/$defs/non_empty_string" },
+        "config_hash": { "$ref": "#/$defs/sha256" },
+        "input_artifact_hashes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sha256" }
+        },
+        "output_artifact_hashes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/sha256" }
+        },
+        "input_manifest_hash": {
+          "anyOf": [ { "$ref": "#/$defs/sha256" }, { "type": "null" } ]
+        },
+        "output_manifest_hash": {
+          "anyOf": [ { "$ref": "#/$defs/sha256" }, { "type": "null" } ]
+        }
+      }
+    }
+  },
+  "properties": {
+    "candidate_version_id": { "$ref": "#/$defs/non_empty_string" },
+    "candidate_version_schema_version": { "$ref": "#/$defs/non_empty_string" },
+    "status": { "$ref": "#/$defs/status" },
+    "policy_versions": { "$ref": "#/$defs/policy_versions" },
+    "lineage": { "$ref": "#/$defs/lineage" },
+    "candidate_artifacts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/artifact_ref" }
+    },
+    "primary_dataset_artifact": { "$ref": "#/$defs/artifact_ref" },
+    "validation_gates_report": {
+      "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ]
+    },
+    "validation_gates_summary": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          { "type": "string" },
+          { "type": "boolean" },
+          { "type": "integer" },
+          { "type": "number" }
+        ]
+      }
+    },
+    "block_export": { "type": "boolean" },
+    "block_model_evaluation": { "type": "boolean" },
+    "block_training": { "type": "boolean" },
+    "blocker_reason_codes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/non_empty_string" }
+    },
+    "action_plan_steps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/step_summary" }
+    },
+    "synthetic_metadata": {
+      "anyOf": [ { "$ref": "#/$defs/synthetic_metadata" }, { "type": "null" } ]
+    },
+    "proposed_at": { "type": "string", "format": "date-time" }
+  }
+}
