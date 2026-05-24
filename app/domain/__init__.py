@@ -107,6 +107,13 @@ from app.domain.profile import (
     TabularProfileLineage,
     TabularProfileReport,
 )
+from app.domain.splits import (
+    SplitAssignment,
+    SplitClassDistribution,
+    SplitManifest,
+    SplitManifestLineage,
+    SplitStrategy,
+)
 from app.domain.text_ocr import (
     PiiCategory,
     PiiFinding,
@@ -214,6 +221,11 @@ __all__ = [
     "ReviewQueueType",
     "RiskProfile",
     "SignalStatus",
+    "SplitAssignment",
+    "SplitClassDistribution",
+    "SplitManifest",
+    "SplitManifestLineage",
+    "SplitStrategy",
     "TabularImputationLineage",
     "TabularImputationReport",
     "TabularProfileLineage",

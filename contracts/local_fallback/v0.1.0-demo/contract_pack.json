@@ -64,6 +64,10 @@
       "path": "schemas/export_package.schema.json"
     },
     {
+      "name": "split_manifest",
+      "path": "schemas/split_manifest.schema.json"
+    },
+    {
       "name": "tabular_profile_report",
       "path": "schemas/tabular_profile_report.schema.json"
     },
@@ -160,6 +164,11 @@
       "name": "export_package.ready",
       "schema": "export_package",
       "path": "examples/export_package.ready.json"
+    },
+    {
+      "name": "split_manifest.group_stratified",
+      "schema": "split_manifest",
+      "path": "examples/split_manifest.group_stratified.json"
     },
     {
       "name": "tabular_profile_report.fraud",
