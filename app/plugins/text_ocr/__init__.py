@@ -16,6 +16,17 @@ from app.plugins.text_ocr.pii import (
     detect_pii,
     redact_record,
 )
+from app.plugins.text_ocr.redaction_action import (
+    REDACT_PII_STEP_TYPE,
+    TEXT_OCR_PRIVACY_POLICY_VERSION,
+    ExecuteTextOcrRedactionRequest,
+    ExecuteTextOcrRedactionResult,
+    TextOcrExportPolicyDecision,
+    TextOcrExportPolicyStatus,
+    TextOcrRedactionExecutionError,
+    evaluate_text_ocr_export_policy,
+    execute_text_ocr_redaction_action,
+)
 from app.plugins.text_ocr.validator import (
     OCR_RECORD_SCHEMA_NAME,
     SUPPORT_MESSAGE_SCHEMA_NAME,
@@ -38,6 +49,13 @@ from app.plugins.text_ocr.validator import (
 
 __all__ = [
     "BuildTextOcrReportResult",
+    "ExecuteTextOcrRedactionRequest",
+    "ExecuteTextOcrRedactionResult",
+    "REDACT_PII_STEP_TYPE",
+    "TEXT_OCR_PRIVACY_POLICY_VERSION",
+    "TextOcrExportPolicyDecision",
+    "TextOcrExportPolicyStatus",
+    "TextOcrRedactionExecutionError",
     "OCR_RECORD_SCHEMA_NAME",
     "PersistedRedactedJsonl",
     "SUPPORT_MESSAGE_SCHEMA_NAME",
@@ -52,6 +70,8 @@ __all__ = [
     "aggregate_pii",
     "build_text_ocr_report",
     "detect_pii",
+    "evaluate_text_ocr_export_policy",
+    "execute_text_ocr_redaction_action",
     "normalize_text",
     "persist_redacted_jsonl",
     "produce_redacted_jsonl",
