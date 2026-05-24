@@ -1,5 +1,19 @@
 """Dataset intelligence report and export artifact builders."""
 
+from app.reports.dataforge_report import (
+    DATAFORGE_REPORT_ARTIFACT_FORMAT,
+    DATAFORGE_REPORT_ARTIFACT_KIND,
+    DATAFORGE_REPORT_MEDIA_TYPE,
+    DATAFORGE_REPORT_SCHEMA_VERSION,
+    BuildDataForgeReportArtifactResult,
+    BuildDataForgeReportRequest,
+    build_dataforge_report,
+    build_dataforge_report_artifact,
+    dataforge_report_ref,
+    detail_artifact_refs,
+    review_queue_ref,
+    serialize_dataforge_report,
+)
 from app.reports.decision_report import (
     DECISION_REPORT_ARTIFACT_FORMAT,
     DECISION_REPORT_ARTIFACT_KIND,
@@ -20,9 +34,15 @@ from app.reports.review_queue import (
 )
 
 __all__ = [
+    "BuildDataForgeReportArtifactResult",
+    "BuildDataForgeReportRequest",
     "BuildDecisionReportArtifactResult",
     "BuildReviewQueuesArtifactResult",
     "BuildReviewQueuesRequest",
+    "DATAFORGE_REPORT_ARTIFACT_FORMAT",
+    "DATAFORGE_REPORT_ARTIFACT_KIND",
+    "DATAFORGE_REPORT_MEDIA_TYPE",
+    "DATAFORGE_REPORT_SCHEMA_VERSION",
     "DECISION_REPORT_ARTIFACT_FORMAT",
     "DECISION_REPORT_ARTIFACT_KIND",
     "DECISION_REPORT_MEDIA_TYPE",
@@ -32,6 +52,12 @@ __all__ = [
     "REVIEW_QUEUE_SCHEMA_VERSION",
     "SAFE_PREVIEW_ARTIFACT_KIND",
     "SAFE_PREVIEW_SCHEMA_VERSION",
+    "build_dataforge_report",
+    "build_dataforge_report_artifact",
     "build_decision_report_artifact",
     "build_review_queues_artifact",
+    "dataforge_report_ref",
+    "detail_artifact_refs",
+    "review_queue_ref",
+    "serialize_dataforge_report",
 ]

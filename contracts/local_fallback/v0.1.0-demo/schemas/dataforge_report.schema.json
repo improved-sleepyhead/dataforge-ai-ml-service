@@ -208,6 +208,8 @@
         "status",
         "reason",
         "prediction_manifest_ref",
+        "prediction_validation_report_ref",
+        "model_error_analysis_report_ref",
         "ambiguous_object_count",
         "probable_label_error_count"
       ],
@@ -216,6 +218,18 @@
         "status": {"type": "string", "enum": ["available", "not_applicable", "unavailable"]},
         "reason": {"type": ["string", "null"]},
         "prediction_manifest_ref": {
+          "anyOf": [
+            {"$ref": "#/$defs/evidence_ref"},
+            {"type": "null"}
+          ]
+        },
+        "prediction_validation_report_ref": {
+          "anyOf": [
+            {"$ref": "#/$defs/evidence_ref"},
+            {"type": "null"}
+          ]
+        },
+        "model_error_analysis_report_ref": {
           "anyOf": [
             {"$ref": "#/$defs/evidence_ref"},
             {"type": "null"}

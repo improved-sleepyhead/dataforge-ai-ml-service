@@ -127,6 +127,14 @@
       "kind": "PREDICTION_MANIFEST",
       "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/predictions.jsonl"
     },
+    "prediction_validation_report_ref": {
+      "kind": "PREDICTION_VALIDATION_REPORT",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/prediction_validation_report.json"
+    },
+    "model_error_analysis_report_ref": {
+      "kind": "MODEL_ERROR_ANALYSIS_REPORT",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/model_error_analysis_report.json"
+    },
     "ambiguous_object_count": 1,
     "probable_label_error_count": 1
   },

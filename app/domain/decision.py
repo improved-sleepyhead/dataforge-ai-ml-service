@@ -429,13 +429,19 @@ class PredictionReportSection(BaseModel):
     status: SignalStatus
     reason: str | None = None
     prediction_manifest_ref: EvidenceRef | None = None
+    prediction_validation_report_ref: EvidenceRef | None = None
+    model_error_analysis_report_ref: EvidenceRef | None = None
     ambiguous_object_count: int = Field(ge=0)
     probable_label_error_count: int = Field(ge=0)
 
     @model_validator(mode="after")
     def validate_prediction_section_state(self) -> Self:
-        if self.status is SignalStatus.AVAILABLE and self.prediction_manifest_ref is None:
-            raise ValueError("available prediction section must include prediction_manifest_ref")
+        if self.status is SignalStatus.AVAILABLE and (
+            self.prediction_manifest_ref is None
+            or self.prediction_validation_report_ref is None
+            or self.model_error_analysis_report_ref is None
+        ):
+            raise ValueError("available prediction section must include prediction refs")
         if self.status is not SignalStatus.AVAILABLE and not self.reason:
             raise ValueError("missing prediction section must include a reason")
         return self
