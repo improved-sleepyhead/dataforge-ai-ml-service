@@ -46,6 +46,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
     assert "split_leakage_report" in pack.schemas
     assert "synthetic_dataset_report" in pack.schemas
     assert "duplicate_action_report" in pack.schemas
+    assert "validation_gates_report" in pack.schemas
     assert {example.name for example in pack.examples} == {
         "artifact_ref.basic",
         "compute_run.analyze_only",
@@ -68,6 +69,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "duplicate_action_report.remove",
         "synthetic_dataset_report.smote",
         "synthetic_dataset_report.gaussian_copula",
+        "validation_gates_report.demo",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
         "tabular_imputation_report.group_median",
@@ -100,6 +102,7 @@ def test_all_contract_examples_validate() -> None:
         "duplicate_action_report.remove",
         "synthetic_dataset_report.smote",
         "synthetic_dataset_report.gaussian_copula",
+        "validation_gates_report.demo",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
         "tabular_imputation_report.group_median",

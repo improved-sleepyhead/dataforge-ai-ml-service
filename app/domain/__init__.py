@@ -155,6 +155,18 @@ from app.domain.text_ocr import (
     TextPiiFindingsForRecord,
     TextValidationIssue,
 )
+from app.domain.validation_gates import (
+    DCR_FORMULA,
+    CandidateArtifactStatus,
+    CandidateValidationGate,
+    ValidationGateFinding,
+    ValidationGateMetric,
+    ValidationGateSeverity,
+    ValidationGatesLineage,
+    ValidationGatesReport,
+    ValidationGateStatus,
+    ValidationGateType,
+)
 
 __all__ = [
     "ArtifactLineage",
@@ -293,4 +305,14 @@ __all__ = [
     "TextValidationIssue",
     "ValidationGateResult",
     "WorkflowType",
+    "CandidateArtifactStatus",
+    "CandidateValidationGate",
+    "DCR_FORMULA",
+    "ValidationGateFinding",
+    "ValidationGateMetric",
+    "ValidationGateSeverity",
+    "ValidationGateStatus",
+    "ValidationGateType",
+    "ValidationGatesLineage",
+    "ValidationGatesReport",
 ]

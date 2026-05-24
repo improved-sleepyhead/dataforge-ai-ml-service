@@ -1,0 +1,294 @@
+{
+  "report_id": "validation_gates_report_001",
+  "report_schema_version": "validation_gates_report.v1",
+  "dataset_id": "dataset_1",
+  "source_dataset_version_id": "dataset_version_v1",
+  "candidate_dataset_version_id": "dataset_version_v2_candidate",
+  "candidate_artifact_kind": "candidate_tabular_dataset",
+  "policy_version": "validation_gates_policy_v0",
+  "overall_status": "passed",
+  "candidate_status": "ok",
+  "raw_artifact_unchanged": true,
+  "block_export": false,
+  "block_model_evaluation": false,
+  "block_training": false,
+  "blocker_present": false,
+  "blocker_gate_types": [],
+  "gates": [
+    {
+      "gate_type": "schema_validation",
+      "status": "passed",
+      "severity": "info",
+      "reason_code": "schema_match",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": 1.0,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": null
+    },
+    {
+      "gate_type": "business_rules",
+      "status": "passed",
+      "severity": "info",
+      "reason_code": "business_rules_passed",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": 1.0,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": null
+    },
+    {
+      "gate_type": "privacy_check",
+      "status": "passed",
+      "severity": "info",
+      "reason_code": "no_pii_detected",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": 1.0,
+      "metrics": [
+        {
+          "name": "email",
+          "value": 0.0,
+          "threshold": null,
+          "formula": null,
+          "notes": null
+        },
+        {
+          "name": "phone",
+          "value": 0.0,
+          "threshold": null,
+          "formula": null,
+          "notes": null
+        }
+      ],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": null
+    },
+    {
+      "gate_type": "split_leakage_check",
+      "status": "passed",
+      "severity": "info",
+      "reason_code": "no_split_leakage",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": 1.0,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": null
+    },
+    {
+      "gate_type": "synthetic_dcr_check",
+      "status": "passed",
+      "severity": "info",
+      "reason_code": "dcr_passed",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": 1.0,
+      "metrics": [
+        {
+          "name": "dcr_min",
+          "value": 1.234,
+          "threshold": 0.0,
+          "formula": "DCR(x_synth) = min_{x_real in D_real} distance(x_synth, x_real)",
+          "notes": null
+        },
+        {
+          "name": "dcr_mean",
+          "value": 4.56,
+          "threshold": null,
+          "formula": "DCR(x_synth) = min_{x_real in D_real} distance(x_synth, x_real)",
+          "notes": null
+        }
+      ],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": null
+    },
+    {
+      "gate_type": "synthetic_exact_duplicate_to_real",
+      "status": "passed",
+      "severity": "info",
+      "reason_code": "no_exact_duplicate_to_real",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": 1.0,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": null
+    },
+    {
+      "gate_type": "synthetic_nearest_neighbor_privacy",
+      "status": "passed",
+      "severity": "info",
+      "reason_code": "nearest_neighbor_privacy_ok",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": 1.0,
+      "metrics": [
+        {
+          "name": "nearest_neighbor_epsilon",
+          "value": 0.000001,
+          "threshold": null,
+          "formula": null,
+          "notes": null
+        }
+      ],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": null
+    },
+    {
+      "gate_type": "synthetic_distribution_similarity",
+      "status": "not_applicable",
+      "severity": "info",
+      "reason_code": "distribution_similarity_pipeline_not_available",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": null,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": "distribution_similarity_pipeline_not_available"
+    },
+    {
+      "gate_type": "synthetic_correlation_preservation",
+      "status": "not_applicable",
+      "severity": "info",
+      "reason_code": "correlation_preservation_pipeline_not_available",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": null,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": "correlation_preservation_pipeline_not_available"
+    },
+    {
+      "gate_type": "synthetic_missingness_comparison",
+      "status": "not_applicable",
+      "severity": "info",
+      "reason_code": "missingness_comparison_pipeline_not_available",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": null,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": "missingness_comparison_pipeline_not_available"
+    },
+    {
+      "gate_type": "synthetic_tstr",
+      "status": "not_applicable",
+      "severity": "info",
+      "reason_code": "model_impact_pipeline_not_available",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": null,
+      "metrics": [],
+      "findings": [],
+      "notes": "TSTR policy: TSTR_score < baseline_score - threshold => synthetic_method_status rejected.",
+      "not_applicable_reason": "model_impact_pipeline_not_available"
+    },
+    {
+      "gate_type": "synthetic_trts",
+      "status": "not_applicable",
+      "severity": "info",
+      "reason_code": "model_impact_pipeline_not_available",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": null,
+      "metrics": [],
+      "findings": [],
+      "notes": "TRTS_score is unstable => requires_review.",
+      "not_applicable_reason": "model_impact_pipeline_not_available"
+    },
+    {
+      "gate_type": "synthetic_shap_consistency",
+      "status": "not_applicable",
+      "severity": "info",
+      "reason_code": "shap_pipeline_not_available",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": null,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": "shap_pipeline_not_available"
+    },
+    {
+      "gate_type": "synthetic_tabsyndex",
+      "status": "not_applicable",
+      "severity": "info",
+      "reason_code": "tabsyndex_pipeline_not_available",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": null,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": "tabsyndex_pipeline_not_available"
+    },
+    {
+      "gate_type": "raw_artifact_immutability",
+      "status": "passed",
+      "severity": "info",
+      "reason_code": "raw_artifact_unchanged",
+      "block_action": null,
+      "findings_count": 0,
+      "pass_rate": 1.0,
+      "metrics": [],
+      "findings": [],
+      "notes": null,
+      "not_applicable_reason": null
+    }
+  ],
+  "lineage": {
+    "action_plan_id": "action_plan_001",
+    "step_id": "validation_gates_001",
+    "source_dataset_version_id": "dataset_version_v1",
+    "candidate_dataset_version_id": "dataset_version_v2_candidate",
+    "created_by_job_id": "compute_run_apply_001",
+    "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "source_artifact": {
+      "artifact_id": "raw_transactions:aaaaaaaaaaaaaaaa",
+      "kind": "raw_transactions",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v1/transactions.csv",
+      "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "text/csv",
+      "size_bytes": 128,
+      "schema_version": "tabular_dataset.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at": "2026-05-24T12:00:00Z"
+      }
+    },
+    "candidate_artifact": {
+      "artifact_id": "candidate_tabular_dataset:aaaaaaaaaaaaaaaa",
+      "kind": "candidate_tabular_dataset",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/transactions.csv",
+      "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "media_type": "text/csv",
+      "size_bytes": 256,
+      "schema_version": "tabular_dataset.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at": "2026-05-24T12:05:00Z"
+      }
+    },
+    "split_manifest": null,
+    "split_leakage_report": null,
+    "synthetic_dataset_report": null
+  },
+  "generated_at": "2026-05-24T12:10:00Z"
+}

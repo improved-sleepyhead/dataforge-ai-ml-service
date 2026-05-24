@@ -80,6 +80,10 @@
       "path": "schemas/synthetic_dataset_report.schema.json"
     },
     {
+      "name": "validation_gates_report",
+      "path": "schemas/validation_gates_report.schema.json"
+    },
+    {
       "name": "tabular_profile_report",
       "path": "schemas/tabular_profile_report.schema.json"
     },
@@ -201,6 +205,11 @@
       "name": "synthetic_dataset_report.gaussian_copula",
       "schema": "synthetic_dataset_report",
       "path": "examples/synthetic_dataset_report.gaussian_copula.json"
+    },
+    {
+      "name": "validation_gates_report.demo",
+      "schema": "validation_gates_report",
+      "path": "examples/validation_gates_report.demo.json"
     },
     {
       "name": "tabular_profile_report.fraud",
