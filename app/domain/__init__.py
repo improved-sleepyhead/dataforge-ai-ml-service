@@ -61,6 +61,12 @@ from app.domain.evidence import (
     SignalStatus,
     TechnicalQualityBlock,
 )
+from app.domain.imputation import (
+    ImputationColumnReport,
+    ImputationMethod,
+    TabularImputationLineage,
+    TabularImputationReport,
+)
 from app.domain.manifest import (
     DataModality,
     DataSplit,
@@ -150,6 +156,8 @@ __all__ = [
     "ErrorBody",
     "ErrorCode",
     "ErrorResponse",
+    "ImputationColumnReport",
+    "ImputationMethod",
     "ExportObjectCounts",
     "ExportPackage",
     "ExportPackageLineage",
@@ -206,6 +214,8 @@ __all__ = [
     "ReviewQueueType",
     "RiskProfile",
     "SignalStatus",
+    "TabularImputationLineage",
+    "TabularImputationReport",
     "TabularProfileLineage",
     "TabularProfileReport",
     "TechnicalQualityBlock",
