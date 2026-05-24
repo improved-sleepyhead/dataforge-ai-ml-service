@@ -45,6 +45,12 @@ from app.domain.decision import (
     ReviewQueueType,
     ValidationGateResult,
 )
+from app.domain.duplicate import (
+    DuplicateActionLineage,
+    DuplicateActionMode,
+    DuplicateActionReport,
+    DuplicateGroupSummary,
+)
 from app.domain.errors import ErrorBody, ErrorCode, ErrorResponse
 from app.domain.evidence import (
     DuplicateSignals,
@@ -183,6 +189,10 @@ __all__ = [
     "DecisionAction",
     "DecisionReport",
     "DuplicateDiagnostics",
+    "DuplicateActionLineage",
+    "DuplicateActionMode",
+    "DuplicateActionReport",
+    "DuplicateGroupSummary",
     "DuplicateSignals",
     "ErrorBody",
     "ErrorCode",

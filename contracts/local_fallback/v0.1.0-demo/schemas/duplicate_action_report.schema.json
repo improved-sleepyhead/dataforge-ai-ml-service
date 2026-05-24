@@ -1,0 +1,261 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/duplicate_action_report.schema.json",
+  "title": "DuplicateActionReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_schema_version",
+    "mode",
+    "id_column",
+    "signature_columns",
+    "before_row_count",
+    "after_row_count",
+    "before_duplicate_pair_count",
+    "before_duplicate_group_count",
+    "after_duplicate_pair_count",
+    "after_duplicate_group_count",
+    "marked_count",
+    "removed_count",
+    "groups",
+    "raw_artifact_hash",
+    "raw_artifact_unchanged",
+    "lineage",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "MARK_DUPLICATE_CANDIDATES",
+        "REMOVE_DUPLICATES"
+      ]
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "kind": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "lineage": {
+          "type": "object",
+          "required": [
+            "parent_version_id",
+            "job_id",
+            "config_hash",
+            "created_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "job_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "config_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "group": {
+      "type": "object",
+      "required": [
+        "group_id",
+        "signature_hash",
+        "affected_object_ids"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "group_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "signature_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "affected_object_ids": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        },
+        "kept_object_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "removed_object_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        },
+        "marked_object_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "action_plan_id",
+        "step_id",
+        "source_dataset_version_id",
+        "candidate_dataset_version_id",
+        "created_by_job_id",
+        "config_hash",
+        "source_artifact",
+        "candidate_artifact"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action_plan_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "step_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "source_dataset_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "candidate_dataset_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "created_by_job_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "candidate_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        }
+      }
+    }
+  },
+  "properties": {
+    "report_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "report_schema_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "mode": {
+      "$ref": "#/$defs/mode"
+    },
+    "id_column": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "signature_columns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
+    },
+    "before_row_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "after_row_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "before_duplicate_pair_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "before_duplicate_group_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "after_duplicate_pair_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "after_duplicate_group_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "marked_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "removed_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/group"
+      }
+    },
+    "raw_artifact_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "raw_artifact_unchanged": {
+      "type": "boolean"
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

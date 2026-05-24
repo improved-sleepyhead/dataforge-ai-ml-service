@@ -72,6 +72,10 @@
       "path": "schemas/split_leakage_report.schema.json"
     },
     {
+      "name": "duplicate_action_report",
+      "path": "schemas/duplicate_action_report.schema.json"
+    },
+    {
       "name": "synthetic_dataset_report",
       "path": "schemas/synthetic_dataset_report.schema.json"
     },
@@ -182,6 +186,11 @@
       "name": "split_leakage_report.demo",
       "schema": "split_leakage_report",
       "path": "examples/split_leakage_report.demo.json"
+    },
+    {
+      "name": "duplicate_action_report.remove",
+      "schema": "duplicate_action_report",
+      "path": "examples/duplicate_action_report.remove.json"
     },
     {
       "name": "synthetic_dataset_report.smote",
