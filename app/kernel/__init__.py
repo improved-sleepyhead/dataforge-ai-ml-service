@@ -1,5 +1,11 @@
 """Dataset intelligence kernel: policies, contracts, decisions, and planning."""
 
+from app.kernel.action_plan import (
+    ACTION_PLAN_SCHEMA_VERSION,
+    ActionPlanPreviewError,
+    BuildActionPlanPreviewRequest,
+    build_action_plan_preview,
+)
 from app.kernel.dataforge_score import (
     DATAFORGE_SCORE_FORMULA,
     DATAFORGE_SCORE_PENALTIES,
@@ -59,6 +65,7 @@ __all__ = [
     "DATAFORGE_SCORE_PENALTIES",
     "DATAFORGE_SCORE_POLICY_VERSION",
     "DATAFORGE_SCORE_WEIGHTS",
+    "ACTION_PLAN_SCHEMA_VERSION",
     "DECISION_REPORT_SCHEMA_VERSION",
     "DECISION_POLICY_VERSION",
     "IMPUTATION_POLICY_COMPONENT_WEIGHTS",
@@ -72,7 +79,9 @@ __all__ = [
     "REASON_CODE_REGISTRY_VERSION",
     "BuildDecisionReportRequest",
     "BuildDataForgeScoreRequest",
+    "BuildActionPlanPreviewRequest",
     "BuildMethodRecommendationsRequest",
+    "ActionPlanPreviewError",
     "DecisionPolicy",
     "EvidenceRecommendation",
     "HardGateEvaluation",
@@ -91,6 +100,7 @@ __all__ = [
     "RecommendationRule",
     "RecommendedActionType",
     "compute_object_value_score",
+    "build_action_plan_preview",
     "build_decision_report",
     "build_dataforge_score",
     "build_method_recommendations",

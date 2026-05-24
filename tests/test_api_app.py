@@ -16,10 +16,17 @@ from app.api.security import (
     TIMESTAMP_HEADER,
     build_service_signature,
 )
-from app.domain import ArtifactLineage, ArtifactRef, ComputeRunStatus, ErrorCode
+from app.domain import (
+    ArtifactLineage,
+    ArtifactRef,
+    ComputeRunStatus,
+    ErrorCode,
+    TabularProfileReport,
+)
+from app.kernel import BuildMethodRecommendationsRequest, build_method_recommendations
 from app.kernel.config import ServiceConfig, load_config
 from app.orchestration.analyze_workflow import expected_analyze_outputs
-from app.validation.contracts import load_contract_pack
+from app.validation.contracts import load_contract_pack, validate_contract_payload
 
 
 def test_health_returns_service_and_contract_versions() -> None:
@@ -73,6 +80,7 @@ def test_openapi_generates_health_and_error_schemas() -> None:
     assert "/api/v1/jobs/analyze-dataset" in schema["paths"]
     assert "HealthResponse" in schema["components"]["schemas"]
     assert "AnalyzeDatasetAcceptedResponse" in schema["components"]["schemas"]
+    assert "ActionPlanPreviewResponse" in schema["components"]["schemas"]
     assert "ErrorResponse" in schema["components"]["schemas"]
 
 
@@ -136,6 +144,77 @@ def test_analyze_dataset_endpoint_materializes_prediction_outputs_when_refs_prov
     assert snapshot.job_events[-1].status is ComputeRunStatus.COMPLETED
 
 
+def test_action_plan_preview_endpoint_builds_steps_and_validation_gates() -> None:
+    config = _test_config()
+    payload = _action_plan_preview_payload()
+    body = _body_bytes(payload)
+    client = TestClient(create_app(config=config), raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/v1/action-plans/preview",
+        content=body,
+        headers=_signed_headers(config=config, body=body, payload=payload),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "PREVIEW_READY"
+    assert data["job_id"] == "platform_job_001"
+    assert data["mutates_dataset"] is False
+
+    action_plan = data["action_plan"]
+    validate_contract_payload(load_contract_pack(), "action_plan", action_plan)
+    assert action_plan["created_from_decision_report"] == "decision_report_001"
+    assert action_plan["execution_mode"] == "PREVIEW_ACTION_PLAN"
+    assert action_plan["selected_decision_ids"] == payload["selected_decision_ids"]
+    assert action_plan["requires_approval"] is False
+
+    steps = action_plan["steps"]
+    assert [step["method_id"] for step in steps] == ["group_median", "class_weights"]
+    assert steps[0]["depends_on"] == []
+    assert steps[1]["depends_on"] == [steps[0]["step_id"]]
+    for step in steps:
+        assert step["idempotency_key"].startswith("sha256:")
+        assert step["config_hash"].startswith("sha256:")
+        assert step["plugin_id"] == "dataforge.tabular"
+        assert step["plugin_version"] == "0.1.0"
+    assert {"schema_validation", "business_rules", "privacy_check"}.issubset(
+        steps[0]["validation_gates"]
+    )
+    assert "model_impact_check" in steps[1]["validation_gates"]
+
+
+def test_action_plan_preview_rejects_disabled_ctgan_override() -> None:
+    config = _test_config()
+    recommendations = _method_recommendations()
+    rare_class = next(
+        recommendation
+        for recommendation in recommendations
+        if recommendation["action_type"] == "AUGMENT_RARE_CLASS"
+    )
+    rare_class_recommendation_id = str(rare_class["recommendation_id"])
+    payload = _action_plan_preview_payload(
+        selected_decision_ids=[rare_class_recommendation_id],
+        selected_method_overrides={rare_class_recommendation_id: "ctgan"},
+        method_recommendations=recommendations,
+    )
+    body = _body_bytes(payload)
+    client = TestClient(create_app(config=config), raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/v1/action-plans/preview",
+        content=body,
+        headers=_signed_headers(config=config, body=body, payload=payload),
+    )
+
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == ErrorCode.POLICY_BLOCKED
+    assert error["details"]["reason_code"] == "method_not_selectable"
+    assert error["details"]["method_id"] == "ctgan"
+    assert "raw" not in response.text.lower()
+
+
 def _test_config() -> ServiceConfig:
     return load_config(
         {
@@ -167,6 +246,59 @@ def _analyze_payload(
         if prediction_artifact_refs is None
         else prediction_artifact_refs,
     }
+
+
+def _action_plan_preview_payload(
+    *,
+    selected_decision_ids: list[str] | None = None,
+    selected_method_overrides: dict[str, str] | None = None,
+    method_recommendations: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    recommendations = (
+        _method_recommendations()
+        if method_recommendations is None
+        else method_recommendations
+    )
+    selected = (
+        [str(recommendation["recommendation_id"]) for recommendation in recommendations]
+        if selected_decision_ids is None
+        else selected_decision_ids
+    )
+    return {
+        "platform_job_id": "platform_job_001",
+        "organization_id": "org_1",
+        "project_id": "project_1",
+        "dataset_id": "dataset_1",
+        "source_dataset_version_id": "dataset_version_1",
+        "decision_report_id": "decision_report_001",
+        "selected_decision_ids": selected,
+        "selected_method_overrides": {}
+        if selected_method_overrides is None
+        else selected_method_overrides,
+        "method_recommendations": recommendations,
+        "created_by_user_id": "platform_user_123",
+        "input_artifacts": [
+            "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/manifest.jsonl"
+        ],
+        "target_version_name": "dataset_version_2_preview",
+    }
+
+
+def _method_recommendations() -> list[dict[str, object]]:
+    recommendations = build_method_recommendations(
+        BuildMethodRecommendationsRequest(tabular_profile=_demo_tabular_profile())
+    )
+    return [recommendation.model_dump(mode="json") for recommendation in recommendations]
+
+
+def _demo_tabular_profile() -> TabularProfileReport:
+    pack = load_contract_pack()
+    example = next(
+        example
+        for example in pack.examples
+        if example.name == "tabular_profile_report.fraud"
+    )
+    return TabularProfileReport.model_validate(example.payload)
 
 
 def _artifact_ref(artifact_id: str, kind: str) -> dict[str, object]:

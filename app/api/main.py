@@ -12,12 +12,19 @@ from starlette.middleware.base import RequestResponseEndpoint
 
 from app.adapters import FakePlatformMetadataClient
 from app.api.schemas import (
+    ActionPlanPreviewRequest,
+    ActionPlanPreviewResponse,
     AnalyzeDatasetAcceptedResponse,
     AnalyzeDatasetRequest,
     HealthResponse,
 )
 from app.api.security import PlatformIdentityDep, ServiceSignatureError
 from app.domain import ComputeRunStatus, ErrorBody, ErrorCode, ErrorResponse
+from app.kernel import (
+    ActionPlanPreviewError,
+    BuildActionPlanPreviewRequest,
+    build_action_plan_preview,
+)
 from app.kernel.config import ServiceConfig, load_config
 from app.orchestration.analyze_workflow import launch_analyze_dataset_workflow
 from app.plugin_sdk import CapabilitiesResponse
@@ -100,6 +107,20 @@ def create_app(
             details={"reason_code": exc.reason_code},
         )
 
+    @application.exception_handler(ActionPlanPreviewError)
+    async def action_plan_preview_exception_handler(
+        request: Request,
+        exc: ActionPlanPreviewError,
+    ) -> JSONResponse:
+        return error_json_response(
+            status_code=exc.status_code,
+            code=exc.code,
+            message="ActionPlan preview could not be created.",
+            recoverable=True,
+            stage="api.action_plan_preview",
+            details={"reason_code": exc.reason_code, **exc.details},
+        )
+
     @application.get(
         f"{API_PREFIX}/health",
         response_model=HealthResponse,
@@ -147,6 +168,36 @@ def create_app(
             status_url=result.status_url,
             expected_outputs=result.expected_outputs,
             materialized_assets=result.materialized_assets,
+            mutates_dataset=False,
+        )
+
+    @application.post(
+        f"{API_PREFIX}/action-plans/preview",
+        response_model=ActionPlanPreviewResponse,
+        responses={401: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        tags=["action-plans"],
+    )
+    async def preview_action_plan(
+        payload: ActionPlanPreviewRequest,
+        identity: PlatformIdentityDep,
+    ) -> ActionPlanPreviewResponse:
+        del identity
+        action_plan = build_action_plan_preview(
+            BuildActionPlanPreviewRequest(
+                decision_report_id=payload.decision_report_id,
+                source_dataset_version_id=payload.source_dataset_version_id,
+                selected_decision_ids=payload.selected_decision_ids,
+                selected_method_overrides=payload.selected_method_overrides,
+                method_recommendations=payload.method_recommendations,
+                created_by_user_id=payload.created_by_user_id,
+                input_artifacts=payload.input_artifacts,
+                target_version_name=payload.target_version_name,
+            )
+        )
+        return ActionPlanPreviewResponse(
+            status="PREVIEW_READY",
+            job_id=payload.platform_job_id,
+            action_plan=action_plan,
             mutates_dataset=False,
         )
 
