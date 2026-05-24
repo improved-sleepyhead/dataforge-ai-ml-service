@@ -35,7 +35,7 @@ from app.orchestration.status_bridge import RunContext, RunStatusBridge
 
 ANALYZE_GROUP = "analyze_only"
 
-ANALYZE_ASSET_KEYS: tuple[AssetKey, ...] = (
+BASE_ANALYZE_ASSET_KEYS: tuple[AssetKey, ...] = (
     AssetKey("raw_manifest"),
     AssetKey("validated_manifest"),
     AssetKey("tabular_profile_report"),
@@ -44,6 +44,19 @@ ANALYZE_ASSET_KEYS: tuple[AssetKey, ...] = (
     AssetKey("decision_report"),
     AssetKey("recommended_actions"),
     AssetKey("review_queue"),
+)
+
+PREDICTION_ANALYZE_ASSET_KEYS: tuple[AssetKey, ...] = (
+    AssetKey("prediction_manifest"),
+    AssetKey("prediction_validation_report"),
+    AssetKey("model_error_analysis_report"),
+    AssetKey("ambiguous_object_candidates"),
+    AssetKey("probable_label_error_candidates"),
+)
+
+ANALYZE_ASSET_KEYS: tuple[AssetKey, ...] = (
+    *BASE_ANALYZE_ASSET_KEYS,
+    *PREDICTION_ANALYZE_ASSET_KEYS,
 )
 
 # Map asset name -> (JobStage, normalized progress at the end of the stage).
@@ -57,6 +70,11 @@ _ANALYZE_STAGE_BY_ASSET: dict[str, tuple[JobStage, float]] = {
     "tabular_profile_report": (JobStage.PROFILING_TABULAR, 0.45),
     "object_analytics_passports": (JobStage.PROFILING_TABULAR, 0.55),
     "evidence_bundle": (JobStage.BUILDING_EVIDENCE, 0.70),
+    "prediction_manifest": (JobStage.BUILDING_MANIFEST, 0.35),
+    "prediction_validation_report": (JobStage.BUILDING_EVIDENCE, 0.62),
+    "model_error_analysis_report": (JobStage.BUILDING_EVIDENCE, 0.68),
+    "ambiguous_object_candidates": (JobStage.BUILDING_EVIDENCE, 0.72),
+    "probable_label_error_candidates": (JobStage.BUILDING_EVIDENCE, 0.74),
     "decision_report": (JobStage.RUNNING_DECISION_CORE, 0.80),
     "recommended_actions": (JobStage.RUNNING_DECISION_CORE, 0.90),
     "review_queue": (JobStage.RUNNING_DECISION_CORE, 0.95),
@@ -180,6 +198,61 @@ def evidence_bundle(context: AssetExecutionContext) -> MaterializeResult[None]:
 
 
 @asset(
+    name="prediction_manifest",
+    group_name=ANALYZE_GROUP,
+    required_resource_keys=_ANALYZE_RESOURCE_KEYS,
+    deps=[AssetKey("validated_manifest")],
+    description="Skeleton: normalized optional predictions manifest.",
+)
+def prediction_manifest(context: AssetExecutionContext) -> MaterializeResult[None]:
+    return _materialize_skeleton(context, asset_name="prediction_manifest")
+
+
+@asset(
+    name="prediction_validation_report",
+    group_name=ANALYZE_GROUP,
+    required_resource_keys=_ANALYZE_RESOURCE_KEYS,
+    deps=[AssetKey("prediction_manifest")],
+    description="Skeleton: prediction-manifest validation report.",
+)
+def prediction_validation_report(context: AssetExecutionContext) -> MaterializeResult[None]:
+    return _materialize_skeleton(context, asset_name="prediction_validation_report")
+
+
+@asset(
+    name="model_error_analysis_report",
+    group_name=ANALYZE_GROUP,
+    required_resource_keys=_ANALYZE_RESOURCE_KEYS,
+    deps=[AssetKey("prediction_validation_report")],
+    description="Skeleton: model error analysis derived from predictions.",
+)
+def model_error_analysis_report(context: AssetExecutionContext) -> MaterializeResult[None]:
+    return _materialize_skeleton(context, asset_name="model_error_analysis_report")
+
+
+@asset(
+    name="ambiguous_object_candidates",
+    group_name=ANALYZE_GROUP,
+    required_resource_keys=_ANALYZE_RESOURCE_KEYS,
+    deps=[AssetKey("model_error_analysis_report")],
+    description="Skeleton: ambiguous-object review candidates derived from predictions.",
+)
+def ambiguous_object_candidates(context: AssetExecutionContext) -> MaterializeResult[None]:
+    return _materialize_skeleton(context, asset_name="ambiguous_object_candidates")
+
+
+@asset(
+    name="probable_label_error_candidates",
+    group_name=ANALYZE_GROUP,
+    required_resource_keys=_ANALYZE_RESOURCE_KEYS,
+    deps=[AssetKey("model_error_analysis_report")],
+    description="Skeleton: probable-label-error review candidates derived from predictions.",
+)
+def probable_label_error_candidates(context: AssetExecutionContext) -> MaterializeResult[None]:
+    return _materialize_skeleton(context, asset_name="probable_label_error_candidates")
+
+
+@asset(
     name="decision_report",
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
@@ -218,6 +291,11 @@ ANALYZE_ASSETS = (
     tabular_profile_report,
     object_analytics_passports,
     evidence_bundle,
+    prediction_manifest,
+    prediction_validation_report,
+    model_error_analysis_report,
+    ambiguous_object_candidates,
+    probable_label_error_candidates,
     decision_report,
     recommended_actions,
     review_queue,
@@ -228,9 +306,16 @@ __all__ = [
     "ANALYZE_ASSET_KEYS",
     "ANALYZE_ASSETS",
     "ANALYZE_GROUP",
+    "BASE_ANALYZE_ASSET_KEYS",
+    "PREDICTION_ANALYZE_ASSET_KEYS",
+    "ambiguous_object_candidates",
     "decision_report",
     "evidence_bundle",
+    "model_error_analysis_report",
     "object_analytics_passports",
+    "prediction_manifest",
+    "prediction_validation_report",
+    "probable_label_error_candidates",
     "raw_manifest",
     "recommended_actions",
     "review_queue",

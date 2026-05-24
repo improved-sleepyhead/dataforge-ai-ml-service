@@ -10,10 +10,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app.api.schemas import HealthResponse
+from app.adapters import FakePlatformMetadataClient
+from app.api.schemas import (
+    AnalyzeDatasetAcceptedResponse,
+    AnalyzeDatasetRequest,
+    HealthResponse,
+)
 from app.api.security import PlatformIdentityDep, ServiceSignatureError
-from app.domain import ErrorBody, ErrorCode, ErrorResponse
-from app.kernel.config import ServiceConfig
+from app.domain import ComputeRunStatus, ErrorBody, ErrorCode, ErrorResponse
+from app.kernel.config import ServiceConfig, load_config
+from app.orchestration.analyze_workflow import launch_analyze_dataset_workflow
 from app.plugin_sdk import CapabilitiesResponse
 from app.plugins import build_static_plugin_manager
 from app.validation.contracts import load_contract_pack
@@ -37,6 +43,7 @@ def create_app(
         openapi_url="/api/openapi.json",
     )
     application.state.service_config = config
+    application.state.fake_platform_client = FakePlatformMetadataClient()
 
     @application.middleware("http")
     async def safe_unhandled_error_middleware(
@@ -116,6 +123,33 @@ def create_app(
     async def capabilities() -> CapabilitiesResponse:
         return build_static_plugin_manager().capabilities()
 
+    @application.post(
+        f"{API_PREFIX}/jobs/analyze-dataset",
+        status_code=202,
+        response_model=AnalyzeDatasetAcceptedResponse,
+        responses={401: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        tags=["jobs"],
+    )
+    async def analyze_dataset(
+        payload: AnalyzeDatasetRequest,
+        identity: PlatformIdentityDep,
+        request: Request,
+    ) -> AnalyzeDatasetAcceptedResponse:
+        del identity
+        result = launch_analyze_dataset_workflow(
+            request=payload,
+            config=_resolve_service_config(request),
+            fake_platform=request.app.state.fake_platform_client,
+        )
+        return AnalyzeDatasetAcceptedResponse(
+            status=ComputeRunStatus.ACCEPTED,
+            job_id=result.job_id,
+            status_url=result.status_url,
+            expected_outputs=result.expected_outputs,
+            materialized_assets=result.materialized_assets,
+            mutates_dataset=False,
+        )
+
     if include_test_error_route:
         _add_test_error_routes(application)
     if include_test_protected_route:
@@ -152,6 +186,13 @@ def service_version() -> str:
         return version(SERVICE_PACKAGE_NAME)
     except PackageNotFoundError:
         return "0.1.0"
+
+
+def _resolve_service_config(request: Request) -> ServiceConfig:
+    config = getattr(request.app.state, "service_config", None)
+    if isinstance(config, ServiceConfig):
+        return config
+    return load_config()
 
 
 def _http_error_code(status_code: int) -> ErrorCode:
