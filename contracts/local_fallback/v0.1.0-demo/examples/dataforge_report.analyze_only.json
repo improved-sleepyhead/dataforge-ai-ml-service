@@ -13,8 +13,19 @@
     "risk_profile": "demo_strict"
   },
   "score": {
-    "value": 0.63,
+    "value": 0.2873,
+    "raw_score": 28.73,
     "policy_version": "dataforge_score_v0",
+    "formula": "DataForgeScore = 100 * (w_c * Completeness + w_v * Validity + w_u * Uniqueness + w_b * Balance + w_p * PrivacySafety + w_m * ModelReadiness + w_l * LineageCompleteness) - Penalties",
+    "weights": {
+      "completeness": 0.15,
+      "validity": 0.15,
+      "uniqueness": 0.12,
+      "balance": 0.15,
+      "privacy_safety": 0.18,
+      "model_readiness": 0.15,
+      "lineage_completeness": 0.1
+    },
     "components": {
       "completeness": 0.82,
       "validity": 0.88,
@@ -24,13 +35,38 @@
       "model_readiness": 0.58,
       "lineage_completeness": 0.9
     },
+    "weighted_components": {
+      "completeness": 0.123,
+      "validity": 0.132,
+      "uniqueness": 0.0948,
+      "balance": 0.0615,
+      "privacy_safety": 0.099,
+      "model_readiness": 0.087,
+      "lineage_completeness": 0.09
+    },
+    "penalties": [
+      {
+        "reason_code": "unmasked_pii",
+        "value": -30,
+        "applied": true
+      },
+      {
+        "reason_code": "severe_class_imbalance",
+        "value": -10,
+        "applied": true
+      }
+    ],
+    "hard_blocked": true,
+    "readiness_status": "BLOCKED",
     "reason_codes": [
-      "privacy_review_required",
+      "unmasked_pii",
+      "severe_class_imbalance",
+      "pii_unmasked",
       "rare_class_underrepresented"
     ]
   },
   "modality_scores": {
-    "tabular": 0.63
+    "tabular": 0.2873
   },
   "blockers": [
     {
@@ -90,6 +126,14 @@
     "prediction_manifest_ref": {
       "kind": "PREDICTION_MANIFEST",
       "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/predictions.jsonl"
+    },
+    "prediction_validation_report_ref": {
+      "kind": "PREDICTION_VALIDATION_REPORT",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/prediction_validation_report.json"
+    },
+    "model_error_analysis_report_ref": {
+      "kind": "MODEL_ERROR_ANALYSIS_REPORT",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/model_error_analysis_report.json"
     },
     "ambiguous_object_count": 1,
     "probable_label_error_count": 1

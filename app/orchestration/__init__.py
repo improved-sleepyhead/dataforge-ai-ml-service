@@ -9,6 +9,8 @@ from app.orchestration.assets import (
     ANALYZE_ASSET_KEYS,
     ANALYZE_ASSETS,
     ANALYZE_GROUP,
+    BASE_ANALYZE_ASSET_KEYS,
+    PREDICTION_ANALYZE_ASSET_KEYS,
 )
 from app.orchestration.definitions import (
     RUN_CONTEXT_RESOURCE_KEY,
@@ -49,11 +51,13 @@ __all__ = [
     "APPLY_JOB_NAME",
     "ARTIFACT_REGISTRY_RESOURCE_KEY",
     "ApplyRunContext",
+    "BASE_ANALYZE_ASSET_KEYS",
     "ComputeResources",
     "FAKE_PLATFORM_RESOURCE_KEY",
     "JobEvent",
     "JobStage",
     "OBJECT_STORAGE_RESOURCE_KEY",
+    "PREDICTION_ANALYZE_ASSET_KEYS",
     "RUN_CONTEXT_RESOURCE_KEY",
     "RunContext",
     "RunContextResource",

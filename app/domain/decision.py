@@ -33,6 +33,20 @@ class DatasetReadiness(StrEnum):
     BLOCKED = "BLOCKED"
 
 
+class DecisionAction(StrEnum):
+    """Allowed Decision Core action taxonomy."""
+
+    KEEP = "KEEP"
+    REMOVE_DUPLICATE = "REMOVE_DUPLICATE"
+    SEND_TO_LABEL_REVIEW = "SEND_TO_LABEL_REVIEW"
+    SEND_TO_PRIVACY_REVIEW = "SEND_TO_PRIVACY_REVIEW"
+    IMPUTE_MISSING_VALUES = "IMPUTE_MISSING_VALUES"
+    AUGMENT_RARE_CLASS = "AUGMENT_RARE_CLASS"
+    GENERATE_SYNTHETIC_CANDIDATE = "GENERATE_SYNTHETIC_CANDIDATE"
+    BLOCK_EXPORT = "BLOCK_EXPORT"
+    EXPORT_READY = "EXPORT_READY"
+
+
 class MethodCandidateStatus(StrEnum):
     """Method availability status in MethodRecommendation."""
 
@@ -116,7 +130,7 @@ class RecommendedAction(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     recommendation_id: NonEmptyStr
-    action: NonEmptyStr
+    action: DecisionAction
     modality: DataModality
     count: int = Field(ge=0)
     reason_codes: tuple[NonEmptyStr, ...]
@@ -124,6 +138,29 @@ class RecommendedAction(BaseModel):
     segment: str | None = None
     method_recommendation_id: str | None = None
     requires_approval: bool
+
+
+class BlockedDecisionAction(BaseModel):
+    """Object-level action blocked by policy/readiness."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    action: DecisionAction
+    reason: NonEmptyStr
+    reason_codes: tuple[NonEmptyStr, ...]
+
+
+class ObjectLevelDecision(BaseModel):
+    """Decision Core action and score for a single object."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    object_id: NonEmptyStr
+    modality: DataModality
+    action: DecisionAction
+    reasons: tuple[NonEmptyStr, ...]
+    blocked_actions: tuple[BlockedDecisionAction, ...]
+    object_value_score: Score
 
 
 class DecisionReport(BaseModel):
@@ -140,6 +177,7 @@ class DecisionReport(BaseModel):
     critical_blockers: tuple[CriticalBlocker, ...]
     safe_actions_available: bool
     recommended_next_job: WorkflowType | None = None
+    object_decisions: tuple[ObjectLevelDecision, ...]
     recommended_actions: tuple[RecommendedAction, ...]
     policy_versions: PolicyVersions
     generated_at: datetime
@@ -166,8 +204,25 @@ class MethodCandidate(BaseModel):
     status: MethodCandidateStatus
     quality_score: Score | None
     risk_score: Score | None
+    method_score: MethodScore
     policy_status: PolicyStatus
     reason: str | None = None
+
+
+class MethodScore(BaseModel):
+    """Policy-scored method selection output with full decomposition."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    value: Score
+    policy_version: NonEmptyStr
+    formula: NonEmptyStr
+    notation_formula: NonEmptyStr
+    formula_weights: dict[NonEmptyStr, float]
+    components: dict[NonEmptyStr, Score]
+    weighted_components: dict[NonEmptyStr, float]
+    policy_component_weights: dict[NonEmptyStr, float]
+    reason_codes: tuple[NonEmptyStr, ...]
 
 
 class BlockedMethod(BaseModel):
@@ -180,6 +235,18 @@ class BlockedMethod(BaseModel):
     reason: NonEmptyStr
 
 
+class MethodRecommendationExplanation(BaseModel):
+    """Human-readable but structured explanation for a recommendation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    recommended_method: NonEmptyStr
+    why_this_method: NonEmptyStr
+    alternatives: tuple[NonEmptyStr, ...]
+    blocked_methods: tuple[NonEmptyStr, ...]
+    reason_codes: tuple[NonEmptyStr, ...]
+
+
 class MethodRecommendation(BaseModel):
     """Method selection contract for action planning and UI explanation."""
 
@@ -188,19 +255,29 @@ class MethodRecommendation(BaseModel):
     recommendation_id: NonEmptyStr
     issue_id: NonEmptyStr
     action_type: NonEmptyStr
+    policy_version: NonEmptyStr
     target: dict[str, Any] = Field(default_factory=dict)
     recommended_method: RecommendedMethod
     candidate_methods: tuple[MethodCandidate, ...]
     blocked_methods: tuple[BlockedMethod, ...]
+    explanation: MethodRecommendationExplanation
     expected_outputs: tuple[NonEmptyStr, ...]
     model_impact_required: bool
 
     @model_validator(mode="after")
     def validate_recommended_method_is_candidate(self) -> Self:
-        if self.recommended_method.method_id not in {
-            candidate.method_id for candidate in self.candidate_methods
-        }:
+        candidates = {candidate.method_id: candidate for candidate in self.candidate_methods}
+        if self.recommended_method.method_id not in candidates:
             raise ValueError("recommended_method must appear in candidate_methods")
+        if (
+            candidates[self.recommended_method.method_id].status
+            is not MethodCandidateStatus.RECOMMENDED
+        ):
+            raise ValueError("recommended_method candidate must have recommended status")
+        if self.recommended_method.method_id in {
+            blocked.method_id for blocked in self.blocked_methods
+        }:
+            raise ValueError("recommended_method must not be blocked")
         return self
 
 
@@ -316,14 +393,31 @@ class ReviewQueue(BaseModel):
     created_at: datetime
 
 
+class DataForgeScorePenalty(BaseModel):
+    """Penalty applied after weighted DataForgeScore components."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    reason_code: NonEmptyStr
+    value: float = Field(le=0.0)
+    applied: bool
+
+
 class DataForgeScore(BaseModel):
     """Dataset-level score with decomposition and reason codes."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     value: Score
+    raw_score: float = Field(ge=0.0, le=100.0)
     policy_version: NonEmptyStr
+    formula: NonEmptyStr
+    weights: dict[NonEmptyStr, float]
     components: dict[NonEmptyStr, Score]
+    weighted_components: dict[NonEmptyStr, float]
+    penalties: tuple[DataForgeScorePenalty, ...] = ()
+    hard_blocked: bool
+    readiness_status: DatasetReadiness
     reason_codes: tuple[NonEmptyStr, ...]
 
 
@@ -335,13 +429,19 @@ class PredictionReportSection(BaseModel):
     status: SignalStatus
     reason: str | None = None
     prediction_manifest_ref: EvidenceRef | None = None
+    prediction_validation_report_ref: EvidenceRef | None = None
+    model_error_analysis_report_ref: EvidenceRef | None = None
     ambiguous_object_count: int = Field(ge=0)
     probable_label_error_count: int = Field(ge=0)
 
     @model_validator(mode="after")
     def validate_prediction_section_state(self) -> Self:
-        if self.status is SignalStatus.AVAILABLE and self.prediction_manifest_ref is None:
-            raise ValueError("available prediction section must include prediction_manifest_ref")
+        if self.status is SignalStatus.AVAILABLE and (
+            self.prediction_manifest_ref is None
+            or self.prediction_validation_report_ref is None
+            or self.model_error_analysis_report_ref is None
+        ):
+            raise ValueError("available prediction section must include prediction refs")
         if self.status is not SignalStatus.AVAILABLE and not self.reason:
             raise ValueError("missing prediction section must include a reason")
         return self

@@ -10,10 +10,28 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import RequestResponseEndpoint
 
-from app.api.schemas import HealthResponse
+from app.adapters import FakePlatformMetadataClient
+from app.api.schemas import (
+    ActionPlanExecuteApprovedRequest,
+    ActionPlanExecuteApprovedResponse,
+    ActionPlanPreviewRequest,
+    ActionPlanPreviewResponse,
+    AnalyzeDatasetAcceptedResponse,
+    AnalyzeDatasetRequest,
+    HealthResponse,
+)
 from app.api.security import PlatformIdentityDep, ServiceSignatureError
-from app.domain import ErrorBody, ErrorCode, ErrorResponse
-from app.kernel.config import ServiceConfig
+from app.domain import ComputeRunStatus, ErrorBody, ErrorCode, ErrorResponse, WorkflowType
+from app.kernel import (
+    ActionPlanExecutionError,
+    ActionPlanPreviewError,
+    BuildActionPlanPreviewRequest,
+    ValidateActionPlanExecutionRequest,
+    build_action_plan_preview,
+    validate_action_plan_execution,
+)
+from app.kernel.config import ServiceConfig, load_config
+from app.orchestration.analyze_workflow import launch_analyze_dataset_workflow
 from app.plugin_sdk import CapabilitiesResponse
 from app.plugins import build_static_plugin_manager
 from app.validation.contracts import load_contract_pack
@@ -37,6 +55,7 @@ def create_app(
         openapi_url="/api/openapi.json",
     )
     application.state.service_config = config
+    application.state.fake_platform_client = FakePlatformMetadataClient()
 
     @application.middleware("http")
     async def safe_unhandled_error_middleware(
@@ -93,6 +112,34 @@ def create_app(
             details={"reason_code": exc.reason_code},
         )
 
+    @application.exception_handler(ActionPlanPreviewError)
+    async def action_plan_preview_exception_handler(
+        request: Request,
+        exc: ActionPlanPreviewError,
+    ) -> JSONResponse:
+        return error_json_response(
+            status_code=exc.status_code,
+            code=exc.code,
+            message="ActionPlan preview could not be created.",
+            recoverable=True,
+            stage="api.action_plan_preview",
+            details={"reason_code": exc.reason_code, **exc.details},
+        )
+
+    @application.exception_handler(ActionPlanExecutionError)
+    async def action_plan_execution_exception_handler(
+        request: Request,
+        exc: ActionPlanExecutionError,
+    ) -> JSONResponse:
+        return error_json_response(
+            status_code=exc.status_code,
+            code=exc.code,
+            message="ActionPlan execution could not be accepted.",
+            recoverable=True,
+            stage="api.action_plan_execute_approved",
+            details={"reason_code": exc.reason_code, **exc.details},
+        )
+
     @application.get(
         f"{API_PREFIX}/health",
         response_model=HealthResponse,
@@ -115,6 +162,96 @@ def create_app(
     )
     async def capabilities() -> CapabilitiesResponse:
         return build_static_plugin_manager().capabilities()
+
+    @application.post(
+        f"{API_PREFIX}/jobs/analyze-dataset",
+        status_code=202,
+        response_model=AnalyzeDatasetAcceptedResponse,
+        responses={401: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        tags=["jobs"],
+    )
+    async def analyze_dataset(
+        payload: AnalyzeDatasetRequest,
+        identity: PlatformIdentityDep,
+        request: Request,
+    ) -> AnalyzeDatasetAcceptedResponse:
+        del identity
+        result = launch_analyze_dataset_workflow(
+            request=payload,
+            config=_resolve_service_config(request),
+            fake_platform=request.app.state.fake_platform_client,
+        )
+        return AnalyzeDatasetAcceptedResponse(
+            status=ComputeRunStatus.ACCEPTED,
+            job_id=result.job_id,
+            status_url=result.status_url,
+            expected_outputs=result.expected_outputs,
+            materialized_assets=result.materialized_assets,
+            mutates_dataset=False,
+        )
+
+    @application.post(
+        f"{API_PREFIX}/action-plans/preview",
+        response_model=ActionPlanPreviewResponse,
+        responses={401: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+        tags=["action-plans"],
+    )
+    async def preview_action_plan(
+        payload: ActionPlanPreviewRequest,
+        identity: PlatformIdentityDep,
+    ) -> ActionPlanPreviewResponse:
+        del identity
+        action_plan = build_action_plan_preview(
+            BuildActionPlanPreviewRequest(
+                decision_report_id=payload.decision_report_id,
+                source_dataset_version_id=payload.source_dataset_version_id,
+                selected_decision_ids=payload.selected_decision_ids,
+                selected_method_overrides=payload.selected_method_overrides,
+                method_recommendations=payload.method_recommendations,
+                created_by_user_id=payload.created_by_user_id,
+                input_artifacts=payload.input_artifacts,
+                target_version_name=payload.target_version_name,
+            )
+        )
+        return ActionPlanPreviewResponse(
+            status="PREVIEW_READY",
+            job_id=payload.platform_job_id,
+            action_plan=action_plan,
+            mutates_dataset=False,
+        )
+
+    @application.post(
+        f"{API_PREFIX}/action-plans/execute-approved",
+        status_code=202,
+        response_model=ActionPlanExecuteApprovedResponse,
+        responses={
+            401: {"model": ErrorResponse},
+            403: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["action-plans"],
+    )
+    async def execute_approved_action_plan(
+        payload: ActionPlanExecuteApprovedRequest,
+        identity: PlatformIdentityDep,
+    ) -> ActionPlanExecuteApprovedResponse:
+        del identity
+        action_plan_hash = validate_action_plan_execution(
+            ValidateActionPlanExecutionRequest(
+                action_plan=payload.action_plan,
+                source_dataset_version_id=payload.source_dataset_version_id,
+                approval_metadata=payload.approval_metadata,
+            )
+        )
+        return ActionPlanExecuteApprovedResponse(
+            status=ComputeRunStatus.ACCEPTED,
+            job_id=payload.platform_job_id,
+            workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
+            action_plan_id=payload.action_plan.action_plan_id,
+            action_plan_hash=action_plan_hash,
+            accepted_step_ids=tuple(step.step_id for step in payload.action_plan.steps),
+            mutates_dataset=True,
+        )
 
     if include_test_error_route:
         _add_test_error_routes(application)
@@ -152,6 +289,13 @@ def service_version() -> str:
         return version(SERVICE_PACKAGE_NAME)
     except PackageNotFoundError:
         return "0.1.0"
+
+
+def _resolve_service_config(request: Request) -> ServiceConfig:
+    config = getattr(request.app.state, "service_config", None)
+    if isinstance(config, ServiceConfig):
+        return config
+    return load_config()
 
 
 def _http_error_code(status_code: int) -> ErrorCode:

@@ -2,9 +2,13 @@
   "recommendation_id": "method_rec_impute_income_001",
   "issue_id": "issue_missing_monthly_income",
   "action_type": "IMPUTE_MISSING_VALUES",
+  "policy_version": "method_selection_v0",
   "target": {
     "scope": "column",
-    "column": "monthly_income"
+    "column": "monthly_income",
+    "target_column": "is_fraud",
+    "missing_rate": 0.22,
+    "missing_count": 44
   },
   "recommended_method": {
     "method_id": "group_median",
@@ -23,14 +27,102 @@
       "status": "recommended",
       "quality_score": 0.82,
       "risk_score": 0.12,
+      "method_score": {
+        "value": 0.5485,
+        "policy_version": "method_selection_v0",
+        "formula": "MethodScore(m) = wq * QualityScore(m) - wr * RiskScore(m) - wc * CostScore(m) + we * ExplainabilityScore(m) + wi * ExpectedModelImpact(m) + wp * PolicyCompatibility(m)",
+        "notation_formula": "MethodScore(m) = w_q * QualityScore(m) - w_r * RiskScore(m) - w_c * CostScore(m) + w_e * ExplainabilityScore(m) + w_i * ExpectedModelImpact(m) + w_p * PolicyCompatibility(m)",
+        "formula_weights": {
+          "wq": 0.3,
+          "wr": 0.2,
+          "wc": 0.1,
+          "we": 0.1,
+          "wi": 0.15,
+          "wp": 0.15
+        },
+        "components": {
+          "quality_score": 0.82,
+          "risk_score": 0.12,
+          "cost_score": 0.18,
+          "explainability_score": 0.94,
+          "expected_model_impact": 0.72,
+          "policy_compatibility": 0.95
+        },
+        "weighted_components": {
+          "quality_score": 0.246,
+          "risk_score": -0.024,
+          "cost_score": -0.018,
+          "explainability_score": 0.094,
+          "expected_model_impact": 0.108,
+          "policy_compatibility": 0.1425
+        },
+        "policy_component_weights": {
+          "distribution_preservation": 0.2,
+          "variance_preservation": 0.12,
+          "business_rules_pass_rate": 0.15,
+          "model_impact_delta": 0.18,
+          "leakage_safety": 0.15,
+          "privacy_safety": 0.1,
+          "explainability": 0.05,
+          "computational_cost": -0.05
+        },
+        "reason_codes": [
+          "skewed_numeric_distribution",
+          "segment_dependent_missingness",
+          "target_safe"
+        ]
+      },
       "policy_status": "enabled",
       "reason": null
     },
     {
-      "method_id": "global_median",
+      "method_id": "median",
       "status": "available",
       "quality_score": 0.68,
       "risk_score": 0.08,
+      "method_score": {
+        "value": 0.503,
+        "policy_version": "method_selection_v0",
+        "formula": "MethodScore(m) = wq * QualityScore(m) - wr * RiskScore(m) - wc * CostScore(m) + we * ExplainabilityScore(m) + wi * ExpectedModelImpact(m) + wp * PolicyCompatibility(m)",
+        "notation_formula": "MethodScore(m) = w_q * QualityScore(m) - w_r * RiskScore(m) - w_c * CostScore(m) + w_e * ExplainabilityScore(m) + w_i * ExpectedModelImpact(m) + w_p * PolicyCompatibility(m)",
+        "formula_weights": {
+          "wq": 0.3,
+          "wr": 0.2,
+          "wc": 0.1,
+          "we": 0.1,
+          "wi": 0.15,
+          "wp": 0.15
+        },
+        "components": {
+          "quality_score": 0.68,
+          "risk_score": 0.08,
+          "cost_score": 0.08,
+          "explainability_score": 0.98,
+          "expected_model_impact": 0.55,
+          "policy_compatibility": 0.95
+        },
+        "weighted_components": {
+          "quality_score": 0.204,
+          "risk_score": -0.016,
+          "cost_score": -0.008,
+          "explainability_score": 0.098,
+          "expected_model_impact": 0.0825,
+          "policy_compatibility": 0.1425
+        },
+        "policy_component_weights": {
+          "distribution_preservation": 0.2,
+          "variance_preservation": 0.12,
+          "business_rules_pass_rate": 0.15,
+          "model_impact_delta": 0.18,
+          "leakage_safety": 0.15,
+          "privacy_safety": 0.1,
+          "explainability": 0.05,
+          "computational_cost": -0.05
+        },
+        "reason_codes": [
+          "target_safe"
+        ]
+      },
       "policy_status": "enabled",
       "reason": null
     },
@@ -39,6 +131,50 @@
       "status": "disabled_by_policy",
       "quality_score": 0.86,
       "risk_score": 0.18,
+      "method_score": {
+        "value": 0.368,
+        "policy_version": "method_selection_v0",
+        "formula": "MethodScore(m) = wq * QualityScore(m) - wr * RiskScore(m) - wc * CostScore(m) + we * ExplainabilityScore(m) + wi * ExpectedModelImpact(m) + wp * PolicyCompatibility(m)",
+        "notation_formula": "MethodScore(m) = w_q * QualityScore(m) - w_r * RiskScore(m) - w_c * CostScore(m) + w_e * ExplainabilityScore(m) + w_i * ExpectedModelImpact(m) + w_p * PolicyCompatibility(m)",
+        "formula_weights": {
+          "wq": 0.3,
+          "wr": 0.2,
+          "wc": 0.1,
+          "we": 0.1,
+          "wi": 0.15,
+          "wp": 0.15
+        },
+        "components": {
+          "quality_score": 0.86,
+          "risk_score": 0.18,
+          "cost_score": 0.45,
+          "explainability_score": 0.56,
+          "expected_model_impact": 0.7,
+          "policy_compatibility": 0.2
+        },
+        "weighted_components": {
+          "quality_score": 0.258,
+          "risk_score": -0.036,
+          "cost_score": -0.045,
+          "explainability_score": 0.056,
+          "expected_model_impact": 0.105,
+          "policy_compatibility": 0.03
+        },
+        "policy_component_weights": {
+          "distribution_preservation": 0.2,
+          "variance_preservation": 0.12,
+          "business_rules_pass_rate": 0.15,
+          "model_impact_delta": 0.18,
+          "leakage_safety": 0.15,
+          "privacy_safety": 0.1,
+          "explainability": 0.05,
+          "computational_cost": -0.05
+        },
+        "reason_codes": [
+          "method_disabled_by_policy",
+          "mvp_readiness_not_enabled"
+        ]
+      },
       "policy_status": "disabled_by_policy",
       "reason": "pilot capability not enabled for this project profile"
     }
@@ -50,6 +186,22 @@
       "reason": "Target-aware imputation is blocked by policy for this column."
     }
   ],
+  "explanation": {
+    "recommended_method": "group_median",
+    "why_this_method": "Group median preserves segment-dependent missingness better than a global median while staying explainable and target-safe.",
+    "alternatives": [
+      "median",
+      "pmm"
+    ],
+    "blocked_methods": [
+      "target_imputation"
+    ],
+    "reason_codes": [
+      "skewed_numeric_distribution",
+      "segment_dependent_missingness",
+      "target_safe"
+    ]
+  },
   "expected_outputs": [
     "imputation_report",
     "candidate_dataset_version",

@@ -63,8 +63,12 @@ def test_method_recommendation_includes_disabled_by_policy_candidate() -> None:
     }
 
     assert candidates_by_method["group_median"].status is MethodCandidateStatus.RECOMMENDED
-    assert candidates_by_method["global_median"].status is MethodCandidateStatus.AVAILABLE
+    assert candidates_by_method["median"].status is MethodCandidateStatus.AVAILABLE
     assert candidates_by_method["pmm"].status is MethodCandidateStatus.DISABLED_BY_POLICY
+    assert candidates_by_method["group_median"].method_score.policy_component_weights[
+        "distribution_preservation"
+    ] == 0.20
+    assert recommendation.explanation.recommended_method == "group_median"
     assert recommendation.blocked_methods[0].method_id == "target_imputation"
 
 
