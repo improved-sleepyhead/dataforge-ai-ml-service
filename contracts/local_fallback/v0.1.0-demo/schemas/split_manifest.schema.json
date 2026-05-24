@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/split_manifest.schema.json",
+  "title": "SplitManifest",
+  "type": "object",
+  "required": [
+    "split_manifest_id",
+    "split_schema_version",
+    "dataset_id",
+    "source_dataset_version_id",
+    "candidate_dataset_version_id",
+    "target_column",
+    "strategy",
+    "seed",
+    "group_key",
+    "policy_version",
+    "split_ratios",
+    "assignments",
+    "class_distribution",
+    "lineage",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "split": {
+      "type": "string",
+      "enum": [
+        "train",
+        "validation",
+        "test",
+        "holdout",
+        "unknown"
+      ]
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lineage": {
+          "type": "object",
+          "required": [
+            "parent_version_id",
+            "job_id",
+            "config_hash",
+            "created_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "job_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "config_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "assignment": {
+      "type": "object",
+      "required": [
+        "object_id",
+        "split",
+        "label",
+        "group_value"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "object_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "split": {
+          "$ref": "#/$defs/split"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "group_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "class_distribution": {
+      "type": "object",
+      "required": [
+        "split",
+        "total_count",
+        "class_counts",
+        "class_ratios"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "split": {
+          "$ref": "#/$defs/split"
+        },
+        "total_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "class_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "class_ratios": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "action_plan_id",
+        "step_id",
+        "source_dataset_version_id",
+        "candidate_dataset_version_id",
+        "created_by_job_id",
+        "config_hash",
+        "source_artifact"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action_plan_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "step_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_dataset_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidate_dataset_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_by_job_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        }
+      }
+    }
+  },
+  "properties": {
+    "split_manifest_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "split_schema_version": {
+      "type": "string",
+      "const": "split_manifest.v1"
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_dataset_version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "candidate_dataset_version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_column": {
+      "type": "string",
+      "minLength": 1
+    },
+    "strategy": {
+      "type": "string",
+      "enum": [
+        "group_stratified",
+        "stratified",
+        "random"
+      ]
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "group_key": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "policy_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "split_ratios": {
+      "type": "object",
+      "required": [
+        "train",
+        "validation",
+        "test"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "train": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "validation": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "test": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "assignments": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/assignment"
+      }
+    },
+    "class_distribution": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/class_distribution"
+      }
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

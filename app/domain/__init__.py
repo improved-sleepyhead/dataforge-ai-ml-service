@@ -67,6 +67,15 @@ from app.domain.imputation import (
     TabularImputationLineage,
     TabularImputationReport,
 )
+from app.domain.leakage import (
+    LeakageCheckResult,
+    LeakageCheckSeverity,
+    LeakageCheckStatus,
+    LeakageCheckType,
+    LeakageCrossSplitFinding,
+    SplitLeakageLineage,
+    SplitLeakageReport,
+)
 from app.domain.manifest import (
     DataModality,
     DataSplit,
@@ -106,6 +115,13 @@ from app.domain.profile import (
     OutlierDiagnostics,
     TabularProfileLineage,
     TabularProfileReport,
+)
+from app.domain.splits import (
+    SplitAssignment,
+    SplitClassDistribution,
+    SplitManifest,
+    SplitManifestLineage,
+    SplitStrategy,
 )
 from app.domain.text_ocr import (
     PiiCategory,
@@ -168,6 +184,11 @@ __all__ = [
     "ErrorConcentrationEntry",
     "GateStatus",
     "LeakageCandidate",
+    "LeakageCheckResult",
+    "LeakageCheckSeverity",
+    "LeakageCheckStatus",
+    "LeakageCheckType",
+    "LeakageCrossSplitFinding",
     "LeakageDiagnostics",
     "LearningValueSignals",
     "ManifestLineage",
@@ -214,6 +235,13 @@ __all__ = [
     "ReviewQueueType",
     "RiskProfile",
     "SignalStatus",
+    "SplitAssignment",
+    "SplitClassDistribution",
+    "SplitLeakageLineage",
+    "SplitLeakageReport",
+    "SplitManifest",
+    "SplitManifestLineage",
+    "SplitStrategy",
     "TabularImputationLineage",
     "TabularImputationReport",
     "TabularProfileLineage",
