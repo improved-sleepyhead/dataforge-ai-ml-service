@@ -1,16 +1,16 @@
 {
-  "report_id": "synthetic_dataset_report_001",
+  "report_id": "synthetic_dataset_report_002",
   "report_schema_version": "synthetic_dataset_report.v1",
-  "method": "smote",
-  "method_version": "smote_v0",
-  "augmentation_kind": "targeted_rare_class",
-  "formula": "x_new = x_i + lambda * (x_nn - x_i)",
+  "method": "gaussian_copula",
+  "method_version": "gaussian_copula_v0",
+  "augmentation_kind": "distribution_level",
+  "formula": "x_new = inverse_ecdf(Phi(L @ w + mu)), w ~ N(0, I)",
   "target_column": "is_fraud",
-  "rare_class_label": "1",
+  "rare_class_label": null,
   "source_split": "train",
-  "random_seed": 42,
-  "k_neighbors": 5,
-  "sampling_strategy": 0.15,
+  "random_seed": 7,
+  "k_neighbors": 0,
+  "sampling_strategy": 0.1,
   "feature_columns": [
     "amount",
     "monthly_income"
@@ -26,31 +26,39 @@
   "real_total_count": 200,
   "real_train_count": 140,
   "real_train_rare_count": 3,
-  "generated_count": 18,
+  "generated_count": 14,
   "class_stats": [
+    {
+      "label": "0",
+      "real_count_in_source_split": 137,
+      "real_count_in_majority_split": 137,
+      "target_count_after_augmentation": 137,
+      "generated_count": 13,
+      "achieved_ratio": 1.0
+    },
     {
       "label": "1",
       "real_count_in_source_split": 3,
       "real_count_in_majority_split": 137,
-      "target_count_after_augmentation": 21,
-      "generated_count": 18,
-      "achieved_ratio": 0.15
+      "target_count_after_augmentation": 3,
+      "generated_count": 1,
+      "achieved_ratio": 0.029197080291970802
     }
   ],
   "sample_lineage": [
     {
-      "synthetic_object_id": "txn_synth_000000",
-      "method": "smote",
-      "formula": "x_new = x_i + lambda * (x_nn - x_i)",
-      "seed_object_id": "txn_00010",
-      "neighbor_object_id": "txn_00132",
-      "lambda_value": 0.42,
-      "latent_draw_index": null,
-      "rare_class_label": "1"
+      "synthetic_object_id": "txn_synth_gc_000000",
+      "method": "gaussian_copula",
+      "formula": "x_new = inverse_ecdf(Phi(L @ w + mu)), w ~ N(0, I)",
+      "seed_object_id": null,
+      "neighbor_object_id": null,
+      "lambda_value": null,
+      "latent_draw_index": 0,
+      "rare_class_label": null
     }
   ],
   "sample_lineage_truncated": true,
-  "full_sample_lineage_count": 18,
+  "full_sample_lineage_count": 14,
   "synthetic_validation": {
     "overall_passed": true,
     "blocker_present": false,
@@ -77,7 +85,7 @@
         "pass_rate": 1.0,
         "findings_count": 0,
         "blocker": false,
-        "notes": "no critical rule failures on synthetic rows"
+        "notes": null
       },
       {
         "check": "privacy_exact_duplicate_to_real",
@@ -89,13 +97,83 @@
       }
     ]
   },
-  "gaussian_copula_artifacts": null,
+  "gaussian_copula_artifacts": {
+    "column_distribution_transforms": [
+      {
+        "column": "amount",
+        "method": "empirical_cdf",
+        "sample_count": 140,
+        "quantile_levels": [
+          0.0,
+          0.25,
+          0.5,
+          0.75,
+          1.0
+        ],
+        "quantile_values": [
+          10.5,
+          110.2,
+          245.6,
+          380.4,
+          499.7
+        ]
+      },
+      {
+        "column": "monthly_income",
+        "method": "empirical_cdf",
+        "sample_count": 132,
+        "quantile_levels": [
+          0.0,
+          0.25,
+          0.5,
+          0.75,
+          1.0
+        ],
+        "quantile_values": [
+          1502.4,
+          3211.0,
+          5102.5,
+          7012.6,
+          8997.1
+        ]
+      }
+    ],
+    "latent_normal_mean": [
+      0.0,
+      0.0
+    ],
+    "latent_normal_covariance_row_major": [
+      1.0,
+      0.21,
+      0.21,
+      1.0
+    ],
+    "latent_normal_cholesky_row_major": [
+      1.0,
+      0.0,
+      0.21,
+      0.9776502443532614
+    ],
+    "correlation_matrix_row_major": [
+      1.0,
+      0.21,
+      0.21,
+      1.0
+    ],
+    "correlation_matrix_size": 2,
+    "inverse_transform_metadata": {
+      "uniform_to_data": "linear_interpolation_over_quantile_grid",
+      "normal_to_uniform": "scipy_phi_via_math_erf"
+    },
+    "ridge_epsilon": 1e-06,
+    "cdf_clamp_epsilon": 1e-06
+  },
   "lineage": {
-    "action_plan_id": "action_plan_smote_001",
-    "step_id": "augment_rare_class_smote",
+    "action_plan_id": "action_plan_synthetic_002",
+    "step_id": "augment_rare_class_gaussian_copula",
     "source_dataset_version_id": "dataset_version_v1",
     "candidate_dataset_version_id": "dataset_version_v2_candidate",
-    "created_by_job_id": "compute_run_apply_001",
+    "created_by_job_id": "compute_run_apply_002",
     "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "source_artifact": {
       "artifact_id": "raw_transactions:aaaaaaaaaaaaaaaa",
@@ -128,10 +206,10 @@
       }
     },
     "candidate_artifact": {
-      "artifact_id": "candidate_tabular_dataset:dddddddddddddddd",
+      "artifact_id": "candidate_tabular_dataset:eeeeeeeeeeeeeeee",
       "kind": "candidate_tabular_dataset",
-      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/candidate_with_synthetic.csv",
-      "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/candidate_gc.csv",
+      "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       "media_type": "text/csv",
       "size_bytes": 4096,
       "schema_version": "tabular_dataset.v1",
@@ -143,10 +221,10 @@
       }
     },
     "augmented_split_manifest": {
-      "artifact_id": "split_manifest:eeeeeeeeeeeeeeee",
+      "artifact_id": "split_manifest:ffffffffffffffff",
       "kind": "split_manifest",
-      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/split_manifest_augmented.json",
-      "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/split_manifest_gc.json",
+      "hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
       "media_type": "application/json",
       "size_bytes": 4096,
       "schema_version": "split_manifest.v1",
@@ -158,5 +236,5 @@
       }
     }
   },
-  "generated_at": "2026-05-24T12:10:00Z"
+  "generated_at": "2026-05-24T12:30:00Z"
 }

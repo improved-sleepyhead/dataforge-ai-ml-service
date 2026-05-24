@@ -96,6 +96,7 @@ def test_smote_generates_synthetic_train_only_rows_with_lineage(tmp_path: Path) 
     for entry in report.sample_lineage:
         assert entry.formula == SMOTE_FORMULA
         assert entry.rare_class_label == "1"
+        assert entry.lambda_value is not None
         assert 0.0 <= entry.lambda_value <= 1.0
         assert entry.synthetic_object_id.startswith("txn_synth_")
     assert report.full_sample_lineage_count == report.generated_count

@@ -1,8 +1,14 @@
 """Tabular plugin: deep MVP modality for the DataForge AI compute plane."""
 
-from app.plugins.tabular.imputation import (
+from app.plugins.tabular._synthetic_common import (
     CANDIDATE_TABULAR_DATASET_KIND,
     CANDIDATE_TABULAR_DATASET_SCHEMA_VERSION,
+    SYNTHETIC_REPORT_FORMAT,
+    SYNTHETIC_REPORT_KIND,
+    SYNTHETIC_REPORT_MEDIA_TYPE,
+    SYNTHETIC_REPORT_SCHEMA_VERSION,
+)
+from app.plugins.tabular.imputation import (
     IMPUTATION_REPORT_KIND,
     IMPUTATION_REPORT_SCHEMA_VERSION,
     ExecuteTabularImputationRequest,
@@ -48,13 +54,18 @@ from app.plugins.tabular.splits import (
     SplitCreationError,
     execute_tabular_split_action,
 )
+from app.plugins.tabular.synthetic_gaussian_copula import (
+    GAUSSIAN_COPULA_METHOD_VERSION,
+    ExecuteGaussianCopulaRequest,
+    ExecuteGaussianCopulaResult,
+    GaussianCopulaExecutionError,
+    GaussianCopulaPolicy,
+    GaussianCopulaPolicyError,
+    execute_gaussian_copula_action,
+)
 from app.plugins.tabular.synthetic_smote import (
     DEFAULT_SAMPLE_LINEAGE_LIMIT,
     SMOTE_METHOD_VERSION,
-    SYNTHETIC_REPORT_FORMAT,
-    SYNTHETIC_REPORT_KIND,
-    SYNTHETIC_REPORT_MEDIA_TYPE,
-    SYNTHETIC_REPORT_SCHEMA_VERSION,
     ExecuteSmoteAugmentationRequest,
     ExecuteSmoteAugmentationResult,
     SmoteExecutionError,
@@ -77,12 +88,18 @@ __all__ = [
     "IMPUTATION_REPORT_KIND",
     "IMPUTATION_REPORT_SCHEMA_VERSION",
     "PROFILE_REPORT_SCHEMA_VERSION",
+    "ExecuteGaussianCopulaRequest",
+    "ExecuteGaussianCopulaResult",
     "ExecuteSmoteAugmentationRequest",
     "ExecuteSmoteAugmentationResult",
     "ExecuteTabularImputationRequest",
     "ExecuteTabularImputationResult",
     "ExecuteTabularSplitRequest",
     "ExecuteTabularSplitResult",
+    "GAUSSIAN_COPULA_METHOD_VERSION",
+    "GaussianCopulaExecutionError",
+    "GaussianCopulaPolicy",
+    "GaussianCopulaPolicyError",
     "ImputationExecutionError",
     "ProfileBuildRequest",
     "RunSplitLeakageChecksRequest",
@@ -103,6 +120,7 @@ __all__ = [
     "SplitLeakageCheckError",
     "RuleFieldCheck",
     "build_tabular_profile_report",
+    "execute_gaussian_copula_action",
     "execute_smote_augmentation_action",
     "execute_tabular_imputation_action",
     "execute_tabular_split_action",

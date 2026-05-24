@@ -8,9 +8,9 @@
     "report_schema_version",
     "method",
     "method_version",
+    "augmentation_kind",
     "formula",
     "target_column",
-    "rare_class_label",
     "source_split",
     "random_seed",
     "k_neighbors",
@@ -45,7 +45,23 @@
     "method": {
       "type": "string",
       "enum": [
-        "smote"
+        "smote",
+        "gaussian_copula"
+      ]
+    },
+    "augmentation_kind": {
+      "type": "string",
+      "enum": [
+        "targeted_rare_class",
+        "distribution_level"
+      ]
+    },
+    "validation_status": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "failed",
+        "not_applicable"
       ]
     },
     "artifact_ref": {
@@ -116,33 +132,60 @@
       "type": "object",
       "required": [
         "synthetic_object_id",
-        "seed_object_id",
-        "neighbor_object_id",
-        "lambda_value",
-        "formula",
-        "rare_class_label"
+        "method",
+        "formula"
       ],
       "additionalProperties": false,
       "properties": {
         "synthetic_object_id": {
           "$ref": "#/$defs/non_empty_string"
         },
-        "seed_object_id": {
-          "$ref": "#/$defs/non_empty_string"
-        },
-        "neighbor_object_id": {
-          "$ref": "#/$defs/non_empty_string"
-        },
-        "lambda_value": {
-          "type": "number",
-          "minimum": 0.0,
-          "maximum": 1.0
+        "method": {
+          "$ref": "#/$defs/method"
         },
         "formula": {
           "$ref": "#/$defs/non_empty_string"
         },
+        "seed_object_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "neighbor_object_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lambda_value": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latent_draw_index": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "rare_class_label": {
-          "$ref": "#/$defs/non_empty_string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },
@@ -179,6 +222,170 @@
         },
         "achieved_ratio": {
           "$ref": "#/$defs/score"
+        }
+      }
+    },
+    "validation_check": {
+      "type": "object",
+      "required": [
+        "check",
+        "status",
+        "findings_count",
+        "blocker"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "status": {
+          "$ref": "#/$defs/validation_status"
+        },
+        "pass_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "findings_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blocker": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "validation_report": {
+      "type": "object",
+      "required": [
+        "overall_passed",
+        "blocker_present",
+        "checks"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "overall_passed": {
+          "type": "boolean"
+        },
+        "blocker_present": {
+          "type": "boolean"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/validation_check"
+          }
+        }
+      }
+    },
+    "column_distribution_transform": {
+      "type": "object",
+      "required": [
+        "column",
+        "method",
+        "sample_count",
+        "quantile_levels",
+        "quantile_values"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "method": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "quantile_levels": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "quantile_values": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "gaussian_copula_artifacts": {
+      "type": "object",
+      "required": [
+        "column_distribution_transforms",
+        "latent_normal_mean",
+        "latent_normal_covariance_row_major",
+        "latent_normal_cholesky_row_major",
+        "correlation_matrix_row_major",
+        "correlation_matrix_size",
+        "inverse_transform_metadata",
+        "ridge_epsilon",
+        "cdf_clamp_epsilon"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "column_distribution_transforms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/column_distribution_transform"
+          }
+        },
+        "latent_normal_mean": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "latent_normal_covariance_row_major": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "latent_normal_cholesky_row_major": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "correlation_matrix_row_major": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "correlation_matrix_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inverse_transform_metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "ridge_epsilon": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "cdf_clamp_epsilon": {
+          "type": "number",
+          "minimum": 0.0
         }
       }
     },
@@ -244,6 +451,9 @@
     "method_version": {
       "$ref": "#/$defs/non_empty_string"
     },
+    "augmentation_kind": {
+      "$ref": "#/$defs/augmentation_kind"
+    },
     "formula": {
       "$ref": "#/$defs/non_empty_string"
     },
@@ -251,7 +461,10 @@
       "$ref": "#/$defs/non_empty_string"
     },
     "rare_class_label": {
-      "$ref": "#/$defs/non_empty_string"
+      "type": [
+        "string",
+        "null"
+      ]
     },
     "source_split": {
       "$ref": "#/$defs/non_empty_string"
@@ -261,7 +474,7 @@
     },
     "k_neighbors": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 0
     },
     "sampling_strategy": {
       "$ref": "#/$defs/score"
@@ -312,6 +525,26 @@
     "full_sample_lineage_count": {
       "type": "integer",
       "minimum": 0
+    },
+    "synthetic_validation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/validation_report"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "gaussian_copula_artifacts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/gaussian_copula_artifacts"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "lineage": {
       "$ref": "#/$defs/lineage"

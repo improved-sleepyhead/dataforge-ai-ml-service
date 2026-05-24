@@ -18,16 +18,9 @@ The executor consumes:
 - the persisted ``SplitManifest`` artifact, which decides which rows
   belong to the training split.
 
-It produces:
-
-- a candidate tabular dataset CSV that contains the original rows plus
-  appended synthetic rows (with ``is_synthetic`` and ``source_split``
-  marker columns);
-- an augmented split manifest that assigns the new synthetic rows to
-  the training split;
-- a contract-valid ``synthetic_dataset_report.v1`` artifact that
-  carries parameters, per-class generation stats, sample lineage, and
-  references to all upstream/downstream artifacts.
+Persistence (candidate dataset, augmented split manifest, report
+artifact) is delegated to :mod:`app.plugins.tabular._synthetic_common`
+so SMOTE and Gaussian Copula share an identical artifact contract.
 
 Privacy and safety:
 
@@ -42,10 +35,7 @@ Privacy and safety:
 
 from __future__ import annotations
 
-import csv
 import heapq
-import io
-import json
 import random
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
@@ -62,8 +52,8 @@ from app.domain import (
     ArtifactRef,
     DataSplit,
     ErrorCode,
-    SplitAssignment,
     SplitManifest,
+    SyntheticAugmentationKind,
     SyntheticClassStats,
     SyntheticDatasetLineage,
     SyntheticDatasetReport,
@@ -71,35 +61,29 @@ from app.domain import (
     SyntheticSampleLineage,
 )
 from app.domain.common import NonEmptyStr, Sha256Digest
-from app.plugins.tabular.splits import (
-    SPLIT_MANIFEST_FORMAT,
-    SPLIT_MANIFEST_KIND,
-    SPLIT_MANIFEST_MEDIA_TYPE,
-    SPLIT_MANIFEST_SCHEMA_VERSION,
+from app.plugins.tabular._synthetic_common import (
+    IS_SYNTHETIC_COLUMN,
+    SOURCE_SPLIT_COLUMN,
+    SYNTHETIC_REPORT_SCHEMA_VERSION,
+    evaluate_synthetic_validation,
+    format_numeric,
+    index_assignments,
+    parse_numeric,
+    persist_synthetic_artifacts,
+    persist_synthetic_report,
+    read_source_rows,
+    verify_assignments_match_rows,
 )
 
-SYNTHETIC_REPORT_KIND = "synthetic_dataset_report"
-SYNTHETIC_REPORT_FORMAT = "json"
-SYNTHETIC_REPORT_MEDIA_TYPE = "application/json"
-SYNTHETIC_REPORT_SCHEMA_VERSION = "synthetic_dataset_report.v1"
 SMOTE_METHOD_VERSION = "smote_v0"
-CANDIDATE_TABULAR_DATASET_KIND = "candidate_tabular_dataset"
-CANDIDATE_TABULAR_DATASET_FORMAT = "csv"
-CANDIDATE_TABULAR_DATASET_MEDIA_TYPE = "text/csv"
-CANDIDATE_TABULAR_DATASET_SCHEMA_VERSION = "tabular_dataset.v1"
-
 DEFAULT_SAMPLE_LINEAGE_LIMIT = 25
 
-_IS_SYNTHETIC_COLUMN = "is_synthetic"
-_SOURCE_SPLIT_COLUMN = "synthetic_source_split"
 _SUPPORTED_STEP_TYPES = {"AUGMENT_RARE_CLASS"}
 _SUPPORTED_METHOD_IDS = {"smote"}
 # Columns that must never be treated as numeric SMOTE features even if
 # they happen to parse as numbers. ``object_id`` and group keys are
 # identifiers; the target column must not be perturbed; binary review
-# flags carry no continuous semantics. Excluding them here keeps the
-# candidate dataset interpretable and avoids accidentally inventing
-# synthetic group keys.
+# flags carry no continuous semantics.
 _NEVER_FEATURE_COLUMNS = frozenset(
     {
         "object_id",
@@ -109,8 +93,8 @@ _NEVER_FEATURE_COLUMNS = frozenset(
         "document_id",
         "support_ticket_id",
         "manual_review_flag",
-        _IS_SYNTHETIC_COLUMN,
-        _SOURCE_SPLIT_COLUMN,
+        IS_SYNTHETIC_COLUMN,
+        SOURCE_SPLIT_COLUMN,
     }
 )
 
@@ -130,6 +114,20 @@ class SmoteExecutionError(ValueError):
         self.reason_code = reason_code
         self.code = code
         self.details = {} if details is None else details
+
+
+def _smote_error_factory(
+    reason_code: str,
+    message: str,
+    code: ErrorCode,
+    details: dict[str, object],
+) -> SmoteExecutionError:
+    return SmoteExecutionError(
+        reason_code=reason_code,
+        message=message,
+        code=code,
+        details=details,
+    )
 
 
 class ExecuteSmoteAugmentationRequest(BaseModel):
@@ -176,13 +174,18 @@ def execute_smote_augmentation_action(
 ) -> ExecuteSmoteAugmentationResult:
     """Run an approved SMOTE step and persist all derived artifacts."""
     _validate_step(request)
-    rows, columns = _read_source_rows(
+    rows, columns = read_source_rows(
         storage=storage,
         source_artifact=request.source_artifact,
         target_column=request.target_column,
+        error_factory=_smote_error_factory,
     )
-    assignments = _index_assignments(request.split_manifest)
-    _verify_assignments_match_rows(assignments=assignments, rows=rows)
+    assignments = index_assignments(request.split_manifest)
+    verify_assignments_match_rows(
+        assignments=assignments,
+        rows=rows,
+        error_factory=_smote_error_factory,
+    )
 
     train_rare_indices = [
         index
@@ -268,6 +271,8 @@ def execute_smote_augmentation_action(
         sample_lineage.append(
             SyntheticSampleLineage(
                 synthetic_object_id=synthetic_object_id,
+                method=SyntheticGenerationMethod.SMOTE,
+                formula=SMOTE_FORMULA,
                 seed_object_id=seed_row["object_id"],
                 neighbor_object_id=neighbor_row["object_id"],
                 lambda_value=round(lambda_value, 6),
@@ -275,59 +280,30 @@ def execute_smote_augmentation_action(
             )
         )
 
-    candidate_columns = _candidate_dataset_columns(columns)
-    candidate_payload = _write_candidate_csv(
-        rows=rows,
+    request_metadata = {
+        "action-plan-id": request.action_plan_id,
+        "step-id": request.step.step_id,
+        "source-artifact-hash": request.source_artifact.hash,
+        "split-manifest-hash": request.split_manifest_artifact.hash,
+        "target-column": request.target_column,
+        "rare-class-label": request.rare_class_label,
+        "random-seed": str(request.random_seed),
+        "k-neighbors": str(effective_k),
+        "sampling-strategy": str(request.sampling_strategy),
+    }
+    persistence = persist_synthetic_artifacts(
+        method=SyntheticGenerationMethod.SMOTE,
+        request_metadata=request_metadata,
+        real_rows=rows,
         synthetic_rows=synthetic_rows,
-        columns=candidate_columns,
-    )
-    candidate_artifact = registry.save_artifact(
-        artifact_kind=CANDIDATE_TABULAR_DATASET_KIND,
-        data=candidate_payload,
-        artifact_format=CANDIDATE_TABULAR_DATASET_FORMAT,
-        media_type=CANDIDATE_TABULAR_DATASET_MEDIA_TYPE,
-        schema_version=CANDIDATE_TABULAR_DATASET_SCHEMA_VERSION,
-        dataset_version_id=request.candidate_dataset_version_id,
+        columns=columns,
+        split_manifest=request.split_manifest,
+        target_column=request.target_column,
+        candidate_dataset_version_id=request.candidate_dataset_version_id,
         created_by_job_id=request.created_by_job_id,
         config_hash=request.config_hash,
-        metadata={
-            "action-plan-id": request.action_plan_id,
-            "step-id": request.step.step_id,
-            "source-artifact-hash": request.source_artifact.hash,
-            "split-manifest-hash": request.split_manifest_artifact.hash,
-            "target-column": request.target_column,
-            "rare-class-label": request.rare_class_label,
-            "synthetic-method": SyntheticGenerationMethod.SMOTE.value,
-            "random-seed": str(request.random_seed),
-            "k-neighbors": str(effective_k),
-            "sampling-strategy": str(request.sampling_strategy),
-            "synthetic-row-count": str(len(synthetic_rows)),
-        },
-    )
-
-    augmented_manifest = _build_augmented_split_manifest(
-        manifest=request.split_manifest,
-        synthetic_rows=synthetic_rows,
-        rare_class_label=request.rare_class_label,
-    )
-    augmented_split_artifact = registry.save_artifact(
-        artifact_kind=SPLIT_MANIFEST_KIND,
-        data=_serialize_split_manifest(augmented_manifest),
-        artifact_format=SPLIT_MANIFEST_FORMAT,
-        media_type=SPLIT_MANIFEST_MEDIA_TYPE,
-        schema_version=SPLIT_MANIFEST_SCHEMA_VERSION,
-        dataset_version_id=request.candidate_dataset_version_id,
-        created_by_job_id=request.created_by_job_id,
-        config_hash=request.config_hash,
-        metadata={
-            "action-plan-id": request.action_plan_id,
-            "step-id": request.step.step_id,
-            "augments-split-manifest-id": request.split_manifest.split_manifest_id,
-            "augments-split-manifest-hash": request.split_manifest_artifact.hash,
-            "synthetic-row-count": str(len(synthetic_rows)),
-            "synthetic-method": SyntheticGenerationMethod.SMOTE.value,
-            "rare-class-label": request.rare_class_label,
-        },
+        storage=storage,
+        registry=registry,
     )
 
     truncated = len(sample_lineage) > request.sample_lineage_limit
@@ -337,6 +313,12 @@ def execute_smote_augmentation_action(
         else ()
     )
 
+    validation_report = evaluate_synthetic_validation(
+        real_rows=rows,
+        synthetic_rows=synthetic_rows,
+        feature_columns=feature_columns,
+    )
+
     report = SyntheticDatasetReport(
         report_id=(
             request.report_id or f"synthetic_dataset_report_{uuid.uuid4().hex[:16]}"
@@ -344,6 +326,7 @@ def execute_smote_augmentation_action(
         report_schema_version=SYNTHETIC_REPORT_SCHEMA_VERSION,
         method=SyntheticGenerationMethod.SMOTE,
         method_version=SMOTE_METHOD_VERSION,
+        augmentation_kind=SyntheticAugmentationKind.TARGETED_RARE_CLASS,
         formula=SMOTE_FORMULA,
         target_column=request.target_column,
         rare_class_label=request.rare_class_label,
@@ -373,6 +356,8 @@ def execute_smote_augmentation_action(
         sample_lineage=sample_lineage_for_report,
         sample_lineage_truncated=truncated,
         full_sample_lineage_count=len(sample_lineage),
+        synthetic_validation=validation_report,
+        gaussian_copula_artifacts=None,
         lineage=SyntheticDatasetLineage(
             action_plan_id=request.action_plan_id,
             step_id=request.step.step_id,
@@ -382,38 +367,27 @@ def execute_smote_augmentation_action(
             config_hash=request.config_hash,
             source_artifact=request.source_artifact,
             split_manifest=request.split_manifest_artifact,
-            candidate_artifact=candidate_artifact.artifact_ref,
-            augmented_split_manifest=augmented_split_artifact.artifact_ref,
+            candidate_artifact=persistence.candidate_artifact.artifact_ref,
+            augmented_split_manifest=persistence.augmented_split_artifact.artifact_ref,
         ),
         generated_at=request.generated_at or datetime.now(UTC),
     )
 
-    report_artifact = registry.save_artifact(
-        artifact_kind=SYNTHETIC_REPORT_KIND,
-        data=_serialize_report(report),
-        artifact_format=SYNTHETIC_REPORT_FORMAT,
-        media_type=SYNTHETIC_REPORT_MEDIA_TYPE,
-        schema_version=SYNTHETIC_REPORT_SCHEMA_VERSION,
-        dataset_version_id=request.candidate_dataset_version_id,
+    report_artifact = persist_synthetic_report(
+        report=report,
+        candidate_dataset_version_id=request.candidate_dataset_version_id,
         created_by_job_id=request.created_by_job_id,
         config_hash=request.config_hash,
-        metadata={
-            "action-plan-id": request.action_plan_id,
-            "step-id": request.step.step_id,
-            "synthetic-method": SyntheticGenerationMethod.SMOTE.value,
-            "random-seed": str(request.random_seed),
-            "k-neighbors": str(effective_k),
-            "sampling-strategy": str(request.sampling_strategy),
-            "generated-count": str(len(synthetic_rows)),
-            "candidate-artifact-hash": candidate_artifact.hash,
-            "augmented-split-manifest-hash": augmented_split_artifact.hash,
-        },
+        base_metadata=request_metadata,
+        candidate_artifact_hash=persistence.candidate_artifact.hash,
+        augmented_split_artifact_hash=persistence.augmented_split_artifact.hash,
+        registry=registry,
     )
 
     return ExecuteSmoteAugmentationResult(
         report=report,
-        candidate_artifact=candidate_artifact,
-        augmented_split_artifact=augmented_split_artifact,
+        candidate_artifact=persistence.candidate_artifact,
+        augmented_split_artifact=persistence.augmented_split_artifact,
         report_artifact=report_artifact,
     )
 
@@ -428,9 +402,7 @@ def _validate_step(request: ExecuteSmoteAugmentationRequest) -> None:
     if step.type not in _SUPPORTED_STEP_TYPES:
         raise SmoteExecutionError(
             reason_code="unsupported_action_step_type",
-            message=(
-                "SMOTE executor only handles AUGMENT_RARE_CLASS steps."
-            ),
+            message="SMOTE executor only handles AUGMENT_RARE_CLASS steps.",
             details={"step_id": step.step_id, "step_type": step.type},
         )
     if step.method_id not in _SUPPORTED_METHOD_IDS:
@@ -463,73 +435,6 @@ def _validate_step(request: ExecuteSmoteAugmentationRequest) -> None:
         )
 
 
-def _read_source_rows(
-    *,
-    storage: MinioObjectStorageAdapter,
-    source_artifact: ArtifactRef,
-    target_column: str,
-) -> tuple[tuple[dict[str, str], ...], tuple[str, ...]]:
-    stored = storage.get(source_artifact.uri)
-    text = stored.data.decode("utf-8")
-    reader = csv.DictReader(io.StringIO(text, newline=""))
-    columns = tuple(name for name in (reader.fieldnames or ()) if name)
-    if not columns:
-        raise SmoteExecutionError(
-            reason_code="empty_tabular_source",
-            message="Source CSV has no header columns.",
-            code=ErrorCode.INVALID_JOB_PAYLOAD,
-        )
-    if target_column not in columns:
-        raise SmoteExecutionError(
-            reason_code="target_column_not_found",
-            message="Target column is not present in source CSV.",
-            code=ErrorCode.INVALID_JOB_PAYLOAD,
-            details={"target_column": target_column},
-        )
-    rows: list[dict[str, str]] = []
-    for index, raw_row in enumerate(reader):
-        row = {
-            column: ("" if raw_row.get(column) is None else str(raw_row.get(column)))
-            for column in columns
-        }
-        if not row.get("object_id"):
-            row["object_id"] = f"row_{index:06d}"
-        rows.append(row)
-    if not rows:
-        raise SmoteExecutionError(
-            reason_code="empty_tabular_source",
-            message="Source CSV has no data rows.",
-            code=ErrorCode.INVALID_JOB_PAYLOAD,
-        )
-    return tuple(rows), columns
-
-
-def _index_assignments(
-    manifest: SplitManifest,
-) -> dict[str, tuple[DataSplit, str | None]]:
-    return {
-        assignment.object_id: (assignment.split, assignment.group_value)
-        for assignment in manifest.assignments
-    }
-
-
-def _verify_assignments_match_rows(
-    *,
-    assignments: Mapping[str, tuple[DataSplit, str | None]],
-    rows: Sequence[Mapping[str, str]],
-) -> None:
-    row_ids = {row["object_id"] for row in rows}
-    missing = sorted(set(assignments) - row_ids)
-    if missing:
-        raise SmoteExecutionError(
-            reason_code="split_manifest_object_id_missing_in_source",
-            message=(
-                "Split manifest references object_ids missing from the source CSV."
-            ),
-            details={"missing_object_ids": missing[:5]},
-        )
-
-
 def _resolve_feature_columns(
     *,
     columns: tuple[str, ...],
@@ -551,9 +456,6 @@ def _resolve_feature_columns(
             excluded.append(column)
             continue
         feature_columns.append(column)
-    # Drop columns that are non-numeric across the dataset. We compute
-    # this here so excluded_columns surfaces the reason a column was
-    # skipped in the report.
     return tuple(feature_columns), tuple(_unique(excluded))
 
 
@@ -582,31 +484,12 @@ def _extract_feature_vectors(
         features: list[float] = []
         for column in columns:
             raw = row.get(column, "")
-            value = _parse_numeric(raw)
+            value = parse_numeric(raw)
             if value is None:
-                # Treat missing/non-numeric rare-class values as 0.0; the
-                # alternative is to skip the row, which would silently
-                # change the rare-class population. Skipping is unsafe
-                # because SMOTE callers expect all rare rows to be
-                # eligible. We mark the situation with a reason code so
-                # callers can decide to add an imputation step before
-                # SMOTE if needed.
                 value = 0.0
             features.append(value)
         vectors.append(tuple(features))
     return tuple(vectors)
-
-
-def _parse_numeric(value: str) -> float | None:
-    if value == "":
-        return None
-    try:
-        result = float(value)
-    except (TypeError, ValueError):
-        return None
-    if result != result:  # NaN
-        return None
-    return result
 
 
 def _pick_neighbor(
@@ -624,9 +507,6 @@ def _pick_neighbor(
         distance = _squared_distance(seed_vector, vector)
         distances.append((distance, index))
     if not distances:
-        # Defensive: caller already enforced len(rare) >= 2, so this
-        # branch should not trigger. We pick the seed itself as a
-        # last-resort fallback to keep the type contract intact.
         return seed_pos
     nearest = heapq.nsmallest(k_neighbors, distances)
     return rng.choice([index for _, index in nearest])
@@ -672,112 +552,15 @@ def _build_synthetic_row(
     row["object_id"] = synthetic_object_id
     row[target_column] = rare_class_label
     for column in feature_columns:
-        seed_value = _parse_numeric(seed_row.get(column, ""))
-        neighbor_value = _parse_numeric(neighbor_row.get(column, ""))
+        seed_value = parse_numeric(seed_row.get(column, ""))
+        neighbor_value = parse_numeric(neighbor_row.get(column, ""))
         if seed_value is None or neighbor_value is None:
-            # Preserve the seed row's value for non-numeric or missing
-            # columns. This keeps the synthetic row valid against the
-            # source schema; the lineage entry already records that the
-            # numeric SMOTE formula could not be applied to that column.
             continue
         new_value = seed_value + lambda_value * (neighbor_value - seed_value)
-        row[column] = _format_numeric(new_value)
-    row[_IS_SYNTHETIC_COLUMN] = "1"
-    row[_SOURCE_SPLIT_COLUMN] = DataSplit.TRAIN.value
+        row[column] = format_numeric(new_value)
+    row[IS_SYNTHETIC_COLUMN] = "1"
+    row[SOURCE_SPLIT_COLUMN] = DataSplit.TRAIN.value
     return row
-
-
-def _format_numeric(value: float) -> str:
-    if value.is_integer():
-        return str(int(value))
-    formatted = f"{value:.6f}".rstrip("0").rstrip(".")
-    return formatted or "0"
-
-
-def _candidate_dataset_columns(columns: tuple[str, ...]) -> tuple[str, ...]:
-    extras: list[str] = []
-    if _IS_SYNTHETIC_COLUMN not in columns:
-        extras.append(_IS_SYNTHETIC_COLUMN)
-    if _SOURCE_SPLIT_COLUMN not in columns:
-        extras.append(_SOURCE_SPLIT_COLUMN)
-    return tuple([*columns, *extras])
-
-
-def _write_candidate_csv(
-    *,
-    rows: Sequence[Mapping[str, str]],
-    synthetic_rows: Sequence[Mapping[str, str]],
-    columns: tuple[str, ...],
-) -> bytes:
-    buffer = io.StringIO(newline="")
-    writer = csv.DictWriter(buffer, fieldnames=list(columns), lineterminator="\n")
-    writer.writeheader()
-    for row in rows:
-        materialized = {column: row.get(column, "") for column in columns}
-        materialized.setdefault(_IS_SYNTHETIC_COLUMN, "0")
-        materialized.setdefault(_SOURCE_SPLIT_COLUMN, "")
-        if not materialized.get(_IS_SYNTHETIC_COLUMN):
-            materialized[_IS_SYNTHETIC_COLUMN] = "0"
-        writer.writerow(materialized)
-    for row in synthetic_rows:
-        materialized = {column: row.get(column, "") for column in columns}
-        writer.writerow(materialized)
-    return buffer.getvalue().encode("utf-8")
-
-
-def _build_augmented_split_manifest(
-    *,
-    manifest: SplitManifest,
-    synthetic_rows: Sequence[Mapping[str, str]],
-    rare_class_label: str,
-) -> SplitManifest:
-    if not synthetic_rows:
-        return manifest
-    new_assignments = list(manifest.assignments)
-    label_counts = {item.split: dict(item.class_counts) for item in manifest.class_distribution}
-    total_counts = {item.split: item.total_count for item in manifest.class_distribution}
-    for row in synthetic_rows:
-        new_assignments.append(
-            SplitAssignment(
-                object_id=row["object_id"],
-                split=DataSplit.TRAIN,
-                label=rare_class_label,
-                group_value=None,
-            )
-        )
-        train_counts = label_counts.setdefault(DataSplit.TRAIN, {})
-        train_counts[rare_class_label] = train_counts.get(rare_class_label, 0) + 1
-        total_counts[DataSplit.TRAIN] = (
-            total_counts.get(DataSplit.TRAIN, 0) + 1
-        )
-
-    new_distribution = []
-    for item in manifest.class_distribution:
-        counts = label_counts.get(item.split, item.class_counts)
-        total = total_counts.get(item.split, item.total_count)
-        ratios = {
-            label: (count / total if total else 0.0)
-            for label, count in counts.items()
-        }
-        new_distribution.append(
-            item.model_copy(
-                update={
-                    "class_counts": dict(sorted(counts.items())),
-                    "class_ratios": dict(sorted(ratios.items())),
-                    "total_count": total,
-                }
-            )
-        )
-
-    return manifest.model_copy(
-        update={
-            "split_manifest_id": (
-                f"{manifest.split_manifest_id}_with_synthetic_{len(synthetic_rows)}"
-            ),
-            "assignments": tuple(new_assignments),
-            "class_distribution": tuple(new_distribution),
-        }
-    )
 
 
 def _achieved_ratio(*, rare_count_after: int, majority_count: int) -> float:
@@ -787,27 +570,11 @@ def _achieved_ratio(*, rare_count_after: int, majority_count: int) -> float:
     return min(1.0, max(0.0, ratio))
 
 
-def _serialize_report(report: SyntheticDatasetReport) -> bytes:
-    return json.dumps(
-        report.model_dump(mode="json"), sort_keys=True, indent=2
-    ).encode("utf-8")
-
-
-def _serialize_split_manifest(manifest: SplitManifest) -> bytes:
-    return json.dumps(
-        manifest.model_dump(mode="json"), sort_keys=True, indent=2
-    ).encode("utf-8")
-
-
 __all__ = [
     "DEFAULT_SAMPLE_LINEAGE_LIMIT",
     "ExecuteSmoteAugmentationRequest",
     "ExecuteSmoteAugmentationResult",
     "SMOTE_METHOD_VERSION",
-    "SYNTHETIC_REPORT_FORMAT",
-    "SYNTHETIC_REPORT_KIND",
-    "SYNTHETIC_REPORT_MEDIA_TYPE",
-    "SYNTHETIC_REPORT_SCHEMA_VERSION",
     "SmoteExecutionError",
     "execute_smote_augmentation_action",
 ]

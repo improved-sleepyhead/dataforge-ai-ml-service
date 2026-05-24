@@ -189,6 +189,11 @@
       "path": "examples/synthetic_dataset_report.smote.json"
     },
     {
+      "name": "synthetic_dataset_report.gaussian_copula",
+      "schema": "synthetic_dataset_report",
+      "path": "examples/synthetic_dataset_report.gaussian_copula.json"
+    },
+    {
       "name": "tabular_profile_report.fraud",
       "schema": "tabular_profile_report",
       "path": "examples/tabular_profile_report.fraud.json"
