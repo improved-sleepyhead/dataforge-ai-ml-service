@@ -68,6 +68,10 @@
       "path": "schemas/split_manifest.schema.json"
     },
     {
+      "name": "split_leakage_report",
+      "path": "schemas/split_leakage_report.schema.json"
+    },
+    {
       "name": "tabular_profile_report",
       "path": "schemas/tabular_profile_report.schema.json"
     },
@@ -169,6 +173,11 @@
       "name": "split_manifest.group_stratified",
       "schema": "split_manifest",
       "path": "examples/split_manifest.group_stratified.json"
+    },
+    {
+      "name": "split_leakage_report.demo",
+      "schema": "split_leakage_report",
+      "path": "examples/split_leakage_report.demo.json"
     },
     {
       "name": "tabular_profile_report.fraud",

@@ -1,0 +1,347 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/split_leakage_report.schema.json",
+  "title": "SplitLeakageReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_schema_version",
+    "dataset_id",
+    "source_dataset_version_id",
+    "candidate_dataset_version_id",
+    "split_manifest_id",
+    "target_column",
+    "policy_version",
+    "leakage_detected",
+    "leakage_risk_score",
+    "block_model_evaluation",
+    "block_training",
+    "checks",
+    "lineage",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "kind": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "lineage": {
+          "type": "object",
+          "required": [
+            "parent_version_id",
+            "job_id",
+            "config_hash",
+            "created_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "job_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "config_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "check_type": {
+      "type": "string",
+      "enum": [
+        "exact_hash",
+        "group_key",
+        "target_leakage_candidate"
+      ]
+    },
+    "check_status": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "failed",
+        "not_applicable"
+      ]
+    },
+    "check_severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "blocker"
+      ]
+    },
+    "cross_split_finding": {
+      "type": "object",
+      "required": [
+        "finding_id",
+        "splits"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "splits": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        },
+        "object_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        },
+        "group_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "column": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "check_result": {
+      "type": "object",
+      "required": [
+        "check_type",
+        "status",
+        "severity",
+        "reason_code",
+        "findings_count"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "check_type": {
+          "$ref": "#/$defs/check_type"
+        },
+        "status": {
+          "$ref": "#/$defs/check_status"
+        },
+        "severity": {
+          "$ref": "#/$defs/check_severity"
+        },
+        "reason_code": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "block_action": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "findings_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "affected_object_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        },
+        "affected_groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        },
+        "affected_columns": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/non_empty_string"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cross_split_finding"
+          }
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "source_dataset_version_id",
+        "candidate_dataset_version_id",
+        "created_by_job_id",
+        "config_hash",
+        "source_artifact",
+        "split_manifest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action_plan_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "step_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source_dataset_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "candidate_dataset_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "created_by_job_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "split_manifest": {
+          "$ref": "#/$defs/artifact_ref"
+        }
+      }
+    }
+  },
+  "properties": {
+    "report_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "report_schema_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "dataset_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "source_dataset_version_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "candidate_dataset_version_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "split_manifest_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "target_column": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "policy_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "leakage_detected": {
+      "type": "boolean"
+    },
+    "leakage_risk_score": {
+      "$ref": "#/$defs/score"
+    },
+    "block_model_evaluation": {
+      "type": "boolean"
+    },
+    "block_training": {
+      "type": "boolean"
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/check_result"
+      }
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

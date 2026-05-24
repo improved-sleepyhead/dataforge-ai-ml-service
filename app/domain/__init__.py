@@ -67,6 +67,15 @@ from app.domain.imputation import (
     TabularImputationLineage,
     TabularImputationReport,
 )
+from app.domain.leakage import (
+    LeakageCheckResult,
+    LeakageCheckSeverity,
+    LeakageCheckStatus,
+    LeakageCheckType,
+    LeakageCrossSplitFinding,
+    SplitLeakageLineage,
+    SplitLeakageReport,
+)
 from app.domain.manifest import (
     DataModality,
     DataSplit,
@@ -175,6 +184,11 @@ __all__ = [
     "ErrorConcentrationEntry",
     "GateStatus",
     "LeakageCandidate",
+    "LeakageCheckResult",
+    "LeakageCheckSeverity",
+    "LeakageCheckStatus",
+    "LeakageCheckType",
+    "LeakageCrossSplitFinding",
     "LeakageDiagnostics",
     "LearningValueSignals",
     "ManifestLineage",
@@ -223,6 +237,8 @@ __all__ = [
     "SignalStatus",
     "SplitAssignment",
     "SplitClassDistribution",
+    "SplitLeakageLineage",
+    "SplitLeakageReport",
     "SplitManifest",
     "SplitManifestLineage",
     "SplitStrategy",

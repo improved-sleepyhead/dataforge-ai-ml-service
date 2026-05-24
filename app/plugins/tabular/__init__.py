@@ -10,6 +10,17 @@ from app.plugins.tabular.imputation import (
     ImputationExecutionError,
     execute_tabular_imputation_action,
 )
+from app.plugins.tabular.leakage_checks import (
+    DEFAULT_SPLIT_LEAKAGE_POLICY_VERSION,
+    SPLIT_LEAKAGE_REPORT_FORMAT,
+    SPLIT_LEAKAGE_REPORT_KIND,
+    SPLIT_LEAKAGE_REPORT_MEDIA_TYPE,
+    SPLIT_LEAKAGE_REPORT_SCHEMA_VERSION,
+    RunSplitLeakageChecksRequest,
+    RunSplitLeakageChecksResult,
+    SplitLeakageCheckError,
+    run_split_leakage_checks,
+)
 from app.plugins.tabular.profile import (
     PROFILE_REPORT_FORMAT,
     PROFILE_REPORT_KIND,
@@ -42,6 +53,7 @@ __all__ = [
     "BuildProfileResult",
     "CANDIDATE_TABULAR_DATASET_KIND",
     "CANDIDATE_TABULAR_DATASET_SCHEMA_VERSION",
+    "DEFAULT_SPLIT_LEAKAGE_POLICY_VERSION",
     "DEFAULT_SPLIT_POLICY_VERSION",
     "DEFAULT_SPLIT_RATIOS",
     "BusinessRule",
@@ -58,9 +70,16 @@ __all__ = [
     "ExecuteTabularSplitResult",
     "ImputationExecutionError",
     "ProfileBuildRequest",
+    "RunSplitLeakageChecksRequest",
+    "RunSplitLeakageChecksResult",
+    "SPLIT_LEAKAGE_REPORT_FORMAT",
+    "SPLIT_LEAKAGE_REPORT_KIND",
+    "SPLIT_LEAKAGE_REPORT_MEDIA_TYPE",
+    "SPLIT_LEAKAGE_REPORT_SCHEMA_VERSION",
     "SPLIT_MANIFEST_KIND",
     "SPLIT_MANIFEST_SCHEMA_VERSION",
     "SplitCreationError",
+    "SplitLeakageCheckError",
     "RuleFieldCheck",
     "build_tabular_profile_report",
     "execute_tabular_imputation_action",
@@ -68,4 +87,5 @@ __all__ = [
     "compute_rules_config_hash",
     "infer_tabular_profile",
     "parse_business_rules",
+    "run_split_leakage_checks",
 ]
