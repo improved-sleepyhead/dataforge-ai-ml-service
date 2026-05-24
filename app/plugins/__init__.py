@@ -19,12 +19,23 @@ from app.plugins.text_ocr import (
     validate_ocr_records_jsonl,
     validate_support_messages_jsonl,
 )
+from app.plugins.validation import (
+    DcrThresholds,
+    RunValidationGatesRequest,
+    RunValidationGatesResult,
+    ValidationGatesError,
+    run_validation_gates,
+)
 
 __all__ = [
     "BuildProfileResult",
     "BuildTextOcrReportResult",
+    "DcrThresholds",
     "ProfileBuildRequest",
+    "RunValidationGatesRequest",
+    "RunValidationGatesResult",
     "TextOcrBuildRequest",
+    "ValidationGatesError",
     "analyze_model_errors",
     "build_not_applicable_report",
     "build_static_plugin_manager",
@@ -33,6 +44,7 @@ __all__ = [
     "build_text_ocr_report",
     "compute_object_signals",
     "infer_tabular_profile",
+    "run_validation_gates",
     "validate_ocr_records_jsonl",
     "validate_support_messages_jsonl",
 ]
