@@ -1,0 +1,189 @@
+{
+  "candidate_version_id": "candidate_dataset_version_001",
+  "candidate_version_schema_version": "candidate_dataset_version.v1",
+  "status": "proposed",
+  "policy_versions": {
+    "profile_policy_version": "demo_strict_v1",
+    "decision_policy_version": "decision_policy_v0",
+    "score_policy_version": "dataforge_score_v0",
+    "method_policy_version": "method_policy_v0",
+    "validation_gates_policy_version": "validation_gates_policy_v0"
+  },
+  "lineage": {
+    "organization_id": "org_1",
+    "project_id": "project_1",
+    "dataset_id": "dataset_1",
+    "parent_version_id": "dataset_version_v1",
+    "proposed_version_name": "dataset_version_v2_candidate",
+    "action_plan_id": "action_plan_smote_001",
+    "decision_report_id": "decision_report_001",
+    "created_by_job_id": "compute_run_apply_001",
+    "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "input_artifact_hashes": [
+      "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "output_artifact_hashes": [
+      "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    ],
+    "input_manifest_hash": null,
+    "output_manifest_hash": null
+  },
+  "candidate_artifacts": [
+    {
+      "artifact_id": "candidate_tabular_dataset:bbbbbbbbbbbbbbbb",
+      "kind": "candidate_tabular_dataset",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/transactions.csv",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "media_type": "text/csv",
+      "size_bytes": 2048,
+      "schema_version": "tabular_dataset.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-25T12:05:00Z"
+      }
+    },
+    {
+      "artifact_id": "synthetic_dataset_report:cccccccccccccccc",
+      "kind": "synthetic_dataset_report",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/synthetic_dataset_report.json",
+      "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "media_type": "application/json",
+      "size_bytes": 1024,
+      "schema_version": "synthetic_dataset_report.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-25T12:05:00Z"
+      }
+    },
+    {
+      "artifact_id": "validation_gates_report:dddddddddddddddd",
+      "kind": "validation_gates_report",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/validation_gates_report.json",
+      "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "media_type": "application/json",
+      "size_bytes": 1024,
+      "schema_version": "validation_gates_report.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-25T12:10:00Z"
+      }
+    }
+  ],
+  "primary_dataset_artifact": {
+    "artifact_id": "candidate_tabular_dataset:bbbbbbbbbbbbbbbb",
+    "kind": "candidate_tabular_dataset",
+    "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/transactions.csv",
+    "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "media_type": "text/csv",
+    "size_bytes": 2048,
+    "schema_version": "tabular_dataset.v1",
+    "lineage": {
+      "parent_version_id": "dataset_version_v2_candidate",
+      "job_id": "compute_run_apply_001",
+      "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "created_at": "2026-05-25T12:05:00Z"
+    }
+  },
+  "validation_gates_report": {
+    "artifact_id": "validation_gates_report:dddddddddddddddd",
+    "kind": "validation_gates_report",
+    "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/validation_gates_report.json",
+    "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "media_type": "application/json",
+    "size_bytes": 1024,
+    "schema_version": "validation_gates_report.v1",
+    "lineage": {
+      "parent_version_id": "dataset_version_v2_candidate",
+      "job_id": "compute_run_apply_001",
+      "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "created_at": "2026-05-25T12:10:00Z"
+    }
+  },
+  "validation_gates_summary": {
+    "overall_status": "passed",
+    "candidate_status": "ok",
+    "raw_artifact_unchanged": true,
+    "blocker_present": false
+  },
+  "block_export": false,
+  "block_model_evaluation": false,
+  "block_training": false,
+  "blocker_reason_codes": [],
+  "action_plan_steps": [
+    {
+      "step_id": "create_split_tabular",
+      "step_type": "CREATE_SPLIT",
+      "method_id": "group_stratified",
+      "plugin_id": "dataforge.tabular",
+      "plugin_version": "0.1.0",
+      "config_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "output_artifact_kind": "split_manifest",
+      "random_seed": 42
+    },
+    {
+      "step_id": "augment_rare_class_smote",
+      "step_type": "AUGMENT_RARE_CLASS",
+      "method_id": "smote",
+      "plugin_id": "dataforge.tabular",
+      "plugin_version": "0.1.0",
+      "config_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "output_artifact_kind": "candidate_tabular_dataset",
+      "random_seed": 42
+    }
+  ],
+  "synthetic_metadata": {
+    "method_id": "smote",
+    "plugin_id": "dataforge.tabular",
+    "plugin_version": "0.1.0",
+    "random_seed": 42,
+    "config_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "source_split": "train",
+    "source_cohort": "rare_class_1",
+    "source_object_ids": ["txn_00123", "txn_00450", "txn_00781"],
+    "source_object_ids_truncated": true,
+    "full_source_object_ids_count": 12,
+    "generated_count": 5,
+    "sampling_strategy": 0.2,
+    "policy_version": "synthetic_policy_v0",
+    "validation_report": {
+      "artifact_id": "validation_gates_report:dddddddddddddddd",
+      "kind": "validation_gates_report",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/validation_gates_report.json",
+      "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "media_type": "application/json",
+      "size_bytes": 1024,
+      "schema_version": "validation_gates_report.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-25T12:10:00Z"
+      }
+    },
+    "model_impact_report": null,
+    "synthetic_dataset_report": {
+      "artifact_id": "synthetic_dataset_report:cccccccccccccccc",
+      "kind": "synthetic_dataset_report",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/synthetic_dataset_report.json",
+      "hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "media_type": "application/json",
+      "size_bytes": 1024,
+      "schema_version": "synthetic_dataset_report.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-25T12:05:00Z"
+      }
+    }
+  },
+  "proposed_at": "2026-05-25T12:15:00Z"
+}

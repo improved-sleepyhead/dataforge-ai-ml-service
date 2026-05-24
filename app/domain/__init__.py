@@ -1,6 +1,15 @@
 """Contract-compatible domain models shared by kernel, plugins, and adapters."""
 
 from app.domain.artifact import ArtifactLineage, ArtifactRef
+from app.domain.candidate_version import (
+    CANDIDATE_DATASET_VERSION_SCHEMA_VERSION,
+    CandidateActionStepSummary,
+    CandidateDatasetVersion,
+    CandidateDatasetVersionLineage,
+    CandidatePolicyVersions,
+    CandidateVersionStatus,
+    SyntheticCandidateMetadata,
+)
 from app.domain.compute import ComputeRun, ComputeRunStatus, WorkflowType
 from app.domain.context import (
     DatasetVersionContext,
@@ -179,6 +188,12 @@ __all__ = [
     "BusinessRuleSummary",
     "BusinessRuleViolation",
     "BusinessRulesReport",
+    "CANDIDATE_DATASET_VERSION_SCHEMA_VERSION",
+    "CandidateActionStepSummary",
+    "CandidateDatasetVersion",
+    "CandidateDatasetVersionLineage",
+    "CandidatePolicyVersions",
+    "CandidateVersionStatus",
     "ClassCount",
     "ClassImbalanceDiagnostics",
     "ColumnMissingness",
@@ -281,6 +296,7 @@ __all__ = [
     "SplitStrategy",
     "SMOTE_FORMULA",
     "SyntheticAugmentationKind",
+    "SyntheticCandidateMetadata",
     "SyntheticClassStats",
     "SyntheticDatasetLineage",
     "SyntheticDatasetReport",
