@@ -73,6 +73,15 @@ from app.kernel.method_selection import (
     BuildMethodRecommendationsRequest,
     build_method_recommendations,
 )
+from app.kernel.model_impact_eligibility import (
+    MODEL_IMPACT_ELIGIBILITY_FORMAT,
+    MODEL_IMPACT_ELIGIBILITY_KIND,
+    MODEL_IMPACT_ELIGIBILITY_MEDIA_TYPE,
+    CheckModelImpactEligibilityRequest,
+    CheckModelImpactEligibilityResult,
+    ModelImpactEligibilityError,
+    check_model_impact_eligibility,
+)
 
 __all__ = [
     "DATAFORGE_SCORE_FORMULA",
@@ -97,6 +106,12 @@ __all__ = [
     "BuildCandidateVersionRequest",
     "BuildCandidateVersionResult",
     "BuildMethodRecommendationsRequest",
+    "CheckModelImpactEligibilityRequest",
+    "CheckModelImpactEligibilityResult",
+    "MODEL_IMPACT_ELIGIBILITY_FORMAT",
+    "MODEL_IMPACT_ELIGIBILITY_KIND",
+    "MODEL_IMPACT_ELIGIBILITY_MEDIA_TYPE",
+    "ModelImpactEligibilityError",
     "ValidateActionPlanExecutionRequest",
     "ActionPlanApprovalMetadata",
     "ActionPlanExecutionError",
@@ -130,6 +145,7 @@ __all__ = [
     "validate_action_plan_execution",
     "build_dataforge_score",
     "build_method_recommendations",
+    "check_model_impact_eligibility",
     "disabled_outlier_capping_reason",
     "evaluate_object_decision",
     "evaluate_hard_gates",

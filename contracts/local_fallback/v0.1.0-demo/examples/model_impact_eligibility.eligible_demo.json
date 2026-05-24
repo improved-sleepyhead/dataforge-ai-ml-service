@@ -1,0 +1,46 @@
+{
+  "report_id": "model_impact_eligibility_001",
+  "report_schema_version": "model_impact_eligibility.v1",
+  "status": "eligible",
+  "eligible": true,
+  "task_type": "supervised_tabular_classification",
+  "target_column": "is_fraud",
+  "rare_class_label": "1",
+  "primary_reason_code": "supervised_classification_with_target",
+  "reasons": ["target_label_present", "split_manifest_valid", "no_leakage_blockers"],
+  "required_inputs_present": [
+    "target_label",
+    "enough_labeled_samples",
+    "valid_split_strategy",
+    "no_leakage_blockers",
+    "baseline_model_available"
+  ],
+  "required_inputs_missing": [],
+  "not_eligible_reason_codes": [],
+  "cohort_stats": [
+    { "label": "0", "count": 196, "ratio": 0.98, "is_rare_class": false },
+    { "label": "1", "count": 4, "ratio": 0.02, "is_rare_class": true }
+  ],
+  "split_stats": [
+    { "split": "train", "total_count": 140, "rare_class_count": 3 },
+    { "split": "validation", "total_count": 30, "rare_class_count": 1 },
+    { "split": "test", "total_count": 30, "rare_class_count": 1 }
+  ],
+  "minimum_labeled_samples": 50,
+  "minimum_rare_class_samples": 5,
+  "fallback_report": null,
+  "lineage": {
+    "organization_id": "org_1",
+    "project_id": "project_1",
+    "dataset_id": "dataset_1",
+    "parent_version_id": "dataset_version_v1",
+    "candidate_dataset_version_id": "dataset_version_v2_candidate",
+    "candidate_version_artifact": null,
+    "tabular_profile_artifact": null,
+    "split_manifest_artifact": null,
+    "split_leakage_report_artifact": null,
+    "created_by_job_id": "compute_run_apply_001",
+    "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "generated_at": "2026-05-26T12:30:00Z"
+}

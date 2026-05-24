@@ -48,6 +48,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
     assert "duplicate_action_report" in pack.schemas
     assert "validation_gates_report" in pack.schemas
     assert "candidate_dataset_version" in pack.schemas
+    assert "model_impact_eligibility" in pack.schemas
     assert {example.name for example in pack.examples} == {
         "artifact_ref.basic",
         "compute_run.analyze_only",
@@ -72,6 +73,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "synthetic_dataset_report.gaussian_copula",
         "validation_gates_report.demo",
         "candidate_dataset_version.smote_proposed",
+        "model_impact_eligibility.eligible_demo",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
         "tabular_imputation_report.group_median",
@@ -106,6 +108,7 @@ def test_all_contract_examples_validate() -> None:
         "synthetic_dataset_report.gaussian_copula",
         "validation_gates_report.demo",
         "candidate_dataset_version.smote_proposed",
+        "model_impact_eligibility.eligible_demo",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
         "tabular_imputation_report.group_median",
