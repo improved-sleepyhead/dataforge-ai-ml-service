@@ -1,0 +1,324 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/synthetic_dataset_report.schema.json",
+  "title": "SyntheticDatasetReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_schema_version",
+    "method",
+    "method_version",
+    "formula",
+    "target_column",
+    "rare_class_label",
+    "source_split",
+    "random_seed",
+    "k_neighbors",
+    "sampling_strategy",
+    "feature_columns",
+    "real_total_count",
+    "real_train_count",
+    "real_train_rare_count",
+    "generated_count",
+    "class_stats",
+    "sample_lineage",
+    "sample_lineage_truncated",
+    "full_sample_lineage_count",
+    "lineage",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "smote"
+      ]
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "kind": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "lineage": {
+          "type": "object",
+          "required": [
+            "parent_version_id",
+            "job_id",
+            "config_hash",
+            "created_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "job_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "config_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "sample_lineage": {
+      "type": "object",
+      "required": [
+        "synthetic_object_id",
+        "seed_object_id",
+        "neighbor_object_id",
+        "lambda_value",
+        "formula",
+        "rare_class_label"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "synthetic_object_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "seed_object_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "neighbor_object_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "lambda_value": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "formula": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "rare_class_label": {
+          "$ref": "#/$defs/non_empty_string"
+        }
+      }
+    },
+    "class_stats": {
+      "type": "object",
+      "required": [
+        "label",
+        "real_count_in_source_split",
+        "real_count_in_majority_split",
+        "target_count_after_augmentation",
+        "generated_count",
+        "achieved_ratio"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "real_count_in_source_split": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "real_count_in_majority_split": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_count_after_augmentation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generated_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "achieved_ratio": {
+          "$ref": "#/$defs/score"
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "action_plan_id",
+        "step_id",
+        "source_dataset_version_id",
+        "candidate_dataset_version_id",
+        "created_by_job_id",
+        "config_hash",
+        "source_artifact",
+        "split_manifest",
+        "candidate_artifact",
+        "augmented_split_manifest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action_plan_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "step_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "source_dataset_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "candidate_dataset_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "created_by_job_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "split_manifest": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "candidate_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "augmented_split_manifest": {
+          "$ref": "#/$defs/artifact_ref"
+        }
+      }
+    }
+  },
+  "properties": {
+    "report_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "report_schema_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "method": {
+      "$ref": "#/$defs/method"
+    },
+    "method_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "formula": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "target_column": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "rare_class_label": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "source_split": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "random_seed": {
+      "type": "integer"
+    },
+    "k_neighbors": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sampling_strategy": {
+      "$ref": "#/$defs/score"
+    },
+    "feature_columns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
+    },
+    "excluded_columns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
+    },
+    "real_total_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "real_train_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "real_train_rare_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "generated_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "class_stats": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/class_stats"
+      }
+    },
+    "sample_lineage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sample_lineage"
+      }
+    },
+    "sample_lineage_truncated": {
+      "type": "boolean"
+    },
+    "full_sample_lineage_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -72,6 +72,10 @@
       "path": "schemas/split_leakage_report.schema.json"
     },
     {
+      "name": "synthetic_dataset_report",
+      "path": "schemas/synthetic_dataset_report.schema.json"
+    },
+    {
       "name": "tabular_profile_report",
       "path": "schemas/tabular_profile_report.schema.json"
     },
@@ -178,6 +182,11 @@
       "name": "split_leakage_report.demo",
       "schema": "split_leakage_report",
       "path": "examples/split_leakage_report.demo.json"
+    },
+    {
+      "name": "synthetic_dataset_report.smote",
+      "schema": "synthetic_dataset_report",
+      "path": "examples/synthetic_dataset_report.smote.json"
     },
     {
       "name": "tabular_profile_report.fraud",

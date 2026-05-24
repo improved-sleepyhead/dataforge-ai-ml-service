@@ -123,6 +123,14 @@ from app.domain.splits import (
     SplitManifestLineage,
     SplitStrategy,
 )
+from app.domain.synthetic import (
+    SMOTE_FORMULA,
+    SyntheticClassStats,
+    SyntheticDatasetLineage,
+    SyntheticDatasetReport,
+    SyntheticGenerationMethod,
+    SyntheticSampleLineage,
+)
 from app.domain.text_ocr import (
     PiiCategory,
     PiiFinding,
@@ -242,6 +250,12 @@ __all__ = [
     "SplitManifest",
     "SplitManifestLineage",
     "SplitStrategy",
+    "SMOTE_FORMULA",
+    "SyntheticClassStats",
+    "SyntheticDatasetLineage",
+    "SyntheticDatasetReport",
+    "SyntheticGenerationMethod",
+    "SyntheticSampleLineage",
     "TabularImputationLineage",
     "TabularImputationReport",
     "TabularProfileLineage",

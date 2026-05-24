@@ -1,0 +1,120 @@
+{
+  "report_id": "synthetic_dataset_report_001",
+  "report_schema_version": "synthetic_dataset_report.v1",
+  "method": "smote",
+  "method_version": "smote_v0",
+  "formula": "x_new = x_i + lambda * (x_nn - x_i)",
+  "target_column": "is_fraud",
+  "rare_class_label": "1",
+  "source_split": "train",
+  "random_seed": 42,
+  "k_neighbors": 5,
+  "sampling_strategy": 0.15,
+  "feature_columns": [
+    "amount",
+    "monthly_income"
+  ],
+  "excluded_columns": [
+    "object_id",
+    "is_fraud",
+    "customer_id_hash",
+    "case_id",
+    "customer_segment",
+    "manual_review_flag"
+  ],
+  "real_total_count": 200,
+  "real_train_count": 140,
+  "real_train_rare_count": 3,
+  "generated_count": 18,
+  "class_stats": [
+    {
+      "label": "1",
+      "real_count_in_source_split": 3,
+      "real_count_in_majority_split": 137,
+      "target_count_after_augmentation": 21,
+      "generated_count": 18,
+      "achieved_ratio": 0.15
+    }
+  ],
+  "sample_lineage": [
+    {
+      "synthetic_object_id": "txn_synth_000000",
+      "seed_object_id": "txn_00010",
+      "neighbor_object_id": "txn_00132",
+      "lambda_value": 0.42,
+      "formula": "x_new = x_i + lambda * (x_nn - x_i)",
+      "rare_class_label": "1"
+    }
+  ],
+  "sample_lineage_truncated": true,
+  "full_sample_lineage_count": 18,
+  "lineage": {
+    "action_plan_id": "action_plan_smote_001",
+    "step_id": "augment_rare_class_smote",
+    "source_dataset_version_id": "dataset_version_v1",
+    "candidate_dataset_version_id": "dataset_version_v2_candidate",
+    "created_by_job_id": "compute_run_apply_001",
+    "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "source_artifact": {
+      "artifact_id": "raw_transactions:aaaaaaaaaaaaaaaa",
+      "kind": "raw_transactions",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v1/transactions.csv",
+      "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "text/csv",
+      "size_bytes": 4096,
+      "schema_version": "tabular_dataset.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-24T12:00:00Z"
+      }
+    },
+    "split_manifest": {
+      "artifact_id": "split_manifest:bbbbbbbbbbbbbbbb",
+      "kind": "split_manifest",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/split_manifest.json",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "media_type": "application/json",
+      "size_bytes": 4096,
+      "schema_version": "split_manifest.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-24T12:00:00Z"
+      }
+    },
+    "candidate_artifact": {
+      "artifact_id": "candidate_tabular_dataset:dddddddddddddddd",
+      "kind": "candidate_tabular_dataset",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/candidate_with_synthetic.csv",
+      "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "media_type": "text/csv",
+      "size_bytes": 4096,
+      "schema_version": "tabular_dataset.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-24T12:00:00Z"
+      }
+    },
+    "augmented_split_manifest": {
+      "artifact_id": "split_manifest:eeeeeeeeeeeeeeee",
+      "kind": "split_manifest",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/split_manifest_augmented.json",
+      "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "media_type": "application/json",
+      "size_bytes": 4096,
+      "schema_version": "split_manifest.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-24T12:00:00Z"
+      }
+    }
+  },
+  "generated_at": "2026-05-24T12:10:00Z"
+}

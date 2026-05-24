@@ -44,6 +44,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "text_ocr_report",
     } <= set(pack.schemas)
     assert "split_leakage_report" in pack.schemas
+    assert "synthetic_dataset_report" in pack.schemas
     assert {example.name for example in pack.examples} == {
         "artifact_ref.basic",
         "compute_run.analyze_only",
@@ -63,6 +64,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "export_package.ready",
         "split_manifest.group_stratified",
         "split_leakage_report.demo",
+        "synthetic_dataset_report.smote",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
         "tabular_imputation_report.group_median",
@@ -92,6 +94,7 @@ def test_all_contract_examples_validate() -> None:
         "export_package.ready",
         "split_manifest.group_stratified",
         "split_leakage_report.demo",
+        "synthetic_dataset_report.smote",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
         "tabular_imputation_report.group_median",
