@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.115,<1.0",
     "jsonschema>=4.22,<5.0",
     "pydantic>=2.8,<3.0",
+    "scikit-learn>=1.5,<2.0",
 ]
 
 [project.optional-dependencies]
@@ -46,3 +47,7 @@ python_version = "3.11"
 packages = ["app"]
 strict = true
 warn_unused_configs = true
+
+[[tool.mypy.overrides]]
+module = ["sklearn.*"]
+ignore_missing_imports = true

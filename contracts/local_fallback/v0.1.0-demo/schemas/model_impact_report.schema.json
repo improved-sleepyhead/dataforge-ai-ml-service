@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/model_impact_report.schema.json",
+  "title": "ModelImpactReport",
+  "type": "object",
+  "required": [
+    "report_id","report_schema_version","metric_library","metric_library_version",
+    "verdict","verdict_reason_codes","baseline_metrics","candidate_metrics",
+    "rare_class_recall_before","rare_class_recall_after","rare_class_recall_delta",
+    "macro_f1_before","macro_f1_after","macro_f1_delta",
+    "weighted_f1_before","weighted_f1_after","weighted_f1_delta",
+    "tstr_trts","baseline_model_config","candidate_model_config",
+    "lineage","generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "non_empty_string": { "type": "string", "minLength": 1 },
+    "score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "verdict": {
+      "type": "string",
+      "enum": ["improved","requires_review","degraded","rejected"]
+    },
+    "synthetic_utility_status": {
+      "type": "string",
+      "enum": ["recommended","requires_review","rejected","not_applicable"]
+    },
+    "metric_status": {
+      "type": "string",
+      "enum": ["available","not_applicable"]
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": ["artifact_id","kind","uri","hash","media_type","size_bytes","schema_version","lineage"],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/non_empty_string" },
+        "kind": { "$ref": "#/$defs/non_empty_string" },
+        "uri": { "type": "string", "pattern": "^s3://[^\\s]+$" },
+        "hash": { "$ref": "#/$defs/sha256" },
+        "media_type": { "$ref": "#/$defs/non_empty_string" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "schema_version": { "$ref": "#/$defs/non_empty_string" },
+        "lineage": {
+          "type": "object",
+          "required": ["parent_version_id","job_id","config_hash","created_at"],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": { "$ref": "#/$defs/non_empty_string" },
+            "job_id": { "$ref": "#/$defs/non_empty_string" },
+            "config_hash": { "$ref": "#/$defs/sha256" },
+            "created_at": { "type": "string", "format": "date-time" }
+          }
+        }
+      }
+    },
+    "confusion_matrix_cell": {
+      "type": "object",
+      "required": ["true_label","predicted_label","count"],
+      "additionalProperties": false,
+      "properties": {
+        "true_label": { "$ref": "#/$defs/non_empty_string" },
+        "predicted_label": { "$ref": "#/$defs/non_empty_string" },
+        "count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "classification_metrics": {
+      "type": "object",
+      "required": [
+        "rare_class_label","rare_class_recall","rare_class_precision",
+        "macro_f1","weighted_f1","confusion_matrix","sample_count"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rare_class_label": { "$ref": "#/$defs/non_empty_string" },
+        "rare_class_recall": { "$ref": "#/$defs/score" },
+        "rare_class_precision": { "$ref": "#/$defs/score" },
+        "macro_f1": { "$ref": "#/$defs/score" },
+        "weighted_f1": { "$ref": "#/$defs/score" },
+        "pr_auc": { "anyOf": [ { "$ref": "#/$defs/score" }, { "type": "null" } ] },
+        "pr_auc_status": { "$ref": "#/$defs/metric_status" },
+        "pr_auc_reason": { "type": ["string","null"] },
+        "confusion_matrix": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/confusion_matrix_cell" }
+        },
+        "sample_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "tstr_trts": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "$ref": "#/$defs/metric_status" },
+        "reason": { "type": ["string","null"] },
+        "tstr_metrics": { "anyOf": [ { "$ref": "#/$defs/classification_metrics" }, { "type": "null" } ] },
+        "trts_metrics": { "anyOf": [ { "$ref": "#/$defs/classification_metrics" }, { "type": "null" } ] },
+        "tstr_macro_f1_drop": { "type": ["number","null"] },
+        "tstr_macro_f1_threshold": { "type": ["number","null"] },
+        "trts_macro_f1_delta": { "type": ["number","null"] },
+        "trts_unstable_threshold": { "type": ["number","null"] }
+      }
+    },
+    "baseline_model_config": {
+      "type": "object",
+      "required": [
+        "algorithm","library","library_version","feature_columns",
+        "target_column","random_seed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "$ref": "#/$defs/non_empty_string" },
+        "library": { "$ref": "#/$defs/non_empty_string" },
+        "library_version": { "$ref": "#/$defs/non_empty_string" },
+        "hyperparameters": {
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              { "type": "string" },
+              { "type": "boolean" },
+              { "type": "integer" },
+              { "type": "number" }
+            ]
+          }
+        },
+        "feature_columns": { "type": "array", "items": { "$ref": "#/$defs/non_empty_string" } },
+        "target_column": { "$ref": "#/$defs/non_empty_string" },
+        "excluded_columns": { "type": "array", "items": { "$ref": "#/$defs/non_empty_string" } },
+        "random_seed": { "type": "integer" }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "dataset_id","parent_version_id","candidate_dataset_version_id",
+        "created_by_job_id","config_hash"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "organization_id": { "anyOf": [ { "$ref": "#/$defs/non_empty_string" }, { "type": "null" } ] },
+        "project_id": { "anyOf": [ { "$ref": "#/$defs/non_empty_string" }, { "type": "null" } ] },
+        "dataset_id": { "$ref": "#/$defs/non_empty_string" },
+        "parent_version_id": { "$ref": "#/$defs/non_empty_string" },
+        "candidate_dataset_version_id": { "$ref": "#/$defs/non_empty_string" },
+        "candidate_version_artifact": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "eligibility_report_artifact": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "source_split_manifest": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "candidate_split_manifest": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "validation_gates_report_artifact": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "synthetic_dataset_report_artifact": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "created_by_job_id": { "$ref": "#/$defs/non_empty_string" },
+        "config_hash": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "properties": {
+    "report_id": { "$ref": "#/$defs/non_empty_string" },
+    "report_schema_version": { "$ref": "#/$defs/non_empty_string" },
+    "metric_library": { "$ref": "#/$defs/non_empty_string" },
+    "metric_library_version": { "$ref": "#/$defs/non_empty_string" },
+    "verdict": { "$ref": "#/$defs/verdict" },
+    "verdict_reason_codes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/non_empty_string" }
+    },
+    "notes": { "type": ["string","null"] },
+    "baseline_metrics": { "$ref": "#/$defs/classification_metrics" },
+    "candidate_metrics": { "$ref": "#/$defs/classification_metrics" },
+    "rare_class_recall_before": { "$ref": "#/$defs/score" },
+    "rare_class_recall_after": { "$ref": "#/$defs/score" },
+    "rare_class_recall_delta": { "type": "number" },
+    "macro_f1_before": { "$ref": "#/$defs/score" },
+    "macro_f1_after": { "$ref": "#/$defs/score" },
+    "macro_f1_delta": { "type": "number" },
+    "weighted_f1_before": { "$ref": "#/$defs/score" },
+    "weighted_f1_after": { "$ref": "#/$defs/score" },
+    "weighted_f1_delta": { "type": "number" },
+    "pr_auc_before": { "anyOf": [ { "$ref": "#/$defs/score" }, { "type": "null" } ] },
+    "pr_auc_after": { "anyOf": [ { "$ref": "#/$defs/score" }, { "type": "null" } ] },
+    "pr_auc_delta": { "type": ["number","null"] },
+    "pr_auc_status": { "$ref": "#/$defs/metric_status" },
+    "pr_auc_reason": { "type": ["string","null"] },
+    "tstr_trts": { "$ref": "#/$defs/tstr_trts" },
+    "synthetic_utility_status": { "$ref": "#/$defs/synthetic_utility_status" },
+    "synthetic_utility_reason_codes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/non_empty_string" }
+    },
+    "baseline_model_config": { "$ref": "#/$defs/baseline_model_config" },
+    "candidate_model_config": { "$ref": "#/$defs/baseline_model_config" },
+    "lineage": { "$ref": "#/$defs/lineage" },
+    "generated_at": { "type": "string", "format": "date-time" }
+  }
+}

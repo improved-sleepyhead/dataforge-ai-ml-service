@@ -92,6 +92,10 @@
       "path": "schemas/model_impact_eligibility.schema.json"
     },
     {
+      "name": "model_impact_report",
+      "path": "schemas/model_impact_report.schema.json"
+    },
+    {
       "name": "tabular_profile_report",
       "path": "schemas/tabular_profile_report.schema.json"
     },
@@ -228,6 +232,11 @@
       "name": "model_impact_eligibility.eligible_demo",
       "schema": "model_impact_eligibility",
       "path": "examples/model_impact_eligibility.eligible_demo.json"
+    },
+    {
+      "name": "model_impact_report.smote_demo",
+      "schema": "model_impact_report",
+      "path": "examples/model_impact_report.smote_demo.json"
     },
     {
       "name": "tabular_profile_report.fraud",
