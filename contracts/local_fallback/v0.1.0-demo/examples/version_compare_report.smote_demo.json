@@ -1,0 +1,250 @@
+{
+  "report_id": "version_compare_001",
+  "report_schema_version": "version_compare_report.v1",
+  "base_version_id": "dataset_version_v1",
+  "candidate_version_id": "dataset_version_v2_candidate",
+  "object_counts": {
+    "before": 100,
+    "after": 105,
+    "delta": 5
+  },
+  "changed_objects": {
+    "changed_objects_total": 9,
+    "imputed_object_count": 4,
+    "duplicate_marked_count": 0,
+    "duplicate_removed_count": 0,
+    "redacted_object_count": 0,
+    "synthetic_added_count": 5,
+    "removed_or_blocked_count": 0
+  },
+  "imputed_fields": [
+    {
+      "column": "monthly_income",
+      "method": "group_median",
+      "before_missing_count": 4,
+      "after_missing_count": 0,
+      "imputed_count": 4
+    }
+  ],
+  "pii_risk": {
+    "status": "available",
+    "not_applicable_reason": null,
+    "pii_record_count_before": 6,
+    "pii_record_count_after": 6,
+    "pii_record_count_delta": 0,
+    "redacted_record_count_before": 0,
+    "redacted_record_count_after": 6,
+    "unredacted_pii_record_count_before": 6,
+    "unredacted_pii_record_count_after": 0
+  },
+  "duplicate_counts": {
+    "status": "available",
+    "not_applicable_reason": null,
+    "duplicate_pair_count_before": 4,
+    "duplicate_pair_count_after": 0,
+    "duplicate_pair_count_delta": -4
+  },
+  "class_balance": {
+    "status": "available",
+    "not_applicable_reason": null,
+    "target_column": "is_fraud",
+    "rare_class_label": "1",
+    "rare_class_count_before": 5,
+    "rare_class_count_after": 10,
+    "rare_class_ratio_before": 0.05,
+    "rare_class_ratio_after": 0.0952,
+    "rare_class_ratio_delta": 0.0452,
+    "imbalance_ratio_before": 19.0,
+    "imbalance_ratio_after": 9.5,
+    "imbalance_ratio_delta": -9.5,
+    "minority_share_before": 0.05,
+    "minority_share_after": 0.0952,
+    "classes": [
+      { "label": "0", "count_before": 95, "count_after": 95 },
+      { "label": "1", "count_before": 5, "count_after": 10 }
+    ]
+  },
+  "model_metrics": {
+    "status": "available",
+    "not_applicable_reason": null,
+    "verdict": "improved",
+    "rare_class_recall_before": 0.3,
+    "rare_class_recall_after": 0.55,
+    "rare_class_recall_delta": 0.25,
+    "macro_f1_before": 0.6,
+    "macro_f1_after": 0.7,
+    "macro_f1_delta": 0.1,
+    "weighted_f1_before": 0.85,
+    "weighted_f1_after": 0.88,
+    "weighted_f1_delta": 0.03,
+    "pr_auc_before": 0.45,
+    "pr_auc_after": 0.55,
+    "pr_auc_delta": 0.1,
+    "pr_auc_status": "available",
+    "pr_auc_reason": null,
+    "model_impact_report": {
+      "artifact_id": "model_impact_report:eeeeeeeeeeeeeeee",
+      "kind": "model_impact_report",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/model_impact_report.json",
+      "hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "media_type": "application/json",
+      "size_bytes": 4096,
+      "schema_version": "model_impact_report.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-27T13:00:00Z"
+      }
+    }
+  },
+  "score": {
+    "status": "available",
+    "not_applicable_reason": null,
+    "policy_version": "dataforge_score_v0",
+    "formula": "DataForgeScore = 100 * (w_c * Completeness + w_v * Validity + w_u * Uniqueness + w_b * Balance + w_p * PrivacySafety + w_m * ModelReadiness + w_l * LineageCompleteness) - Penalties",
+    "raw_score_before": 62.5,
+    "raw_score_after": 84.2,
+    "raw_score_delta": 21.7,
+    "value_before": 0.625,
+    "value_after": 0.842,
+    "value_delta": 0.217,
+    "components": [
+      {
+        "component": "balance",
+        "weight": 0.15,
+        "value_before": 0.42,
+        "value_after": 0.65,
+        "weighted_before": 0.063,
+        "weighted_after": 0.0975,
+        "delta": 0.23
+      },
+      {
+        "component": "completeness",
+        "weight": 0.15,
+        "value_before": 0.92,
+        "value_after": 1.0,
+        "weighted_before": 0.138,
+        "weighted_after": 0.15,
+        "delta": 0.08
+      },
+      {
+        "component": "lineage_completeness",
+        "weight": 0.1,
+        "value_before": 1.0,
+        "value_after": 1.0,
+        "weighted_before": 0.1,
+        "weighted_after": 0.1,
+        "delta": 0.0
+      },
+      {
+        "component": "model_readiness",
+        "weight": 0.15,
+        "value_before": 1.0,
+        "value_after": 1.0,
+        "weighted_before": 0.15,
+        "weighted_after": 0.15,
+        "delta": 0.0
+      },
+      {
+        "component": "privacy_safety",
+        "weight": 0.18,
+        "value_before": 0.4,
+        "value_after": 1.0,
+        "weighted_before": 0.072,
+        "weighted_after": 0.18,
+        "delta": 0.6
+      },
+      {
+        "component": "uniqueness",
+        "weight": 0.12,
+        "value_before": 0.92,
+        "value_after": 1.0,
+        "weighted_before": 0.1104,
+        "weighted_after": 0.12,
+        "delta": 0.08
+      },
+      {
+        "component": "validity",
+        "weight": 0.15,
+        "value_before": 0.95,
+        "value_after": 1.0,
+        "weighted_before": 0.1425,
+        "weighted_after": 0.15,
+        "delta": 0.05
+      }
+    ],
+    "penalties": [
+      {
+        "reason_code": "severe_class_imbalance",
+        "value_before": -10.0,
+        "value_after": 0.0,
+        "applied_before": true,
+        "applied_after": false
+      },
+      {
+        "reason_code": "unmasked_pii",
+        "value_before": -30.0,
+        "value_after": 0.0,
+        "applied_before": true,
+        "applied_after": false
+      }
+    ],
+    "readiness_status_before": "ready_with_warnings",
+    "readiness_status_after": "ready_for_export"
+  },
+  "validation_gates": {
+    "overall_status": "passed",
+    "candidate_status": "ok",
+    "raw_artifact_unchanged": true,
+    "blocker_present": false,
+    "blocker_gate_types": [],
+    "block_export": false,
+    "block_model_evaluation": false,
+    "block_training": false,
+    "blocker_reason_codes": [],
+    "validation_gates_report": {
+      "artifact_id": "validation_gates_report:dddddddddddddddd",
+      "kind": "validation_gates_report",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/validation_gates_report.json",
+      "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "media_type": "application/json",
+      "size_bytes": 1024,
+      "schema_version": "validation_gates_report.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-25T12:10:00Z"
+      }
+    }
+  },
+  "action_plan_id": "action_plan_smote_001",
+  "lineage": {
+    "organization_id": "org_1",
+    "project_id": "project_1",
+    "dataset_id": "dataset_1",
+    "parent_version_id": "dataset_version_v1",
+    "candidate_dataset_version_id": "dataset_version_v2_candidate",
+    "candidate_version_artifact": {
+      "artifact_id": "candidate_dataset_version:aaaaaaaaaaaaaaaa",
+      "kind": "candidate_dataset_version",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/candidate_dataset_version.json",
+      "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "application/json",
+      "size_bytes": 2048,
+      "schema_version": "candidate_dataset_version.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-25T12:15:00Z"
+      }
+    },
+    "action_plan_id": "action_plan_smote_001",
+    "decision_report_id": "decision_report_smote",
+    "created_by_job_id": "compute_run_apply_001",
+    "config_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+  },
+  "generated_at": "2026-05-28T13:00:00Z"
+}

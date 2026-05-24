@@ -97,6 +97,15 @@ from app.kernel.model_impact_eligibility import (
     ModelImpactEligibilityError,
     check_model_impact_eligibility,
 )
+from app.kernel.version_compare import (
+    VERSION_COMPARE_REPORT_FORMAT,
+    VERSION_COMPARE_REPORT_KIND,
+    VERSION_COMPARE_REPORT_MEDIA_TYPE,
+    BuildVersionCompareRequest,
+    BuildVersionCompareResult,
+    VersionCompareBuilderError,
+    build_version_compare_report,
+)
 
 __all__ = [
     "DATAFORGE_SCORE_FORMULA",
@@ -180,4 +189,11 @@ __all__ = [
     "load_decision_policy_v0",
     "load_reason_code_registry",
     "recommend_from_evidence",
+    "VERSION_COMPARE_REPORT_FORMAT",
+    "VERSION_COMPARE_REPORT_KIND",
+    "VERSION_COMPARE_REPORT_MEDIA_TYPE",
+    "BuildVersionCompareRequest",
+    "BuildVersionCompareResult",
+    "VersionCompareBuilderError",
+    "build_version_compare_report",
 ]
