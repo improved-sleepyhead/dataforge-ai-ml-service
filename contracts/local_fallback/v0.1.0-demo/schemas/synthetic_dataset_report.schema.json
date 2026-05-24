@@ -1,0 +1,557 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/synthetic_dataset_report.schema.json",
+  "title": "SyntheticDatasetReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_schema_version",
+    "method",
+    "method_version",
+    "augmentation_kind",
+    "formula",
+    "target_column",
+    "source_split",
+    "random_seed",
+    "k_neighbors",
+    "sampling_strategy",
+    "feature_columns",
+    "real_total_count",
+    "real_train_count",
+    "real_train_rare_count",
+    "generated_count",
+    "class_stats",
+    "sample_lineage",
+    "sample_lineage_truncated",
+    "full_sample_lineage_count",
+    "lineage",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "method": {
+      "type": "string",
+      "enum": [
+        "smote",
+        "gaussian_copula"
+      ]
+    },
+    "augmentation_kind": {
+      "type": "string",
+      "enum": [
+        "targeted_rare_class",
+        "distribution_level"
+      ]
+    },
+    "validation_status": {
+      "type": "string",
+      "enum": [
+        "passed",
+        "failed",
+        "not_applicable"
+      ]
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "kind": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "lineage": {
+          "type": "object",
+          "required": [
+            "parent_version_id",
+            "job_id",
+            "config_hash",
+            "created_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "job_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "config_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "sample_lineage": {
+      "type": "object",
+      "required": [
+        "synthetic_object_id",
+        "method",
+        "formula"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "synthetic_object_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "method": {
+          "$ref": "#/$defs/method"
+        },
+        "formula": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "seed_object_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "neighbor_object_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "lambda_value": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0.0,
+              "maximum": 1.0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latent_draw_index": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rare_class_label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "class_stats": {
+      "type": "object",
+      "required": [
+        "label",
+        "real_count_in_source_split",
+        "real_count_in_majority_split",
+        "target_count_after_augmentation",
+        "generated_count",
+        "achieved_ratio"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "real_count_in_source_split": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "real_count_in_majority_split": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target_count_after_augmentation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generated_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "achieved_ratio": {
+          "$ref": "#/$defs/score"
+        }
+      }
+    },
+    "validation_check": {
+      "type": "object",
+      "required": [
+        "check",
+        "status",
+        "findings_count",
+        "blocker"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "check": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "status": {
+          "$ref": "#/$defs/validation_status"
+        },
+        "pass_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/score"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "findings_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blocker": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "validation_report": {
+      "type": "object",
+      "required": [
+        "overall_passed",
+        "blocker_present",
+        "checks"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "overall_passed": {
+          "type": "boolean"
+        },
+        "blocker_present": {
+          "type": "boolean"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/validation_check"
+          }
+        }
+      }
+    },
+    "column_distribution_transform": {
+      "type": "object",
+      "required": [
+        "column",
+        "method",
+        "sample_count",
+        "quantile_levels",
+        "quantile_values"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "method": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "sample_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "quantile_levels": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "quantile_values": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "gaussian_copula_artifacts": {
+      "type": "object",
+      "required": [
+        "column_distribution_transforms",
+        "latent_normal_mean",
+        "latent_normal_covariance_row_major",
+        "latent_normal_cholesky_row_major",
+        "correlation_matrix_row_major",
+        "correlation_matrix_size",
+        "inverse_transform_metadata",
+        "ridge_epsilon",
+        "cdf_clamp_epsilon"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "column_distribution_transforms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/column_distribution_transform"
+          }
+        },
+        "latent_normal_mean": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "latent_normal_covariance_row_major": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "latent_normal_cholesky_row_major": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "correlation_matrix_row_major": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "correlation_matrix_size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inverse_transform_metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "ridge_epsilon": {
+          "type": "number",
+          "minimum": 0.0
+        },
+        "cdf_clamp_epsilon": {
+          "type": "number",
+          "minimum": 0.0
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "action_plan_id",
+        "step_id",
+        "source_dataset_version_id",
+        "candidate_dataset_version_id",
+        "created_by_job_id",
+        "config_hash",
+        "source_artifact",
+        "split_manifest",
+        "candidate_artifact",
+        "augmented_split_manifest"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action_plan_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "step_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "source_dataset_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "candidate_dataset_version_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "created_by_job_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "split_manifest": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "candidate_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "augmented_split_manifest": {
+          "$ref": "#/$defs/artifact_ref"
+        }
+      }
+    }
+  },
+  "properties": {
+    "report_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "report_schema_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "method": {
+      "$ref": "#/$defs/method"
+    },
+    "method_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "augmentation_kind": {
+      "$ref": "#/$defs/augmentation_kind"
+    },
+    "formula": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "target_column": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "rare_class_label": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_split": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "random_seed": {
+      "type": "integer"
+    },
+    "k_neighbors": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sampling_strategy": {
+      "$ref": "#/$defs/score"
+    },
+    "feature_columns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
+    },
+    "excluded_columns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/non_empty_string"
+      }
+    },
+    "real_total_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "real_train_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "real_train_rare_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "generated_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "class_stats": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/class_stats"
+      }
+    },
+    "sample_lineage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sample_lineage"
+      }
+    },
+    "sample_lineage_truncated": {
+      "type": "boolean"
+    },
+    "full_sample_lineage_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "synthetic_validation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/validation_report"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "gaussian_copula_artifacts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/gaussian_copula_artifacts"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
