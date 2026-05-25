@@ -61,6 +61,13 @@ from app.orchestration.apply_assets import (
     APPLY_ASSET_KEYS,
     APPLY_ASSETS,
 )
+from app.orchestration.cancellation import (
+    CancellationToken,
+    RetryMetadata,
+    RunCancelledError,
+    RunFailureReason,
+    classify_failure,
+)
 from app.orchestration.definitions import build_definitions
 from app.orchestration.resources import ComputeResources
 from app.orchestration.run_context import ApplyRunContext, RunContextResource
@@ -79,6 +86,7 @@ class ApplyWorkflowResult:
     action_plan_id: str
     action_plan_hash: Sha256Digest
     idempotency_key: Sha256Digest
+    retry_metadata: RetryMetadata
     candidate_artifact_uri: str | None
     candidate_artifact_hash: Sha256Digest | None
     synthetic_artifact_uri: str | None
@@ -107,6 +115,8 @@ def launch_apply_actions_workflow(
     policy_versions: CandidatePolicyVersions | None = None,
     require_model_impact_eligibility: bool = False,
     input_artifacts: tuple[ArtifactRef, ...] = (),
+    cancellation_token: CancellationToken | None = None,
+    attempt_number: int = 1,
 ) -> ApplyWorkflowResult:
     """Materialize the APPLY asset graph for an approved ActionPlan.
 
@@ -114,6 +124,20 @@ def launch_apply_actions_workflow(
     the same configuration the analyze launcher uses. It refuses to
     proceed without ``approval_metadata`` because the API layer only
     forwards approved requests.
+
+    When ``cancellation_token`` is provided the launcher checks it
+    before and after Dagster materialization. A triggered token raises
+    :class:`RunCancelledError` after emitting a CANCELLED stage event,
+    so the platform UI shows the run as terminated rather than hanging.
+    Cancelled or failed runs MUST NOT publish a candidate artifact: the
+    launcher returns no result and the per-asset placeholders, even if
+    already registered, are not promoted because there is no
+    ``ApplyWorkflowResult`` returned to the caller.
+
+    Failures during Dagster materialization are classified into a stable
+    :class:`RunFailureReason`, surfaced as ``recoverable=true|false`` in
+    the FAILED stage event, and re-raised as :class:`RuntimeError` so
+    callers cannot silently treat a failed run as ACCEPTED.
     """
     if request.approval_metadata is None:
         raise ValueError(
@@ -163,6 +187,18 @@ def launch_apply_actions_workflow(
         dataset_id=request.dataset_id,
         dataset_version_id=apply_context.proposed_version_name,
     )
+
+    bridge = RunStatusBridge(fake_platform=fake_platform)
+    if cancellation_token is not None and cancellation_token.is_cancelled:
+        bridge.emit_cancelled(run_context=run_context, progress=0.0)
+        raise RunCancelledError(
+            reason_code=cancellation_token.reason_code,
+            message=(
+                "APPLY_SELECTED_ACTIONS workflow cancelled before "
+                f"materialization: {cancellation_token.reason_code}"
+            ),
+        )
+
     definitions = build_definitions(
         compute_resources=_build_in_memory_resources(
             config=config,
@@ -178,20 +214,42 @@ def launch_apply_actions_workflow(
 
     expected_outputs = tuple(key.path[-1] for key in APPLY_ASSET_KEYS)
     selection = AssetSelection.assets(*expected_outputs)
-    bridge = RunStatusBridge(fake_platform=fake_platform)
     bridge.emit_started(run_context=run_context)
 
-    result = materialize(
-        APPLY_ASSETS,
-        selection=selection,
-        resources=definitions.resources,
-        raise_on_error=False,
-    )
-    if not result.success:
+    try:
+        result = materialize(
+            APPLY_ASSETS,
+            selection=selection,
+            resources=definitions.resources,
+            raise_on_error=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - boundary catches Dagster failures
+        reason = classify_failure(str(exc))
         bridge.emit_failed(
             run_context=run_context,
             progress=0.0,
-            error_code="APPLY_WORKFLOW_FAILED",
+            error_code=reason.value,
+        )
+        raise RuntimeError(
+            f"APPLY_SELECTED_ACTIONS workflow materialization raised: {reason.value}"
+        ) from exc
+
+    if cancellation_token is not None and cancellation_token.is_cancelled:
+        bridge.emit_cancelled(run_context=run_context, progress=0.5)
+        raise RunCancelledError(
+            reason_code=cancellation_token.reason_code,
+            message=(
+                "APPLY_SELECTED_ACTIONS workflow cancelled after "
+                f"materialization: {cancellation_token.reason_code}"
+            ),
+        )
+
+    if not result.success:
+        reason = RunFailureReason.INTERNAL_ERROR
+        bridge.emit_failed(
+            run_context=run_context,
+            progress=0.0,
+            error_code=reason.value,
         )
         raise RuntimeError("APPLY_SELECTED_ACTIONS workflow materialization failed")
 
@@ -229,6 +287,7 @@ def launch_apply_actions_workflow(
         action_plan_id=request.action_plan.action_plan_id,
         action_plan_hash=action_plan_hash,
         idempotency_key=idempotency_key,
+        retry_metadata=RetryMetadata(attempt_number=attempt_number),
         candidate_artifact_uri=candidate_uri,
         candidate_artifact_hash=candidate_hash,
         synthetic_artifact_uri=synthetic_uri,

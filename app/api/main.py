@@ -18,6 +18,8 @@ from app.api.schemas import (
     ActionPlanPreviewResponse,
     AnalyzeDatasetAcceptedResponse,
     AnalyzeDatasetRequest,
+    CancelJobRequest,
+    CancelJobResponse,
     HealthResponse,
 )
 from app.api.security import PlatformIdentityDep, ServiceSignatureError
@@ -33,6 +35,7 @@ from app.kernel import (
 from app.kernel.config import ServiceConfig, load_config
 from app.orchestration.analyze_workflow import launch_analyze_dataset_workflow
 from app.orchestration.apply_workflow import launch_apply_actions_workflow
+from app.orchestration.cancellation import CancellationRegistry, RunCancelledError
 from app.plugin_sdk import CapabilitiesResponse
 from app.plugins import build_static_plugin_manager
 from app.validation.contracts import load_contract_pack
@@ -57,6 +60,7 @@ def create_app(
     )
     application.state.service_config = config
     application.state.fake_platform_client = FakePlatformMetadataClient()
+    application.state.cancellation_registry = CancellationRegistry()
 
     @application.middleware("http")
     async def safe_unhandled_error_middleware(
@@ -141,6 +145,20 @@ def create_app(
             details={"reason_code": exc.reason_code, **exc.details},
         )
 
+    @application.exception_handler(RunCancelledError)
+    async def run_cancelled_exception_handler(
+        request: Request,
+        exc: RunCancelledError,
+    ) -> JSONResponse:
+        return error_json_response(
+            status_code=409,
+            code=ErrorCode.INVALID_JOB_PAYLOAD,
+            message="Compute run was cancelled before completion.",
+            recoverable=True,
+            stage="api.compute_run_cancelled",
+            details={"reason_code": exc.reason_code},
+        )
+
     @application.get(
         f"{API_PREFIX}/health",
         response_model=HealthResponse,
@@ -177,11 +195,17 @@ def create_app(
         request: Request,
     ) -> AnalyzeDatasetAcceptedResponse:
         del identity
-        result = launch_analyze_dataset_workflow(
-            request=payload,
-            config=_resolve_service_config(request),
-            fake_platform=request.app.state.fake_platform_client,
-        )
+        registry: CancellationRegistry = request.app.state.cancellation_registry
+        token = registry.register(platform_job_id=payload.platform_job_id)
+        try:
+            result = launch_analyze_dataset_workflow(
+                request=payload,
+                config=_resolve_service_config(request),
+                fake_platform=request.app.state.fake_platform_client,
+                cancellation_token=token,
+            )
+        finally:
+            registry.discard(platform_job_id=payload.platform_job_id)
         return AnalyzeDatasetAcceptedResponse(
             status=ComputeRunStatus.ACCEPTED,
             job_id=result.job_id,
@@ -246,12 +270,18 @@ def create_app(
                 approval_metadata=payload.approval_metadata,
             )
         )
-        result = launch_apply_actions_workflow(
-            request=payload,
-            action_plan_hash=action_plan_hash,
-            config=_resolve_service_config(request),
-            fake_platform=request.app.state.fake_platform_client,
-        )
+        registry: CancellationRegistry = request.app.state.cancellation_registry
+        token = registry.register(platform_job_id=payload.platform_job_id)
+        try:
+            result = launch_apply_actions_workflow(
+                request=payload,
+                action_plan_hash=action_plan_hash,
+                config=_resolve_service_config(request),
+                fake_platform=request.app.state.fake_platform_client,
+                cancellation_token=token,
+            )
+        finally:
+            registry.discard(platform_job_id=payload.platform_job_id)
         return ActionPlanExecuteApprovedResponse(
             status=ComputeRunStatus.ACCEPTED,
             job_id=payload.platform_job_id,
@@ -270,6 +300,42 @@ def create_app(
             model_impact_artifact_uri=result.model_impact_artifact_uri,
             export_package_artifact_uri=result.export_package_artifact_uri,
             mutates_dataset=True,
+        )
+
+    @application.post(
+        f"{API_PREFIX}/jobs/{{platform_job_id}}/cancel",
+        status_code=202,
+        response_model=CancelJobResponse,
+        responses={
+            401: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["jobs"],
+    )
+    async def cancel_job(
+        platform_job_id: str,
+        payload: CancelJobRequest,
+        identity: PlatformIdentityDep,
+        request: Request,
+    ) -> CancelJobResponse:
+        del identity
+        if payload.platform_job_id != platform_job_id:
+            return CancelJobResponse(
+                status=ComputeRunStatus.SKIPPED,
+                job_id=platform_job_id,
+                reason_code="platform_job_id_mismatch",
+                cancellation_accepted=False,
+            )
+        registry: CancellationRegistry = request.app.state.cancellation_registry
+        accepted = registry.cancel(
+            platform_job_id=platform_job_id,
+            reason_code=payload.reason_code,
+        )
+        return CancelJobResponse(
+            status=ComputeRunStatus.CANCELLED if accepted else ComputeRunStatus.SKIPPED,
+            job_id=platform_job_id,
+            reason_code=payload.reason_code,
+            cancellation_accepted=accepted,
         )
 
     if include_test_error_route:
