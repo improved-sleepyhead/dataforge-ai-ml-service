@@ -81,6 +81,15 @@ from app.kernel.export_package import (
     ExportPackageBuilderError,
     build_export_package,
 )
+from app.kernel.idempotency import (
+    AnalyzeIdempotencyInputs,
+    ApplyIdempotencyInputs,
+    JobIdempotencyKeyError,
+    PluginVersionFootprint,
+    collect_artifact_hashes,
+    compute_analyze_idempotency_key,
+    compute_apply_idempotency_key,
+)
 from app.kernel.lineage import (
     LINEAGE_REPORT_FORMAT,
     LINEAGE_REPORT_KIND,
@@ -146,6 +155,13 @@ __all__ = [
     "DATAFORGE_SCORE_POLICY_VERSION",
     "DATAFORGE_SCORE_WEIGHTS",
     "ACTION_PLAN_SCHEMA_VERSION",
+    "AnalyzeIdempotencyInputs",
+    "ApplyIdempotencyInputs",
+    "JobIdempotencyKeyError",
+    "PluginVersionFootprint",
+    "collect_artifact_hashes",
+    "compute_analyze_idempotency_key",
+    "compute_apply_idempotency_key",
     "DECISION_REPORT_SCHEMA_VERSION",
     "DECISION_POLICY_VERSION",
     "IMPUTATION_POLICY_COMPONENT_WEIGHTS",

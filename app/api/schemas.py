@@ -21,6 +21,28 @@ class HealthResponse(BaseModel):
     contract_pack_version: NonEmptyStr
 
 
+class CancelJobRequest(BaseModel):
+    """Signed platform request to cancel a running compute job."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    platform_job_id: NonEmptyStr
+    organization_id: NonEmptyStr
+    project_id: NonEmptyStr
+    reason_code: NonEmptyStr = "platform_user_cancelled"
+
+
+class CancelJobResponse(BaseModel):
+    """Cancellation acknowledgement; the launcher emits CANCELLED through the bridge."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    status: Literal[ComputeRunStatus.CANCELLED, ComputeRunStatus.SKIPPED]
+    job_id: NonEmptyStr
+    reason_code: NonEmptyStr
+    cancellation_accepted: bool
+
+
 class AnalyzeDatasetRequest(BaseModel):
     """Signed platform request to start an ANALYZE_ONLY dataset workflow."""
 
@@ -45,6 +67,7 @@ class AnalyzeDatasetAcceptedResponse(BaseModel):
     status_url: NonEmptyStr
     expected_outputs: tuple[NonEmptyStr, ...]
     materialized_assets: tuple[NonEmptyStr, ...]
+    idempotency_key: Sha256Digest
     mutates_dataset: Literal[False] = False
 
 
@@ -103,4 +126,14 @@ class ActionPlanExecuteApprovedResponse(BaseModel):
     action_plan_id: NonEmptyStr
     action_plan_hash: Sha256Digest
     accepted_step_ids: tuple[NonEmptyStr, ...]
+    status_url: NonEmptyStr
+    expected_outputs: tuple[NonEmptyStr, ...]
+    materialized_assets: tuple[NonEmptyStr, ...]
+    idempotency_key: Sha256Digest
+    candidate_artifact_uri: S3Uri | None = None
+    candidate_artifact_hash: Sha256Digest | None = None
+    synthetic_artifact_uri: S3Uri | None = None
+    synthetic_status: NonEmptyStr
+    model_impact_artifact_uri: S3Uri | None = None
+    export_package_artifact_uri: S3Uri | None = None
     mutates_dataset: Literal[True] = True

@@ -1,9 +1,15 @@
 """Dagster orchestration runtime for the DataForge AI compute plane."""
 
 from app.orchestration.apply_assets import (
+    APPLY_ARTIFACT_FORMAT,
+    APPLY_ARTIFACT_KINDS,
+    APPLY_ARTIFACT_MEDIA_TYPE,
+    APPLY_ARTIFACT_SCHEMA_VERSIONS,
     APPLY_ASSET_KEYS,
     APPLY_ASSETS,
     APPLY_GROUP,
+    asset_kind_for,
+    schema_version_for,
 )
 from app.orchestration.assets import (
     ANALYZE_ASSET_KEYS,
@@ -11,6 +17,17 @@ from app.orchestration.assets import (
     ANALYZE_GROUP,
     BASE_ANALYZE_ASSET_KEYS,
     PREDICTION_ANALYZE_ASSET_KEYS,
+)
+from app.orchestration.cancellation import (
+    CancellationRegistry,
+    CancellationToken,
+    RetryMetadata,
+    RunCancelledError,
+    RunFailureReason,
+    classify_failure,
+    is_recoverable,
+    merge_unique_reasons,
+    recoverable_reasons,
 )
 from app.orchestration.definitions import (
     RUN_CONTEXT_RESOURCE_KEY,
@@ -45,6 +62,10 @@ __all__ = [
     "ANALYZE_ASSETS",
     "ANALYZE_GROUP",
     "ANALYZE_JOB_NAME",
+    "APPLY_ARTIFACT_FORMAT",
+    "APPLY_ARTIFACT_KINDS",
+    "APPLY_ARTIFACT_MEDIA_TYPE",
+    "APPLY_ARTIFACT_SCHEMA_VERSIONS",
     "APPLY_ASSET_KEYS",
     "APPLY_ASSETS",
     "APPLY_GROUP",
@@ -52,6 +73,8 @@ __all__ = [
     "ARTIFACT_REGISTRY_RESOURCE_KEY",
     "ApplyRunContext",
     "BASE_ANALYZE_ASSET_KEYS",
+    "CancellationRegistry",
+    "CancellationToken",
     "ComputeResources",
     "FAKE_PLATFORM_RESOURCE_KEY",
     "JobEvent",
@@ -59,15 +82,24 @@ __all__ = [
     "OBJECT_STORAGE_RESOURCE_KEY",
     "PREDICTION_ANALYZE_ASSET_KEYS",
     "RUN_CONTEXT_RESOURCE_KEY",
+    "RetryMetadata",
+    "RunCancelledError",
     "RunContext",
     "RunContextResource",
+    "RunFailureReason",
     "RunStatusBridge",
     "SERVICE_CONFIG_RESOURCE_KEY",
+    "asset_kind_for",
     "build_analyze_job",
     "build_apply_job",
     "build_definitions",
     "build_local_demo_definitions",
+    "classify_failure",
     "defs",
     "emit_stage_event",
+    "is_recoverable",
+    "merge_unique_reasons",
+    "recoverable_reasons",
     "scan_event_for_raw_pii",
+    "schema_version_for",
 ]

@@ -15,13 +15,26 @@ from app.adapters import (
     MinioObjectStorageAdapter,
     ObjectStorageScope,
 )
+from app.adapters.object_storage import ObjectStorageError
 from app.api.schemas import AnalyzeDatasetRequest
-from app.domain import ComputeRunStatus, WorkflowType
+from app.domain import ComputeRunStatus, ErrorCode, WorkflowType
 from app.kernel.config import ServiceConfig
+from app.kernel.idempotency import (
+    AnalyzeIdempotencyInputs,
+    collect_artifact_hashes,
+    compute_analyze_idempotency_key,
+)
 from app.orchestration.assets import (
     ANALYZE_ASSETS,
     BASE_ANALYZE_ASSET_KEYS,
     PREDICTION_ANALYZE_ASSET_KEYS,
+)
+from app.orchestration.cancellation import (
+    CancellationToken,
+    RetryMetadata,
+    RunCancelledError,
+    RunFailureReason,
+    classify_failure,
 )
 from app.orchestration.definitions import build_definitions
 from app.orchestration.resources import ComputeResources
@@ -38,6 +51,8 @@ class AnalyzeWorkflowResult:
     status_url: str
     expected_outputs: tuple[str, ...]
     materialized_assets: tuple[str, ...]
+    idempotency_key: str
+    retry_metadata: RetryMetadata
     mutates_dataset: bool = False
 
 
@@ -46,6 +61,8 @@ def launch_analyze_dataset_workflow(
     request: AnalyzeDatasetRequest,
     config: ServiceConfig,
     fake_platform: FakePlatformMetadataClient,
+    cancellation_token: CancellationToken | None = None,
+    attempt_number: int = 1,
 ) -> AnalyzeWorkflowResult:
     """Materialize the requested ANALYZE_ONLY asset selection in process.
 
@@ -53,9 +70,35 @@ def launch_analyze_dataset_workflow(
     in-memory adapters and a fake platform status sink, so the endpoint can
     prove request signing, status callbacks, asset selection, and no-mutation
     behavior without requiring a real Dagster daemon, backend, or MinIO.
+
+    When ``cancellation_token`` is provided the launcher checks it before
+    and after Dagster materialization; a triggered token raises
+    :class:`RunCancelledError` after emitting a CANCELLED stage event so
+    the platform UI shows the run as terminated rather than hanging.
+
+    Failures during Dagster materialization are classified into a
+    stable :class:`RunFailureReason`, surfaced as ``recoverable=true|false``
+    in the FAILED stage event, and re-raised as a :class:`RuntimeError`
+    so callers cannot silently treat a failed run as ACCEPTED.
     """
     expected_outputs = expected_analyze_outputs(
         include_predictions=bool(request.prediction_artifact_refs)
+    )
+    idempotency_key = compute_analyze_idempotency_key(
+        AnalyzeIdempotencyInputs(
+            organization_id=request.organization_id,
+            project_id=request.project_id,
+            dataset_id=request.dataset_id,
+            dataset_version_id=request.dataset_version_id,
+            input_artifact_hashes=collect_artifact_hashes(
+                request.dataset_object_refs
+            ),
+            prediction_artifact_hashes=collect_artifact_hashes(
+                request.prediction_artifact_refs
+            ),
+            config_hash=config.config_hash,
+            contract_pack_version=config.contract_pack_version,
+        )
     )
     run_context = RunContext(
         compute_run_id=f"compute_{request.platform_job_id}",
@@ -65,6 +108,18 @@ def launch_analyze_dataset_workflow(
         dataset_id=request.dataset_id,
         dataset_version_id=request.dataset_version_id,
     )
+    bridge = RunStatusBridge(fake_platform=fake_platform)
+
+    if cancellation_token is not None and cancellation_token.is_cancelled:
+        bridge.emit_cancelled(run_context=run_context, progress=0.0)
+        raise RunCancelledError(
+            reason_code=cancellation_token.reason_code,
+            message=(
+                "ANALYZE_ONLY workflow cancelled before materialization: "
+                f"{cancellation_token.reason_code}"
+            ),
+        )
+
     definitions = build_definitions(
         compute_resources=_build_in_memory_resources(
             config=config,
@@ -77,21 +132,44 @@ def launch_analyze_dataset_workflow(
         ),
     )
 
-    result = materialize(
-        ANALYZE_ASSETS,
-        selection=AssetSelection.assets(*expected_outputs),
-        resources=definitions.resources,
-        raise_on_error=False,
-    )
-    if not result.success:
-        RunStatusBridge(fake_platform=fake_platform).emit_failed(
+    try:
+        result = materialize(
+            ANALYZE_ASSETS,
+            selection=AssetSelection.assets(*expected_outputs),
+            resources=definitions.resources,
+            raise_on_error=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - boundary catches Dagster failures
+        reason = classify_failure(str(exc))
+        bridge.emit_failed(
             run_context=run_context,
             progress=0.0,
-            error_code="ANALYZE_WORKFLOW_FAILED",
+            error_code=reason.value,
+        )
+        raise RuntimeError(
+            f"ANALYZE_ONLY workflow materialization raised: {reason.value}"
+        ) from exc
+
+    if cancellation_token is not None and cancellation_token.is_cancelled:
+        bridge.emit_cancelled(run_context=run_context, progress=0.5)
+        raise RunCancelledError(
+            reason_code=cancellation_token.reason_code,
+            message=(
+                "ANALYZE_ONLY workflow cancelled after materialization: "
+                f"{cancellation_token.reason_code}"
+            ),
+        )
+
+    if not result.success:
+        reason = RunFailureReason.INTERNAL_ERROR
+        bridge.emit_failed(
+            run_context=run_context,
+            progress=0.0,
+            error_code=reason.value,
         )
         raise RuntimeError("ANALYZE_ONLY workflow materialization failed")
 
-    RunStatusBridge(fake_platform=fake_platform).emit_completed(run_context=run_context)
+    bridge.emit_completed(run_context=run_context)
     materialized_assets = tuple(
         _asset_name(event.asset_key) for event in result.get_asset_materialization_events()
     )
@@ -101,6 +179,8 @@ def launch_analyze_dataset_workflow(
         status_url=f"/api/v1/jobs/{request.platform_job_id}/status",
         expected_outputs=expected_outputs,
         materialized_assets=materialized_assets,
+        idempotency_key=idempotency_key,
+        retry_metadata=RetryMetadata(attempt_number=attempt_number),
         mutates_dataset=False,
     )
 
@@ -171,7 +251,7 @@ class _InMemoryS3Client:
         return {"ETag": "fake-etag"}
 
     def get_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
-        record = self._objects[(Bucket, Key)]
+        record = self._object(Bucket, Key)
         body = record["Body"]
         if not isinstance(body, bytes):  # pragma: no cover - defensive
             raise TypeError("InMemoryS3Client body must be bytes")
@@ -183,7 +263,7 @@ class _InMemoryS3Client:
         }
 
     def head_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
-        record = self._objects[(Bucket, Key)]
+        record = self._object(Bucket, Key)
         body = record["Body"]
         if not isinstance(body, bytes):  # pragma: no cover - defensive
             raise TypeError("InMemoryS3Client body must be bytes")
@@ -203,6 +283,15 @@ class _InMemoryS3Client:
                 continue
             contents.append({"Key": key, "Size": len(body)})
         return {"Contents": contents}
+
+    def _object(self, bucket: str, key: str) -> dict[str, Any]:
+        try:
+            return self._objects[(bucket, key)]
+        except KeyError as exc:
+            raise ObjectStorageError(
+                code=ErrorCode.ARTIFACT_NOT_FOUND,
+                message=f"missing object {bucket}/{key}",
+            ) from exc
 
 
 __all__ = [
