@@ -137,3 +137,66 @@ class ActionPlanExecuteApprovedResponse(BaseModel):
     model_impact_artifact_uri: S3Uri | None = None
     export_package_artifact_uri: S3Uri | None = None
     mutates_dataset: Literal[True] = True
+
+
+class JobStatusResponse(BaseModel):
+    """Compute run status response for ``GET /jobs/{job_id}``."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    job_id: NonEmptyStr
+    workflow_type: WorkflowType
+    status: ComputeRunStatus
+    status_url: NonEmptyStr
+    expected_outputs: tuple[NonEmptyStr, ...]
+    materialized_assets: tuple[NonEmptyStr, ...]
+    mutates_dataset: bool
+    idempotency_key: Sha256Digest
+    action_plan_id: NonEmptyStr | None = None
+    action_plan_hash: Sha256Digest | None = None
+    candidate_artifact_uri: S3Uri | None = None
+    candidate_artifact_hash: Sha256Digest | None = None
+    synthetic_artifact_uri: S3Uri | None = None
+    synthetic_status: NonEmptyStr | None = None
+    model_impact_artifact_uri: S3Uri | None = None
+    export_package_artifact_uri: S3Uri | None = None
+
+
+class ActionPlanGetResponse(BaseModel):
+    """ActionPlan record returned by ``GET /action-plans/{id}``.
+
+    Carries the preview itself plus optional execution metadata when the
+    plan has been accepted for an approved APPLY run. ``mutates_dataset``
+    stays ``False`` for plans that have not been executed yet.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    action_plan: ActionPlan
+    job_id: NonEmptyStr | None = None
+    action_plan_hash: Sha256Digest | None = None
+    accepted_step_ids: tuple[NonEmptyStr, ...] = ()
+    workflow_type: WorkflowType | None = None
+    status_url: NonEmptyStr | None = None
+    mutates_dataset: bool
+
+
+class ReviewQueueSummaryEntry(BaseModel):
+    """Privacy-safe per-queue summary used by ``GET /reports/{id}/issues``."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    queue_type: NonEmptyStr
+    item_count: int
+    raw_pii_allowed: bool
+    redacted_only: bool
+
+
+class ReportIssuesResponse(BaseModel):
+    """Aggregated issues view returned by ``GET /reports/{id}/issues``."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    report_id: NonEmptyStr
+    review_queue_summary: tuple[ReviewQueueSummaryEntry, ...]
+    total_item_count: int

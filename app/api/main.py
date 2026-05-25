@@ -14,6 +14,7 @@ from app.adapters import FakePlatformMetadataClient
 from app.api.schemas import (
     ActionPlanExecuteApprovedRequest,
     ActionPlanExecuteApprovedResponse,
+    ActionPlanGetResponse,
     ActionPlanPreviewRequest,
     ActionPlanPreviewResponse,
     AnalyzeDatasetAcceptedResponse,
@@ -21,9 +22,22 @@ from app.api.schemas import (
     CancelJobRequest,
     CancelJobResponse,
     HealthResponse,
+    JobStatusResponse,
+    ReportIssuesResponse,
+    ReviewQueueSummaryEntry,
 )
-from app.api.security import PlatformIdentityDep, ServiceSignatureError
-from app.domain import ComputeRunStatus, ErrorBody, ErrorCode, ErrorResponse, WorkflowType
+from app.api.security import PlatformIdentityDep, PlatformIdentityNoBodyDep, ServiceSignatureError
+from app.api.store import ActionPlanRecord, ComputeResultStore, JobResultRecord
+from app.domain import (
+    ComputeRunStatus,
+    DataForgeReport,
+    DecisionReport,
+    ErrorBody,
+    ErrorCode,
+    ErrorResponse,
+    VersionCompareReport,
+    WorkflowType,
+)
 from app.kernel import (
     ActionPlanExecutionError,
     ActionPlanPreviewError,
@@ -61,6 +75,7 @@ def create_app(
     application.state.service_config = config
     application.state.fake_platform_client = FakePlatformMetadataClient()
     application.state.cancellation_registry = CancellationRegistry()
+    application.state.compute_store = ComputeResultStore()
 
     @application.middleware("http")
     async def safe_unhandled_error_middleware(
@@ -206,6 +221,19 @@ def create_app(
             )
         finally:
             registry.discard(platform_job_id=payload.platform_job_id)
+        store: ComputeResultStore = request.app.state.compute_store
+        store.record_job(
+            JobResultRecord(
+                job_id=result.job_id,
+                workflow_type=WorkflowType.ANALYZE_ONLY,
+                status=ComputeRunStatus.ACCEPTED,
+                status_url=result.status_url,
+                expected_outputs=result.expected_outputs,
+                materialized_assets=result.materialized_assets,
+                idempotency_key=result.idempotency_key,
+                mutates_dataset=False,
+            )
+        )
         return AnalyzeDatasetAcceptedResponse(
             status=ComputeRunStatus.ACCEPTED,
             job_id=result.job_id,
@@ -225,6 +253,7 @@ def create_app(
     async def preview_action_plan(
         payload: ActionPlanPreviewRequest,
         identity: PlatformIdentityDep,
+        request: Request,
     ) -> ActionPlanPreviewResponse:
         del identity
         action_plan = build_action_plan_preview(
@@ -238,6 +267,10 @@ def create_app(
                 input_artifacts=payload.input_artifacts,
                 target_version_name=payload.target_version_name,
             )
+        )
+        store: ComputeResultStore = request.app.state.compute_store
+        store.record_action_plan(
+            ActionPlanRecord(action_plan=action_plan, job_id=payload.platform_job_id)
         )
         return ActionPlanPreviewResponse(
             status="PREVIEW_READY",
@@ -282,6 +315,37 @@ def create_app(
             )
         finally:
             registry.discard(platform_job_id=payload.platform_job_id)
+        store: ComputeResultStore = request.app.state.compute_store
+        store.record_job(
+            JobResultRecord(
+                job_id=payload.platform_job_id,
+                workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
+                status=ComputeRunStatus.ACCEPTED,
+                status_url=result.status_url,
+                expected_outputs=result.expected_outputs,
+                materialized_assets=result.materialized_assets,
+                idempotency_key=result.idempotency_key,
+                mutates_dataset=True,
+                action_plan_id=payload.action_plan.action_plan_id,
+                action_plan_hash=action_plan_hash,
+                candidate_artifact_uri=result.candidate_artifact_uri,
+                candidate_artifact_hash=result.candidate_artifact_hash,
+                synthetic_artifact_uri=result.synthetic_artifact_uri,
+                synthetic_status=result.synthetic_status,
+                model_impact_artifact_uri=result.model_impact_artifact_uri,
+                export_package_artifact_uri=result.export_package_artifact_uri,
+            )
+        )
+        store.record_action_plan(
+            ActionPlanRecord(
+                action_plan=payload.action_plan,
+                job_id=payload.platform_job_id,
+                action_plan_hash=action_plan_hash,
+                accepted_step_ids=tuple(step.step_id for step in payload.action_plan.steps),
+                workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
+                status_url=result.status_url,
+            )
+        )
         return ActionPlanExecuteApprovedResponse(
             status=ComputeRunStatus.ACCEPTED,
             job_id=payload.platform_job_id,
@@ -337,6 +401,157 @@ def create_app(
             reason_code=payload.reason_code,
             cancellation_accepted=accepted,
         )
+
+    @application.get(
+        f"{API_PREFIX}/jobs/{{job_id}}",
+        response_model=JobStatusResponse,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["jobs"],
+    )
+    async def get_job_status(
+        job_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> JobStatusResponse:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        record = store.get_job(job_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="job_not_found")
+        return JobStatusResponse(
+            job_id=record.job_id,
+            workflow_type=record.workflow_type,
+            status=record.status,
+            status_url=record.status_url,
+            expected_outputs=record.expected_outputs,
+            materialized_assets=record.materialized_assets,
+            mutates_dataset=record.mutates_dataset,
+            idempotency_key=record.idempotency_key,
+            action_plan_id=record.action_plan_id,
+            action_plan_hash=record.action_plan_hash,
+            candidate_artifact_uri=record.candidate_artifact_uri,
+            candidate_artifact_hash=record.candidate_artifact_hash,
+            synthetic_artifact_uri=record.synthetic_artifact_uri,
+            synthetic_status=record.synthetic_status,
+            model_impact_artifact_uri=record.model_impact_artifact_uri,
+            export_package_artifact_uri=record.export_package_artifact_uri,
+        )
+
+    @application.get(
+        f"{API_PREFIX}/action-plans/{{action_plan_id}}",
+        response_model=ActionPlanGetResponse,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["action-plans"],
+    )
+    async def get_action_plan(
+        action_plan_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> ActionPlanGetResponse:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        record = store.get_action_plan(action_plan_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="action_plan_not_found")
+        return ActionPlanGetResponse(
+            action_plan=record.action_plan,
+            job_id=record.job_id,
+            action_plan_hash=record.action_plan_hash,
+            accepted_step_ids=record.accepted_step_ids,
+            workflow_type=record.workflow_type,
+            status_url=record.status_url,
+            mutates_dataset=record.workflow_type is WorkflowType.APPLY_SELECTED_ACTIONS,
+        )
+
+    @application.get(
+        f"{API_PREFIX}/reports/{{report_id}}",
+        response_model=DataForgeReport | DecisionReport,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["reports"],
+    )
+    async def get_report(
+        report_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> DataForgeReport | DecisionReport:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        dataforge = store.get_dataforge_report(report_id)
+        if dataforge is not None:
+            return dataforge
+        decision = store.get_decision_report(report_id)
+        if decision is not None:
+            return decision
+        raise HTTPException(status_code=404, detail="report_not_found")
+
+    @application.get(
+        f"{API_PREFIX}/reports/{{report_id}}/issues",
+        response_model=ReportIssuesResponse,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["reports"],
+    )
+    async def get_report_issues(
+        report_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> ReportIssuesResponse:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        queues = store.get_review_queues(report_id)
+        if queues is None:
+            raise HTTPException(status_code=404, detail="report_issues_not_found")
+        summary = tuple(
+            ReviewQueueSummaryEntry(
+                queue_type=queue.queue_type.value,
+                item_count=len(queue.objects),
+                raw_pii_allowed=queue.export_policy.raw_pii_allowed,
+                redacted_only=queue.export_policy.redacted_only,
+            )
+            for queue in queues
+        )
+        return ReportIssuesResponse(
+            report_id=report_id,
+            review_queue_summary=summary,
+            total_item_count=sum(entry.item_count for entry in summary),
+        )
+
+    @application.get(
+        f"{API_PREFIX}/compare/{{compare_id}}",
+        response_model=VersionCompareReport,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["reports"],
+    )
+    async def get_version_compare(
+        compare_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> VersionCompareReport:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        report = store.get_version_compare(compare_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="version_compare_not_found")
+        return report
 
     if include_test_error_route:
         _add_test_error_routes(application)
