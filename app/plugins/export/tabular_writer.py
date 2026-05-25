@@ -71,6 +71,7 @@ class TabularExportRequest(BaseModel):
     candidate_dataset_version_id: NonEmptyStr
     source_artifact: ArtifactRef
     split_manifest: SplitManifest | None = None
+    split_manifest_artifact: ArtifactRef | None = None
     blocked_object_ids: tuple[NonEmptyStr, ...] = ()
     write_csv: bool = True
     write_per_split: bool = True
@@ -97,6 +98,7 @@ class TabularExportArtifacts:
     parquet_artifact: RegisteredArtifact
     csv_artifact: RegisteredArtifact | None
     per_split: tuple[TabularExportPerSplitArtifact, ...]
+    split_manifest_artifact: ArtifactRef | None
     columns: tuple[str, ...]
     included_row_count: int
     excluded_blocked_count: int
@@ -106,6 +108,8 @@ class TabularExportArtifacts:
         refs: list[ArtifactRef] = [self.parquet_artifact.artifact_ref]
         if self.csv_artifact is not None:
             refs.append(self.csv_artifact.artifact_ref)
+        if self.split_manifest_artifact is not None:
+            refs.append(self.split_manifest_artifact)
         for entry in self.per_split:
             refs.append(entry.parquet_artifact.artifact_ref)
             if entry.csv_artifact is not None:
@@ -171,6 +175,7 @@ def write_tabular_export(
         parquet_artifact=parquet_artifact,
         csv_artifact=csv_artifact,
         per_split=per_split,
+        split_manifest_artifact=request.split_manifest_artifact,
         columns=tuple(columns),
         included_row_count=len(filtered_rows),
         excluded_blocked_count=excluded,

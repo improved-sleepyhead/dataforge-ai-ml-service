@@ -160,6 +160,7 @@ def test_per_split_export_includes_train_validation_test_and_excludes_blocked(
         candidate_dataset_version_id="dataset_version_v2_candidate",
         source_artifact=source_artifact,
         split_manifest=manifest,
+        split_manifest_artifact=split_action.split_artifact.artifact_ref,
         blocked_object_ids=blocked_object_ids,
         write_csv=True,
         write_per_split=True,
@@ -179,6 +180,8 @@ def test_per_split_export_includes_train_validation_test_and_excludes_blocked(
     splits_present = {entry.split for entry in result.per_split}
     assert DataSplit.TRAIN in splits_present
     assert DataSplit.VALIDATION in splits_present or DataSplit.TEST in splits_present
+    assert result.split_manifest_artifact == split_action.split_artifact.artifact_ref
+    assert split_action.split_artifact.artifact_ref in result.all_artifact_refs()
 
     for entry in result.per_split:
         ids = _read_object_ids_from_parquet(
