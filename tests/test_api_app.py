@@ -214,7 +214,13 @@ def test_execute_approved_rejects_unsigned_request() -> None:
 
 
 def test_execute_approved_accepts_valid_approval_metadata() -> None:
-    """TASK-040 step 2-3: fake valid approval metadata yields accepted state."""
+    """TASK-040 step 2-3 + TASK-057: fake valid approval metadata yields accepted state.
+
+    The endpoint must also launch the APPLY_SELECTED_ACTIONS Dagster
+    materialization (TASK-057), expose status_url/expected_outputs and
+    surface candidate / model impact / export artifact URIs so the
+    platform UI can pin them to the platform job record.
+    """
     config = _test_config()
     payload = _action_plan_execute_payload()
     body = _body_bytes(payload)
@@ -238,6 +244,33 @@ def test_execute_approved_accepts_valid_approval_metadata() -> None:
     assert data["action_plan_hash"] == approval_metadata["action_plan_hash"]
     assert data["accepted_step_ids"] == [step["step_id"] for step in steps]
     assert data["mutates_dataset"] is True
+
+    # TASK-057: APPLY workflow materialization wiring.
+    assert data["status_url"] == "/api/v1/jobs/platform_job_001/status"
+    expected = list(data["expected_outputs"])
+    materialized = list(data["materialized_assets"])
+    assert sorted(expected) == sorted(
+        [
+            "action_plan",
+            "remediation_execution_report",
+            "prepared_dataset",
+            "synthetic_dataset",
+            "model_impact_report",
+            "export_package",
+        ]
+    )
+    assert sorted(materialized) == sorted(expected)
+    assert data["candidate_artifact_uri"] is not None
+    assert data["candidate_artifact_uri"].startswith("s3://")
+    assert data["candidate_artifact_hash"] is not None
+    assert data["candidate_artifact_hash"].startswith("sha256:")
+    assert data["model_impact_artifact_uri"] is not None
+    assert data["export_package_artifact_uri"] is not None
+    # The fixture uses an imputation-only ActionPlan so synthetic_status
+    # must be not_applicable and the synthetic URI is still emitted as
+    # a placeholder marker.
+    assert data["synthetic_status"] == "not_applicable"
+    assert data["synthetic_artifact_uri"] is not None
 
 
 def test_execute_approved_rejects_approval_hash_mismatch() -> None:

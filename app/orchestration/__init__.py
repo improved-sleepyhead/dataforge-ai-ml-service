@@ -1,9 +1,15 @@
 """Dagster orchestration runtime for the DataForge AI compute plane."""
 
 from app.orchestration.apply_assets import (
+    APPLY_ARTIFACT_FORMAT,
+    APPLY_ARTIFACT_KINDS,
+    APPLY_ARTIFACT_MEDIA_TYPE,
+    APPLY_ARTIFACT_SCHEMA_VERSIONS,
     APPLY_ASSET_KEYS,
     APPLY_ASSETS,
     APPLY_GROUP,
+    asset_kind_for,
+    schema_version_for,
 )
 from app.orchestration.assets import (
     ANALYZE_ASSET_KEYS,
@@ -45,6 +51,10 @@ __all__ = [
     "ANALYZE_ASSETS",
     "ANALYZE_GROUP",
     "ANALYZE_JOB_NAME",
+    "APPLY_ARTIFACT_FORMAT",
+    "APPLY_ARTIFACT_KINDS",
+    "APPLY_ARTIFACT_MEDIA_TYPE",
+    "APPLY_ARTIFACT_SCHEMA_VERSIONS",
     "APPLY_ASSET_KEYS",
     "APPLY_ASSETS",
     "APPLY_GROUP",
@@ -63,6 +73,7 @@ __all__ = [
     "RunContextResource",
     "RunStatusBridge",
     "SERVICE_CONFIG_RESOURCE_KEY",
+    "asset_kind_for",
     "build_analyze_job",
     "build_apply_job",
     "build_definitions",
@@ -70,4 +81,5 @@ __all__ = [
     "defs",
     "emit_stage_event",
     "scan_event_for_raw_pii",
+    "schema_version_for",
 ]

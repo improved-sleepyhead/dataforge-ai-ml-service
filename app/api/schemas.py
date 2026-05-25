@@ -103,4 +103,13 @@ class ActionPlanExecuteApprovedResponse(BaseModel):
     action_plan_id: NonEmptyStr
     action_plan_hash: Sha256Digest
     accepted_step_ids: tuple[NonEmptyStr, ...]
+    status_url: NonEmptyStr
+    expected_outputs: tuple[NonEmptyStr, ...]
+    materialized_assets: tuple[NonEmptyStr, ...]
+    candidate_artifact_uri: S3Uri | None = None
+    candidate_artifact_hash: Sha256Digest | None = None
+    synthetic_artifact_uri: S3Uri | None = None
+    synthetic_status: NonEmptyStr
+    model_impact_artifact_uri: S3Uri | None = None
+    export_package_artifact_uri: S3Uri | None = None
     mutates_dataset: Literal[True] = True

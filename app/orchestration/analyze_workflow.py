@@ -15,8 +15,9 @@ from app.adapters import (
     MinioObjectStorageAdapter,
     ObjectStorageScope,
 )
+from app.adapters.object_storage import ObjectStorageError
 from app.api.schemas import AnalyzeDatasetRequest
-from app.domain import ComputeRunStatus, WorkflowType
+from app.domain import ComputeRunStatus, ErrorCode, WorkflowType
 from app.kernel.config import ServiceConfig
 from app.orchestration.assets import (
     ANALYZE_ASSETS,
@@ -171,7 +172,7 @@ class _InMemoryS3Client:
         return {"ETag": "fake-etag"}
 
     def get_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
-        record = self._objects[(Bucket, Key)]
+        record = self._object(Bucket, Key)
         body = record["Body"]
         if not isinstance(body, bytes):  # pragma: no cover - defensive
             raise TypeError("InMemoryS3Client body must be bytes")
@@ -183,7 +184,7 @@ class _InMemoryS3Client:
         }
 
     def head_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
-        record = self._objects[(Bucket, Key)]
+        record = self._object(Bucket, Key)
         body = record["Body"]
         if not isinstance(body, bytes):  # pragma: no cover - defensive
             raise TypeError("InMemoryS3Client body must be bytes")
@@ -203,6 +204,15 @@ class _InMemoryS3Client:
                 continue
             contents.append({"Key": key, "Size": len(body)})
         return {"Contents": contents}
+
+    def _object(self, bucket: str, key: str) -> dict[str, Any]:
+        try:
+            return self._objects[(bucket, key)]
+        except KeyError as exc:
+            raise ObjectStorageError(
+                code=ErrorCode.ARTIFACT_NOT_FOUND,
+                message=f"missing object {bucket}/{key}",
+            ) from exc
 
 
 __all__ = [

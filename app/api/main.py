@@ -32,6 +32,7 @@ from app.kernel import (
 )
 from app.kernel.config import ServiceConfig, load_config
 from app.orchestration.analyze_workflow import launch_analyze_dataset_workflow
+from app.orchestration.apply_workflow import launch_apply_actions_workflow
 from app.plugin_sdk import CapabilitiesResponse
 from app.plugins import build_static_plugin_manager
 from app.validation.contracts import load_contract_pack
@@ -234,6 +235,7 @@ def create_app(
     async def execute_approved_action_plan(
         payload: ActionPlanExecuteApprovedRequest,
         identity: PlatformIdentityDep,
+        request: Request,
     ) -> ActionPlanExecuteApprovedResponse:
         del identity
         action_plan_hash = validate_action_plan_execution(
@@ -243,6 +245,12 @@ def create_app(
                 approval_metadata=payload.approval_metadata,
             )
         )
+        result = launch_apply_actions_workflow(
+            request=payload,
+            action_plan_hash=action_plan_hash,
+            config=_resolve_service_config(request),
+            fake_platform=request.app.state.fake_platform_client,
+        )
         return ActionPlanExecuteApprovedResponse(
             status=ComputeRunStatus.ACCEPTED,
             job_id=payload.platform_job_id,
@@ -250,6 +258,15 @@ def create_app(
             action_plan_id=payload.action_plan.action_plan_id,
             action_plan_hash=action_plan_hash,
             accepted_step_ids=tuple(step.step_id for step in payload.action_plan.steps),
+            status_url=result.status_url,
+            expected_outputs=result.expected_outputs,
+            materialized_assets=result.materialized_assets,
+            candidate_artifact_uri=result.candidate_artifact_uri,
+            candidate_artifact_hash=result.candidate_artifact_hash,
+            synthetic_artifact_uri=result.synthetic_artifact_uri,
+            synthetic_status=result.synthetic_status,
+            model_impact_artifact_uri=result.model_impact_artifact_uri,
+            export_package_artifact_uri=result.export_package_artifact_uri,
             mutates_dataset=True,
         )
 

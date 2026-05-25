@@ -32,7 +32,8 @@ from app.adapters import (
     MinioObjectStorageAdapter,
     ObjectStorageScope,
 )
-from app.domain import WorkflowType
+from app.adapters.object_storage import ObjectStorageError
+from app.domain import ErrorCode, WorkflowType
 from app.kernel.config import (
     DagsterSettings,
     ExternalAISettings,
@@ -185,7 +186,7 @@ class _InMemoryS3Client:
         return {"ETag": "fake-etag"}
 
     def get_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
-        record = self._objects[(Bucket, Key)]
+        record = self._object(Bucket, Key)
         from io import BytesIO
 
         body = record["Body"]
@@ -199,7 +200,7 @@ class _InMemoryS3Client:
         }
 
     def head_object(self, *, Bucket: str, Key: str) -> Mapping[str, Any]:
-        record = self._objects[(Bucket, Key)]
+        record = self._object(Bucket, Key)
         body = record["Body"]
         if not isinstance(body, bytes):  # pragma: no cover - defensive
             raise TypeError("InMemoryS3Client body must be bytes")
@@ -219,6 +220,15 @@ class _InMemoryS3Client:
                 continue
             contents.append({"Key": key, "Size": len(body)})
         return {"Contents": contents}
+
+    def _object(self, bucket: str, key: str) -> dict[str, object]:
+        try:
+            return self._objects[(bucket, key)]
+        except KeyError as exc:
+            raise ObjectStorageError(
+                code=ErrorCode.ARTIFACT_NOT_FOUND,
+                message=f"missing object {bucket}/{key}",
+            ) from exc
 
 
 defs = build_local_demo_definitions()

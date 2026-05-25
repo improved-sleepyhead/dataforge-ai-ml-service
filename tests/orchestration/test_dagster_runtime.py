@@ -29,7 +29,8 @@ from app.adapters import (
     MinioObjectStorageAdapter,
     ObjectStorageScope,
 )
-from app.domain import ComputeRunStatus, WorkflowType
+from app.adapters.object_storage import ObjectStorageError
+from app.domain import ComputeRunStatus, ErrorCode, WorkflowType
 from app.kernel.config import (
     DagsterSettings,
     ExternalAISettings,
@@ -311,7 +312,7 @@ class _InMemoryS3Client:
         return {"ETag": "fake-etag"}
 
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, Any]:
-        record = self._objects[(Bucket, Key)]
+        record = self._object(Bucket, Key)
         body = record["Body"]
         return {
             "Body": BytesIO(body),
@@ -321,7 +322,7 @@ class _InMemoryS3Client:
         }
 
     def head_object(self, *, Bucket: str, Key: str) -> dict[str, Any]:
-        record = self._objects[(Bucket, Key)]
+        record = self._object(Bucket, Key)
         body = record["Body"]
         return {
             "ContentLength": len(body),
@@ -336,6 +337,15 @@ class _InMemoryS3Client:
             if bucket == Bucket and key.startswith(Prefix)
         ]
         return {"Contents": contents}
+
+    def _object(self, bucket: str, key: str) -> dict[str, Any]:
+        try:
+            return self._objects[(bucket, key)]
+        except KeyError as exc:
+            raise ObjectStorageError(
+                code=ErrorCode.ARTIFACT_NOT_FOUND,
+                message=f"missing object {bucket}/{key}",
+            ) from exc
 
 
 # Some pytest collection environments warn on unused imports; pin pytest as used.
