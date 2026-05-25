@@ -231,8 +231,8 @@ def _resolve_status(
         return CandidateVersionStatus.FAILED
     if report.candidate_status.value == "validation_failed":
         return CandidateVersionStatus.BLOCKED
-    if report.overall_status is ValidationGateStatus.FAILED:
-        return CandidateVersionStatus.BLOCKED
+    if report.candidate_status.value == "review_required":
+        return CandidateVersionStatus.REVIEW_REQUIRED
     return CandidateVersionStatus.PROPOSED
 
 

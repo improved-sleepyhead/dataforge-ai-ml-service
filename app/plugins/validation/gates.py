@@ -226,7 +226,7 @@ def run_validation_gates(
     # Synthetic-only gates need both the synthetic report and the source
     # rows for DCR / near-duplicate checks. They resolve to
     # not_applicable when the candidate is not a synthetic artifact.
-    synthetic_rows, real_rows = _split_real_and_synthetic_rows(candidate_rows)
+    synthetic_rows, candidate_real_rows = _split_real_and_synthetic_rows(candidate_rows)
     if request.synthetic_dataset_report is None or not synthetic_rows:
         dcr_check = _synthetic_not_applicable_gate(
             ValidationGateType.SYNTHETIC_DCR_CHECK,
@@ -247,11 +247,15 @@ def run_validation_gates(
             else "candidate_has_no_synthetic_rows",
         )
     else:
-        # Use real_rows from the candidate as the comparison reference;
-        # if the caller supplies numeric columns we restrict DCR to that
-        # intersection (categorical features cannot use Euclidean
-        # distance). Otherwise fall back to the synthetic report's
-        # declared feature columns.
+        reference_real_rows, reference_scope = _resolve_dcr_reference_rows(
+            storage=storage,
+            source_artifact=request.source_artifact,
+            candidate_real_rows=candidate_real_rows,
+        )
+        # Use immutable source rows as D_real for DCR / duplicate-to-real
+        # checks. Candidate-real rows are only a fallback for malformed or
+        # empty source artifacts; the reference scope is recorded in the
+        # gate metrics so audit can tell which population was used.
         synthetic_feature_columns = request.synthetic_dataset_report.feature_columns
         if request.numeric_columns:
             feature_columns = tuple(
@@ -265,8 +269,9 @@ def run_validation_gates(
             feature_columns = synthetic_feature_columns
         dcr_metrics = _compute_dcr(
             synthetic_rows=synthetic_rows,
-            real_rows=real_rows,
+            real_rows=reference_real_rows,
             feature_columns=feature_columns,
+            reference_scope=reference_scope,
         )
         dcr_check = _dcr_gate(
             metrics=dcr_metrics,
@@ -274,7 +279,7 @@ def run_validation_gates(
         )
         exact_duplicate_check = _synthetic_exact_duplicate_gate(
             synthetic_rows=synthetic_rows,
-            real_rows=real_rows,
+            real_rows=reference_real_rows,
             feature_columns=feature_columns,
         )
         nearest_check = _synthetic_nearest_neighbor_privacy_gate(
@@ -475,6 +480,25 @@ def _split_real_and_synthetic_rows(
     synthetic = tuple(row for row in rows if row.get(_IS_SYNTHETIC_COLUMN) == "1")
     real = tuple(row for row in rows if row.get(_IS_SYNTHETIC_COLUMN) != "1")
     return synthetic, real
+
+
+def _resolve_dcr_reference_rows(
+    *,
+    storage: MinioObjectStorageAdapter,
+    source_artifact: ArtifactRef,
+    candidate_real_rows: Sequence[Mapping[str, str]],
+) -> tuple[tuple[Mapping[str, str], ...], str]:
+    source_rows, _ = _read_csv(
+        storage=storage,
+        artifact=source_artifact,
+        role="source_dcr_reference",
+    )
+    source_real_rows = tuple(
+        row for row in source_rows if row.get(_IS_SYNTHETIC_COLUMN) != "1"
+    )
+    if source_real_rows:
+        return source_real_rows, "source_artifact"
+    return tuple(candidate_real_rows), "candidate_real_rows_fallback"
 
 
 # ---------------------------------------------------------------------------
@@ -794,6 +818,8 @@ class _DcrMetrics:
     mean: float
     median: float
     below_epsilon: int
+    real_reference_count: int
+    reference_scope: str
 
 
 def _compute_dcr(
@@ -801,6 +827,7 @@ def _compute_dcr(
     synthetic_rows: Sequence[Mapping[str, str]],
     real_rows: Sequence[Mapping[str, str]],
     feature_columns: Sequence[str],
+    reference_scope: str,
 ) -> _DcrMetrics:
     """Compute DCR metrics using the formula
 
@@ -815,6 +842,7 @@ def _compute_dcr(
     real_vectors = [
         _row_vector(row, feature_columns) for row in real_rows
     ]
+    real_reference_count = len(real_vectors)
     distances: list[float] = []
     below = 0
     for synthetic_row in synthetic_rows:
@@ -838,6 +866,8 @@ def _compute_dcr(
             mean=0.0,
             median=0.0,
             below_epsilon=0,
+            real_reference_count=real_reference_count,
+            reference_scope=reference_scope,
         )
     sorted_distances = sorted(distances)
     midpoint = len(sorted_distances) // 2
@@ -851,6 +881,8 @@ def _compute_dcr(
         mean=sum(distances) / len(distances),
         median=median,
         below_epsilon=below,
+        real_reference_count=real_reference_count,
+        reference_scope=reference_scope,
     )
 
 
@@ -872,6 +904,11 @@ def _dcr_gate(
             name="below_epsilon_count",
             value=float(metrics.below_epsilon),
             threshold=0.0,
+        ),
+        ValidationGateMetric(
+            name="real_reference_count",
+            value=float(metrics.real_reference_count),
+            notes=metrics.reference_scope,
         ),
     )
     if metrics.minimum < thresholds.minimum_dcr_threshold or metrics.below_epsilon > 0:

@@ -38,10 +38,12 @@ from app.domain import (
     DEFAULT_MIN_LABELED_SAMPLES,
     DEFAULT_MIN_RARE_CLASS_SAMPLES,
     DEFAULT_MIN_SPLITS,
+    FALLBACK_READINESS_REPORT_SCHEMA_VERSION,
     MODEL_IMPACT_ELIGIBILITY_SCHEMA_VERSION,
     ArtifactRef,
     ClassImbalanceDiagnostics,
     ErrorCode,
+    FallbackReadinessReport,
     FallbackReadinessReportRef,
     ModelImpactCohortStats,
     ModelImpactEligibilityLineage,
@@ -60,6 +62,10 @@ from app.domain.common import NonEmptyStr, Sha256Digest
 MODEL_IMPACT_ELIGIBILITY_KIND = "model_impact_eligibility_report"
 MODEL_IMPACT_ELIGIBILITY_FORMAT = "json"
 MODEL_IMPACT_ELIGIBILITY_MEDIA_TYPE = "application/json"
+FALLBACK_READINESS_REPORT_KIND = "fallback_readiness_report"
+FALLBACK_READINESS_REPORT_FORMAT = "json"
+FALLBACK_READINESS_REPORT_MEDIA_TYPE = "application/json"
+FALLBACK_READINESS_KIND = "model_impact_not_eligible_readiness"
 
 _SUPPORTED_TASK_TYPES: frozenset[ModelImpactTaskType] = frozenset(
     {ModelImpactTaskType.SUPERVISED_TABULAR_CLASSIFICATION}
@@ -239,15 +245,38 @@ def check_model_impact_eligibility(
             else "unknown_eligibility_failure"
         )
     )
-    fallback = None if eligible else request.fallback_report
-    fallback_reasons = (
-        tuple(code.value for code in not_eligible_reason_codes) if fallback is None else ()
+    generated_at = request.generated_at or datetime.now(UTC)
+    lineage = ModelImpactEligibilityLineage(
+        organization_id=request.organization_id,
+        project_id=request.project_id,
+        dataset_id=request.dataset_id,
+        parent_version_id=request.parent_version_id,
+        candidate_dataset_version_id=request.candidate_dataset_version_id,
+        candidate_version_artifact=request.candidate_version_artifact,
+        tabular_profile_artifact=request.tabular_profile_artifact,
+        split_manifest_artifact=request.split_manifest_artifact,
+        split_leakage_report_artifact=request.split_leakage_report_artifact,
+        created_by_job_id=request.created_by_job_id,
+        config_hash=request.config_hash,
     )
-    if fallback is None and not eligible:
-        # No fallback artifact was provided: still record the reasons
-        # so the platform can decide which fallback report kind to
-        # produce next.
-        _ = fallback_reasons  # documented but unused when fallback is None
+    fallback = (
+        None
+        if eligible
+        else request.fallback_report
+        or _build_fallback_readiness_report(
+            request=request,
+            registry=registry,
+            primary_reason_code=primary_reason_code,
+            reasons=tuple(_dedupe(reasons)),
+            required_inputs_present=tuple(_dedupe(required_inputs_present)),
+            required_inputs_missing=tuple(_dedupe(required_inputs_missing)),
+            not_eligible_reason_codes=tuple(_dedupe(not_eligible_reason_codes)),
+            cohort_stats=cohort_stats,
+            split_stats=split_stats,
+            lineage=lineage,
+            generated_at=generated_at,
+        )
+    )
 
     report = ModelImpactEligibilityReport(
         report_id=request.report_id
@@ -272,20 +301,8 @@ def check_model_impact_eligibility(
         minimum_labeled_samples=request.minimum_labeled_samples,
         minimum_rare_class_samples=request.minimum_rare_class_samples,
         fallback_report=fallback,
-        lineage=ModelImpactEligibilityLineage(
-            organization_id=request.organization_id,
-            project_id=request.project_id,
-            dataset_id=request.dataset_id,
-            parent_version_id=request.parent_version_id,
-            candidate_dataset_version_id=request.candidate_dataset_version_id,
-            candidate_version_artifact=request.candidate_version_artifact,
-            tabular_profile_artifact=request.tabular_profile_artifact,
-            split_manifest_artifact=request.split_manifest_artifact,
-            split_leakage_report_artifact=request.split_leakage_report_artifact,
-            created_by_job_id=request.created_by_job_id,
-            config_hash=request.config_hash,
-        ),
-        generated_at=request.generated_at or datetime.now(UTC),
+        lineage=lineage,
+        generated_at=generated_at,
     )
 
     artifact = registry.save_artifact(
@@ -307,6 +324,60 @@ def check_model_impact_eligibility(
         },
     )
     return CheckModelImpactEligibilityResult(report=report, report_artifact=artifact)
+
+
+def _build_fallback_readiness_report(
+    *,
+    request: CheckModelImpactEligibilityRequest,
+    registry: ArtifactRegistry,
+    primary_reason_code: str,
+    reasons: tuple[str, ...],
+    required_inputs_present: tuple[ModelImpactInputName, ...],
+    required_inputs_missing: tuple[ModelImpactInputName, ...],
+    not_eligible_reason_codes: tuple[ModelImpactNotEligibleReasonCode, ...],
+    cohort_stats: tuple[ModelImpactCohortStats, ...],
+    split_stats: tuple[ModelImpactSplitStats, ...],
+    lineage: ModelImpactEligibilityLineage,
+    generated_at: datetime,
+) -> FallbackReadinessReportRef:
+    fallback_report = FallbackReadinessReport(
+        report_id=f"fallback_readiness_{uuid.uuid4().hex[:16]}",
+        report_schema_version=FALLBACK_READINESS_REPORT_SCHEMA_VERSION,
+        fallback_kind=FALLBACK_READINESS_KIND,
+        dataset_id=request.dataset_id,
+        parent_version_id=request.parent_version_id,
+        candidate_dataset_version_id=request.candidate_dataset_version_id,
+        primary_reason_code=primary_reason_code,
+        reasons=reasons,
+        required_inputs_present=required_inputs_present,
+        required_inputs_missing=required_inputs_missing,
+        not_eligible_reason_codes=not_eligible_reason_codes,
+        cohort_stats=cohort_stats,
+        split_stats=split_stats,
+        lineage=lineage,
+        generated_at=generated_at,
+    )
+    artifact = registry.save_artifact(
+        artifact_kind=FALLBACK_READINESS_REPORT_KIND,
+        data=_serialize_fallback(fallback_report),
+        artifact_format=FALLBACK_READINESS_REPORT_FORMAT,
+        media_type=FALLBACK_READINESS_REPORT_MEDIA_TYPE,
+        schema_version=FALLBACK_READINESS_REPORT_SCHEMA_VERSION,
+        dataset_version_id=request.candidate_dataset_version_id,
+        created_by_job_id=request.created_by_job_id,
+        config_hash=request.config_hash,
+        metadata={
+            "fallback-kind": FALLBACK_READINESS_KIND,
+            "primary-reason-code": primary_reason_code,
+            "candidate-dataset-version-id": request.candidate_dataset_version_id,
+            "parent-version-id": request.parent_version_id,
+        },
+    )
+    return FallbackReadinessReportRef(
+        fallback_kind=FALLBACK_READINESS_KIND,
+        fallback_artifact=artifact.artifact_ref,
+        reasons=tuple(code.value for code in not_eligible_reason_codes),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -462,9 +533,20 @@ def _serialize(report: ModelImpactEligibilityReport) -> bytes:
     ).encode("utf-8")
 
 
+def _serialize_fallback(report: FallbackReadinessReport) -> bytes:
+    return json.dumps(
+        report.model_dump(mode="json"),
+        sort_keys=True,
+        indent=2,
+    ).encode("utf-8")
+
+
 __all__ = [
     "CheckModelImpactEligibilityRequest",
     "CheckModelImpactEligibilityResult",
+    "FALLBACK_READINESS_REPORT_FORMAT",
+    "FALLBACK_READINESS_REPORT_KIND",
+    "FALLBACK_READINESS_REPORT_MEDIA_TYPE",
     "MODEL_IMPACT_ELIGIBILITY_FORMAT",
     "MODEL_IMPACT_ELIGIBILITY_KIND",
     "MODEL_IMPACT_ELIGIBILITY_MEDIA_TYPE",

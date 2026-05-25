@@ -89,6 +89,12 @@ DEFAULT_RARE_CLASS_RECALL_DEGRADED_DROP = 0.05
 DEFAULT_MACRO_F1_DEGRADED_DROP = 0.03
 """Drop in macro_f1 that marks the candidate degraded."""
 
+DEFAULT_WEIGHTED_F1_DEGRADED_DROP = 0.03
+"""Drop in weighted_f1 that marks the candidate degraded."""
+
+DEFAULT_PR_AUC_DEGRADED_DROP = 0.03
+"""Drop in PR-AUC that marks the candidate degraded when PR-AUC is available."""
+
 _IS_SYNTHETIC_COLUMN = "is_synthetic"
 
 
@@ -140,6 +146,8 @@ class RunModelImpactRequest(BaseModel):
     trts_unstable_threshold: float = DEFAULT_TRTS_UNSTABLE_THRESHOLD
     rare_class_recall_degraded_drop: float = DEFAULT_RARE_CLASS_RECALL_DEGRADED_DROP
     macro_f1_degraded_drop: float = DEFAULT_MACRO_F1_DEGRADED_DROP
+    weighted_f1_degraded_drop: float = DEFAULT_WEIGHTED_F1_DEGRADED_DROP
+    pr_auc_degraded_drop: float = DEFAULT_PR_AUC_DEGRADED_DROP
     created_by_job_id: NonEmptyStr
     config_hash: Sha256Digest
     report_id: str | None = None
@@ -254,8 +262,12 @@ def run_model_impact(
     verdict, verdict_reasons = _classify_verdict(
         rare_class_recall_delta=rare_class_recall_delta,
         macro_f1_delta=macro_f1_delta,
+        weighted_f1_delta=weighted_f1_delta,
+        pr_auc_delta=pr_auc_delta,
         rare_class_recall_drop_threshold=request.rare_class_recall_degraded_drop,
         macro_f1_drop_threshold=request.macro_f1_degraded_drop,
+        weighted_f1_drop_threshold=request.weighted_f1_degraded_drop,
+        pr_auc_drop_threshold=request.pr_auc_degraded_drop,
         validation_gates_blocker_present=request.validation_gates_blocker_present,
     )
     synthetic_status, synthetic_reasons = _classify_synthetic_utility(
@@ -263,6 +275,10 @@ def run_model_impact(
         verdict=verdict,
         rare_class_recall_delta=rare_class_recall_delta,
         macro_f1_delta=macro_f1_delta,
+        weighted_f1_delta=weighted_f1_delta,
+        pr_auc_delta=pr_auc_delta,
+        weighted_f1_drop_threshold=request.weighted_f1_degraded_drop,
+        pr_auc_drop_threshold=request.pr_auc_degraded_drop,
         tstr_trts=tstr_trts,
         validation_gates_blocker_present=request.validation_gates_blocker_present,
     )
@@ -598,14 +614,13 @@ def _compute_tstr_trts(
             reason="candidate_has_no_synthetic_train_rows",
         )
 
-    # TSTR: train on the synthetic-augmented candidate train split
-    # (real + synthetic), test on the real source test split.
-    # For targeted-rare-class methods like SMOTE the synthetic-only
-    # train would carry a single class, so the augmented train is the
-    # operationally meaningful "train synthetic" view that PRD §11.1
-    # asks to compare against the real-test baseline.
+    # TSTR is strict per DATASETS.md §11.1: train on synthetic rows
+    # only, then test on real source rows. Targeted rare-class methods
+    # such as SMOTE often produce a single synthetic class; in that case
+    # TSTR is explicitly not_applicable instead of being silently
+    # replaced with an augmented-train metric.
     tstr_metrics, tstr_status, tstr_reason = _train_and_evaluate(
-        train_rows=candidate_train_rows,
+        train_rows=synthetic_train_rows,
         test_rows=source_test_rows,
         feature_columns=feature_columns,
         target_column=target_column,
@@ -622,16 +637,36 @@ def _compute_tstr_trts(
         rare_class_label=rare_class_label,
         random_seed=random_seed,
     )
-    if (
-        tstr_status is not MetricStatus.AVAILABLE
-        or trts_status is not MetricStatus.AVAILABLE
-    ):
+    tstr_macro_f1_drop = (
+        baseline_macro_f1 - tstr_metrics.macro_f1
+        if tstr_status is MetricStatus.AVAILABLE
+        else None
+    )
+    trts_macro_f1_delta = (
+        candidate_macro_f1 - trts_metrics.macro_f1
+        if trts_status is MetricStatus.AVAILABLE
+        else None
+    )
+    if tstr_status is not MetricStatus.AVAILABLE or trts_status is not MetricStatus.AVAILABLE:
+        unavailable: list[str] = []
+        if tstr_status is not MetricStatus.AVAILABLE:
+            unavailable.append(f"tstr_{tstr_reason or 'unavailable'}")
+        if trts_status is not MetricStatus.AVAILABLE:
+            unavailable.append(f"trts_{trts_reason or 'unavailable'}")
         return TstrTrtsMetrics(
             status=MetricStatus.NOT_APPLICABLE,
-            reason=tstr_reason or trts_reason or "tstr_trts_unavailable",
+            reason=";".join(unavailable) or "tstr_trts_unavailable",
+            tstr_metrics=(
+                tstr_metrics if tstr_status is MetricStatus.AVAILABLE else None
+            ),
+            trts_metrics=(
+                trts_metrics if trts_status is MetricStatus.AVAILABLE else None
+            ),
+            tstr_macro_f1_drop=tstr_macro_f1_drop,
+            tstr_macro_f1_threshold=tstr_macro_f1_threshold,
+            trts_macro_f1_delta=trts_macro_f1_delta,
+            trts_unstable_threshold=trts_unstable_threshold,
         )
-    tstr_macro_f1_drop = baseline_macro_f1 - tstr_metrics.macro_f1
-    trts_macro_f1_delta = candidate_macro_f1 - trts_metrics.macro_f1
     return TstrTrtsMetrics(
         status=MetricStatus.AVAILABLE,
         tstr_metrics=tstr_metrics,
@@ -647,27 +682,51 @@ def _classify_verdict(
     *,
     rare_class_recall_delta: float,
     macro_f1_delta: float,
+    weighted_f1_delta: float,
+    pr_auc_delta: float | None,
     rare_class_recall_drop_threshold: float,
     macro_f1_drop_threshold: float,
+    weighted_f1_drop_threshold: float,
+    pr_auc_drop_threshold: float,
     validation_gates_blocker_present: bool,
 ) -> tuple[ModelImpactVerdict, list[str]]:
     reasons: list[str] = []
     if validation_gates_blocker_present:
         reasons.append("validation_gates_blocker_present")
         return ModelImpactVerdict.REJECTED, reasons
-    if (
-        rare_class_recall_delta <= -rare_class_recall_drop_threshold
-        or macro_f1_delta <= -macro_f1_drop_threshold
-    ):
+    degraded_reasons: list[str] = []
+    if rare_class_recall_delta <= -rare_class_recall_drop_threshold:
+        degraded_reasons.append("rare_class_recall_degraded")
+    if macro_f1_delta <= -macro_f1_drop_threshold:
+        degraded_reasons.append("macro_f1_degraded")
+    if weighted_f1_delta <= -weighted_f1_drop_threshold:
+        degraded_reasons.append("weighted_f1_degraded")
+    if pr_auc_delta is not None and pr_auc_delta <= -pr_auc_drop_threshold:
+        degraded_reasons.append("pr_auc_degraded")
+    if degraded_reasons:
         reasons.append("metrics_degraded")
+        reasons.extend(degraded_reasons)
         return ModelImpactVerdict.DEGRADED, reasons
-    if rare_class_recall_delta > 0 and macro_f1_delta >= 0:
+    pr_auc_non_degraded = pr_auc_delta is None or pr_auc_delta >= 0
+    if (
+        rare_class_recall_delta > 0
+        and macro_f1_delta >= 0
+        and weighted_f1_delta >= 0
+        and pr_auc_non_degraded
+    ):
         reasons.append("rare_class_recall_improved")
         if macro_f1_delta > 0:
             reasons.append("macro_f1_improved")
+        if weighted_f1_delta > 0:
+            reasons.append("weighted_f1_improved")
+        if pr_auc_delta is not None and pr_auc_delta > 0:
+            reasons.append("pr_auc_improved")
         return ModelImpactVerdict.IMPROVED, reasons
-    if math.isclose(rare_class_recall_delta, 0.0, abs_tol=1e-9) and math.isclose(
-        macro_f1_delta, 0.0, abs_tol=1e-9
+    if (
+        math.isclose(rare_class_recall_delta, 0.0, abs_tol=1e-9)
+        and math.isclose(macro_f1_delta, 0.0, abs_tol=1e-9)
+        and math.isclose(weighted_f1_delta, 0.0, abs_tol=1e-9)
+        and (pr_auc_delta is None or math.isclose(pr_auc_delta, 0.0, abs_tol=1e-9))
     ):
         reasons.append("metrics_unchanged")
         return ModelImpactVerdict.REQUIRES_REVIEW, reasons
@@ -681,6 +740,10 @@ def _classify_synthetic_utility(
     verdict: ModelImpactVerdict,
     rare_class_recall_delta: float,
     macro_f1_delta: float,
+    weighted_f1_delta: float,
+    pr_auc_delta: float | None,
+    weighted_f1_drop_threshold: float,
+    pr_auc_drop_threshold: float,
     tstr_trts: TstrTrtsMetrics,
     validation_gates_blocker_present: bool,
 ) -> tuple[SyntheticUtilityStatus, list[str]]:
@@ -688,6 +751,15 @@ def _classify_synthetic_utility(
         return SyntheticUtilityStatus.NOT_APPLICABLE, []
     if validation_gates_blocker_present:
         return SyntheticUtilityStatus.REJECTED, ["validation_gates_blocker_present"]
+    degraded_reasons: list[str] = []
+    if verdict is ModelImpactVerdict.DEGRADED:
+        degraded_reasons.append("metrics_degraded")
+    if weighted_f1_delta <= -weighted_f1_drop_threshold:
+        degraded_reasons.append("weighted_f1_degraded")
+    if pr_auc_delta is not None and pr_auc_delta <= -pr_auc_drop_threshold:
+        degraded_reasons.append("pr_auc_degraded")
+    if degraded_reasons:
+        return SyntheticUtilityStatus.REJECTED, degraded_reasons
     if tstr_trts.status is not MetricStatus.AVAILABLE:
         return (
             SyntheticUtilityStatus.REQUIRES_REVIEW,
@@ -708,13 +780,16 @@ def _classify_synthetic_utility(
     ):
         reasons.append("trts_macro_f1_unstable")
         return SyntheticUtilityStatus.REQUIRES_REVIEW, reasons
-    if verdict is ModelImpactVerdict.IMPROVED and rare_class_recall_delta > 0:
+    if (
+        verdict is ModelImpactVerdict.IMPROVED
+        and rare_class_recall_delta > 0
+        and macro_f1_delta >= 0
+        and weighted_f1_delta >= 0
+        and (pr_auc_delta is None or pr_auc_delta >= 0)
+    ):
         reasons.append("tstr_within_threshold")
         reasons.append("rare_class_recall_improved")
         return SyntheticUtilityStatus.RECOMMENDED, reasons
-    if verdict is ModelImpactVerdict.DEGRADED:
-        reasons.append("metrics_degraded")
-        return SyntheticUtilityStatus.REJECTED, reasons
     reasons.append("metrics_inconclusive")
     return SyntheticUtilityStatus.REQUIRES_REVIEW, reasons
 
@@ -774,9 +849,11 @@ __all__ = [
     "DEFAULT_BASELINE_ALGORITHM",
     "DEFAULT_RANDOM_SEED",
     "DEFAULT_MACRO_F1_DEGRADED_DROP",
+    "DEFAULT_PR_AUC_DEGRADED_DROP",
     "DEFAULT_RARE_CLASS_RECALL_DEGRADED_DROP",
     "DEFAULT_TRTS_UNSTABLE_THRESHOLD",
     "DEFAULT_TSTR_MACRO_F1_THRESHOLD",
+    "DEFAULT_WEIGHTED_F1_DEGRADED_DROP",
     "MODEL_IMPACT_REPORT_FORMAT",
     "MODEL_IMPACT_REPORT_KIND",
     "MODEL_IMPACT_REPORT_MEDIA_TYPE",

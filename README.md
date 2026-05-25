@@ -115,3 +115,56 @@ prediction manifests, evidence, decision reports, method recommendations,
 action plans, review queues, DataForge reports, export packages, and errors;
 `make test-contracts` loads the pack and validates all examples without
 requiring a real backend, frontend, or external contract repository.
+
+### Contract Test Suite
+
+`make test-contracts` runs the contract-side compatibility suite under
+`tests/contracts/`. Two layers run on every invocation:
+
+- `tests/contracts/test_contract_pack.py` loads `contract_pack.json`, validates
+  each schema with `Draft202012Validator`, and validates every shipped example
+  against its declared schema.
+- `tests/contracts/test_pydantic_model_contract_compatibility.py` parses every
+  required example through the corresponding `app.domain` Pydantic model and
+  round-trips the model dump back through the JSON Schema. This guards against
+  silent drift between Pydantic models and JSON Schemas for `ManifestRow`,
+  `PredictionManifest`, `EvidenceBundle`, `DecisionReport`,
+  `MethodRecommendation`, `ActionPlan`, `ReviewQueue`, `DataForgeReport`, and
+  `ExportPackage`. A canary test additionally injects a forbidden extra field
+  into each required example to confirm a corrupted example would actually
+  break the suite.
+
+The suite has no runtime dependency on the NestJS backend, the Next.js
+frontend, real object storage, signing keys, or external AI providers.
+
+### Updating Contract Fixtures
+
+Whenever a contract surface changes — a new artifact, a new field, a new
+example, or a new error code — apply the changes inside this repository in the
+following order:
+
+1. Update or add the JSON Schema in
+   `contracts/local_fallback/v0.1.0-demo/schemas/<contract>.schema.json`. New
+   schemas must use `additionalProperties: false` and JSON Schema draft 2020-12.
+2. Add a representative payload in
+   `contracts/local_fallback/v0.1.0-demo/examples/<example_name>.json`. Examples
+   must be PII-free and deterministic.
+3. Register both files in
+   `contracts/local_fallback/v0.1.0-demo/contract_pack.json` under the
+   appropriate `schemas` and `examples` lists.
+4. Update or add the matching Pydantic model in `app/domain/`. Models should
+   use `ConfigDict(extra="forbid", frozen=True)` so they reject unknown fields
+   and stay aligned with the JSON Schema.
+5. If the contract is one of the required contracts in
+   `tests/contracts/test_contract_pack.py` or
+   `tests/contracts/test_pydantic_model_contract_compatibility.py`, extend the
+   expected schema/example sets and the parametrized model-compatibility cases
+   so the new contract is exercised on every `make test-contracts` run.
+6. Run `make test-contracts` to confirm the suite still passes. The contract
+   pack version recorded in `DATAFORGE_CONTRACT_PACK_VERSION` and embedded in
+   report metadata stays the same until the canonical
+   `dataforgeai-contracts` repository publishes a new version.
+
+Once the upstream `dataforgeai-contracts` repository ships canonical schemas,
+the local fallback pack will be replaced or pinned to a published release; the
+test suite layout above will continue to apply against the published pack.

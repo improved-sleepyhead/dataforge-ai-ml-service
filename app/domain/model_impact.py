@@ -31,6 +31,9 @@ from app.domain.common import NonEmptyStr, Score, Sha256Digest
 MODEL_IMPACT_ELIGIBILITY_SCHEMA_VERSION = "model_impact_eligibility.v1"
 """Schema version stamped on every eligibility artifact."""
 
+FALLBACK_READINESS_REPORT_SCHEMA_VERSION = "fallback_readiness_report.v1"
+"""Schema version for deterministic model-impact fallback readiness artifacts."""
+
 DEFAULT_MIN_LABELED_SAMPLES = 50
 """Minimum number of labeled samples required to fit a deterministic baseline.
 
@@ -144,6 +147,29 @@ class ModelImpactEligibilityLineage(BaseModel):
     config_hash: Sha256Digest
 
 
+class FallbackReadinessReport(BaseModel):
+    """Deterministic readiness report emitted when model impact cannot run."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    report_id: NonEmptyStr
+    report_schema_version: NonEmptyStr = FALLBACK_READINESS_REPORT_SCHEMA_VERSION
+    fallback_kind: NonEmptyStr
+    dataset_id: NonEmptyStr
+    parent_version_id: NonEmptyStr
+    candidate_dataset_version_id: NonEmptyStr
+    status: ModelImpactEligibilityStatus = ModelImpactEligibilityStatus.NOT_ELIGIBLE
+    primary_reason_code: NonEmptyStr
+    reasons: tuple[NonEmptyStr, ...]
+    required_inputs_present: tuple[ModelImpactInputName, ...]
+    required_inputs_missing: tuple[ModelImpactInputName, ...]
+    not_eligible_reason_codes: tuple[ModelImpactNotEligibleReasonCode, ...]
+    cohort_stats: tuple[ModelImpactCohortStats, ...] = ()
+    split_stats: tuple[ModelImpactSplitStats, ...] = ()
+    lineage: ModelImpactEligibilityLineage
+    generated_at: datetime
+
+
 class ModelImpactEligibilityReport(BaseModel):
     """Decision artifact for whether model-impact evaluation may run."""
 
@@ -174,6 +200,8 @@ __all__ = [
     "DEFAULT_MIN_LABELED_SAMPLES",
     "DEFAULT_MIN_RARE_CLASS_SAMPLES",
     "DEFAULT_MIN_SPLITS",
+    "FALLBACK_READINESS_REPORT_SCHEMA_VERSION",
+    "FallbackReadinessReport",
     "FallbackReadinessReportRef",
     "MODEL_IMPACT_ELIGIBILITY_SCHEMA_VERSION",
     "ModelImpactCohortStats",

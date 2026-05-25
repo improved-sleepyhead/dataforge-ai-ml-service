@@ -17,6 +17,7 @@ from app.domain import (
     ClassImbalanceDiagnostics,
     ColumnMissingness,
     ErrorCode,
+    FallbackReadinessReport,
     LeakageCheckResult,
     LeakageCheckSeverity,
     LeakageCheckStatus,
@@ -188,6 +189,22 @@ def test_missing_target_label_is_not_eligible(tmp_path: Path) -> None:
     assert (
         ErrorCode.MODEL_IMPACT_NOT_ELIGIBLE.value == "MODEL_IMPACT_NOT_ELIGIBLE"
     )
+    assert report.fallback_report is not None
+    assert report.fallback_report.fallback_kind == "model_impact_not_eligible_readiness"
+    assert "target_label_missing" in report.fallback_report.reasons
+    fallback_payload = storage.get(report.fallback_report.fallback_artifact.uri).data
+    fallback_report = FallbackReadinessReport.model_validate_json(fallback_payload)
+    assert fallback_report.status is ModelImpactEligibilityStatus.NOT_ELIGIBLE
+    assert fallback_report.primary_reason_code == "target_label_missing"
+    assert (
+        ModelImpactNotEligibleReasonCode.TARGET_LABEL_MISSING
+        in fallback_report.not_eligible_reason_codes
+    )
+    validate_contract_payload(
+        load_contract_pack(),
+        "model_impact_eligibility",
+        report.model_dump(mode="json"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -234,6 +251,8 @@ def test_leakage_blocker_makes_candidate_not_eligible(tmp_path: Path) -> None:
     )
     assert ModelImpactInputName.NO_LEAKAGE_BLOCKERS in report.required_inputs_missing
     assert "leakage_blocker_present" in report.reasons
+    assert report.fallback_report is not None
+    assert "leakage_blocker_present" in report.fallback_report.reasons
 
 
 def test_too_few_rare_class_samples_is_not_eligible() -> None:

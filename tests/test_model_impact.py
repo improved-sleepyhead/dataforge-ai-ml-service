@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+import app.kernel.model_impact as model_impact_module
 from app.adapters import ArtifactRegistry, MinioObjectStorageAdapter, ObjectStorageScope
 from app.adapters.object_storage import ObjectStorageError, S3CompatibleClient
 from app.domain import (
@@ -28,6 +29,7 @@ from app.domain import (
     SplitManifestLineage,
     SplitStrategy,
     SyntheticUtilityStatus,
+    TstrTrtsMetrics,
 )
 from app.ingestion import open_archive_path
 from app.kernel import (
@@ -175,12 +177,12 @@ def test_model_impact_is_deterministic_for_same_seed(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 5: synthetic SMOTE candidate -> TSTR/TRTS available
+# Step 5: synthetic SMOTE candidate -> strict TSTR/TRTS semantics
 # ---------------------------------------------------------------------------
 
 
 def test_smote_candidate_emits_tstr_trts_metrics(tmp_path: Path) -> None:
-    """Step 5: synthetic SMOTE candidate produces TSTR and TRTS metrics."""
+    """Step 5: SMOTE reports strict TSTR as N/A when synthetic train is single-class."""
     storage, registry = _storage_and_registry()
     source_artifact = _source_transactions_artifact(tmp_path, registry)
     split_action = execute_tabular_split_action(
@@ -221,31 +223,26 @@ def test_smote_candidate_emits_tstr_trts_metrics(tmp_path: Path) -> None:
     result = run_model_impact(request, storage=storage, registry=registry)
     report = result.report
 
-    # Step 5: TSTR/TRTS metrics are available with concrete numbers.
-    assert report.tstr_trts.status is MetricStatus.AVAILABLE
-    assert report.tstr_trts.tstr_metrics is not None
+    # Step 5: strict TSTR trains on synthetic rows only. Targeted SMOTE
+    # generates rare-class rows, so the synthetic-only training set is
+    # single-class and TSTR must be explicit not_applicable instead of
+    # silently using real+synthetic candidate train rows.
+    assert report.tstr_trts.status is MetricStatus.NOT_APPLICABLE
+    assert report.tstr_trts.reason is not None
+    assert "tstr_single_class_in_train_split" in report.tstr_trts.reason
+    assert report.tstr_trts.tstr_metrics is None
     assert report.tstr_trts.trts_metrics is not None
-    assert 0.0 <= report.tstr_trts.tstr_metrics.macro_f1 <= 1.0
     assert 0.0 <= report.tstr_trts.trts_metrics.macro_f1 <= 1.0
-    assert report.tstr_trts.tstr_macro_f1_drop is not None
+    assert report.tstr_trts.tstr_macro_f1_drop is None
     assert report.tstr_trts.tstr_macro_f1_threshold == pytest.approx(0.10)
     assert report.tstr_trts.trts_macro_f1_delta is not None
     assert report.tstr_trts.trts_unstable_threshold == pytest.approx(0.20)
 
     # Synthetic utility verdict reflects metric movement.
-    assert report.synthetic_utility_status in {
-        SyntheticUtilityStatus.RECOMMENDED,
-        SyntheticUtilityStatus.REQUIRES_REVIEW,
-        SyntheticUtilityStatus.REJECTED,
-    }
-    # Validation gates blocker is False here, so REJECTED requires
-    # explicit metric-driven reasons.
-    if report.synthetic_utility_status is SyntheticUtilityStatus.REJECTED:
-        assert any(
-            "tstr_macro_f1_drop_above_threshold" == reason
-            or "metrics_degraded" == reason
-            for reason in report.synthetic_utility_reason_codes
-        )
+    assert report.synthetic_utility_status is SyntheticUtilityStatus.REQUIRES_REVIEW
+    assert "tstr_single_class_in_train_split" in " ".join(
+        report.synthetic_utility_reason_codes
+    )
 
     # Persistence: contract validates and metadata reflects the
     # synthetic verdict.
@@ -259,6 +256,58 @@ def test_smote_candidate_emits_tstr_trts_metrics(tmp_path: Path) -> None:
         stored.info.metadata["synthetic-utility-status"]
         == report.synthetic_utility_status.value
     )
+
+
+def test_model_impact_decisions_use_weighted_f1_and_pr_auc() -> None:
+    """Synthetic utility cannot ignore weighted F1 or PR-AUC degradation."""
+    verdict, verdict_reasons = model_impact_module._classify_verdict(
+        rare_class_recall_delta=0.10,
+        macro_f1_delta=0.01,
+        weighted_f1_delta=-0.04,
+        pr_auc_delta=0.0,
+        rare_class_recall_drop_threshold=0.05,
+        macro_f1_drop_threshold=0.03,
+        weighted_f1_drop_threshold=0.03,
+        pr_auc_drop_threshold=0.03,
+        validation_gates_blocker_present=False,
+    )
+    assert verdict is ModelImpactVerdict.DEGRADED
+    assert "weighted_f1_degraded" in verdict_reasons
+
+    verdict, verdict_reasons = model_impact_module._classify_verdict(
+        rare_class_recall_delta=0.10,
+        macro_f1_delta=0.01,
+        weighted_f1_delta=0.0,
+        pr_auc_delta=-0.04,
+        rare_class_recall_drop_threshold=0.05,
+        macro_f1_drop_threshold=0.03,
+        weighted_f1_drop_threshold=0.03,
+        pr_auc_drop_threshold=0.03,
+        validation_gates_blocker_present=False,
+    )
+    assert verdict is ModelImpactVerdict.DEGRADED
+    assert "pr_auc_degraded" in verdict_reasons
+
+    utility_status, utility_reasons = model_impact_module._classify_synthetic_utility(
+        candidate_is_synthetic=True,
+        verdict=ModelImpactVerdict.IMPROVED,
+        rare_class_recall_delta=0.10,
+        macro_f1_delta=0.01,
+        weighted_f1_delta=-0.04,
+        pr_auc_delta=0.0,
+        weighted_f1_drop_threshold=0.03,
+        pr_auc_drop_threshold=0.03,
+        tstr_trts=TstrTrtsMetrics(
+            status=MetricStatus.AVAILABLE,
+            tstr_macro_f1_drop=0.0,
+            tstr_macro_f1_threshold=0.10,
+            trts_macro_f1_delta=0.0,
+            trts_unstable_threshold=0.20,
+        ),
+        validation_gates_blocker_present=False,
+    )
+    assert utility_status is SyntheticUtilityStatus.REJECTED
+    assert "weighted_f1_degraded" in utility_reasons
 
 
 # ---------------------------------------------------------------------------
