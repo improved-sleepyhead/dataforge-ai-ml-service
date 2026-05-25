@@ -58,6 +58,58 @@ async def require_platform_signature(
     config: Annotated[ServiceConfig | None, Depends(_get_service_config)] = None,
 ) -> PlatformRequestIdentity:
     """Verify platform identity, HMAC signature, timestamp freshness, and scope."""
+    return await _verify_platform_signature(
+        request=request,
+        service_identity=service_identity,
+        timestamp=timestamp,
+        signature=signature,
+        organization_id=organization_id,
+        project_id=project_id,
+        config=config,
+        require_payload_scope=True,
+    )
+
+
+async def require_platform_signature_no_body(
+    request: Request,
+    service_identity: Annotated[str | None, Header(alias=SERVICE_IDENTITY_HEADER)] = None,
+    timestamp: Annotated[str | None, Header(alias=TIMESTAMP_HEADER)] = None,
+    signature: Annotated[str | None, Header(alias=SIGNATURE_HEADER)] = None,
+    organization_id: Annotated[str | None, Header(alias=ORGANIZATION_ID_HEADER)] = None,
+    project_id: Annotated[str | None, Header(alias=PROJECT_ID_HEADER)] = None,
+    config: Annotated[ServiceConfig | None, Depends(_get_service_config)] = None,
+) -> PlatformRequestIdentity:
+    """Verify platform identity for GET endpoints that have no JSON body.
+
+    Same HMAC scheme as :func:`require_platform_signature` but the body
+    portion of the signed payload is the literal empty bytes string and
+    the body is not parsed as JSON. The organization/project scope is
+    still verified through the signed headers themselves, which the HMAC
+    pins to the request.
+    """
+    return await _verify_platform_signature(
+        request=request,
+        service_identity=service_identity,
+        timestamp=timestamp,
+        signature=signature,
+        organization_id=organization_id,
+        project_id=project_id,
+        config=config,
+        require_payload_scope=False,
+    )
+
+
+async def _verify_platform_signature(
+    *,
+    request: Request,
+    service_identity: str | None,
+    timestamp: str | None,
+    signature: str | None,
+    organization_id: str | None,
+    project_id: str | None,
+    config: ServiceConfig | None,
+    require_payload_scope: bool,
+) -> PlatformRequestIdentity:
     if config is None:
         raise ServiceSignatureError(reason_code="service_config_unavailable", status_code=500)
     if not service_identity:
@@ -75,8 +127,9 @@ async def require_platform_signature(
     _validate_timestamp_freshness(signed_at, config.platform.signature_max_age_seconds)
 
     body = await request.body()
-    payload = _parse_json_body(body)
-    _validate_payload_scope(payload, organization_id=organization_id, project_id=project_id)
+    if require_payload_scope:
+        payload = _parse_json_body(body)
+        _validate_payload_scope(payload, organization_id=organization_id, project_id=project_id)
 
     expected = build_service_signature(
         secret=config.platform.service_signing_secret.get_secret_value(),
@@ -98,6 +151,9 @@ async def require_platform_signature(
 
 
 PlatformIdentityDep = Annotated[PlatformRequestIdentity, Depends(require_platform_signature)]
+PlatformIdentityNoBodyDep = Annotated[
+    PlatformRequestIdentity, Depends(require_platform_signature_no_body)
+]
 
 
 def build_service_signature(
