@@ -444,6 +444,98 @@ def test_failed_candidate_is_blocked_and_not_overwritten(tmp_path: Path) -> None
     assert storage.get(first.candidate_version_artifact.uri).data == first_bytes
 
 
+def test_review_required_validation_stays_review_required(tmp_path: Path) -> None:
+    """Warning-only validation failures keep the candidate in review flow."""
+    storage, registry = _storage_and_registry()
+    source_artifact = _source_transactions_artifact(tmp_path, registry)
+    plan = _imputation_action_plan()
+    imputation = execute_tabular_imputation_action(
+        ExecuteTabularImputationRequest(
+            action_plan_id=plan.action_plan_id,
+            step=plan.steps[0],
+            source_dataset_version_id="dataset_version_v1",
+            candidate_dataset_version_id="dataset_version_v2_candidate",
+            target_column="is_fraud",
+            source_artifact=source_artifact,
+            created_by_job_id="compute_run_apply_001",
+            config_hash=_CONFIG_HASH,
+            generated_at=_GENERATED_AT,
+        ),
+        storage=storage,
+        registry=registry,
+    )
+    warning_rule = BusinessRule(
+        rule_id="warning_amount_threshold",
+        severity=BusinessRuleSeverity.WARNING,
+        checks=(RuleFieldCheck(field="amount", op="lt", value=1.0),),
+    )
+    gates_result = run_validation_gates(
+        RunValidationGatesRequest(
+            dataset_id="dataset_1",
+            source_dataset_version_id="dataset_version_v1",
+            candidate_dataset_version_id="dataset_version_v2_candidate",
+            candidate_artifact=imputation.candidate_artifact.artifact_ref,
+            source_artifact=source_artifact,
+            candidate_artifact_kind="candidate_tabular_dataset",
+            schema_columns=tuple(_demo_schema_columns(tmp_path)),
+            numeric_columns=("amount", "monthly_income"),
+            business_rules=(warning_rule,),
+            created_by_job_id="compute_run_apply_001",
+            config_hash=_GATES_CONFIG_HASH,
+            generated_at=_GENERATED_AT,
+        ),
+        storage=storage,
+        registry=registry,
+    )
+    assert gates_result.report.candidate_status.value == "review_required"
+    assert gates_result.report.blocker_present is False
+    assert gates_result.report.block_export is False
+
+    result = build_candidate_dataset_version(
+        BuildCandidateVersionRequest(
+            organization_id="org_1",
+            project_id="project_1",
+            dataset_id="dataset_1",
+            parent_version_id="dataset_version_v1",
+            proposed_version_name="dataset_version_v2_candidate",
+            action_plan=plan,
+            policy_versions=_policy_versions(),
+            decision_report_id="decision_report_001",
+            created_by_job_id="compute_run_apply_001",
+            config_hash=_CANDIDATE_CONFIG_HASH,
+            source_artifacts=(source_artifact,),
+            candidate_artifacts=(
+                imputation.candidate_artifact.artifact_ref,
+                gates_result.report_artifact.artifact_ref,
+            ),
+            primary_dataset_artifact=imputation.candidate_artifact.artifact_ref,
+            validation_gates_report=gates_result.report,
+            validation_gates_report_artifact=gates_result.report_artifact.artifact_ref,
+            candidate_version_id="candidate_dataset_version_review_001",
+            proposed_at=_GENERATED_AT,
+        ),
+        registry=registry,
+    )
+
+    candidate = result.candidate_version
+    assert candidate.status is CandidateVersionStatus.REVIEW_REQUIRED
+    assert candidate.block_export is False
+    assert candidate.block_model_evaluation is False
+    assert candidate.block_training is False
+    assert candidate.blocker_reason_codes == ()
+    assert (
+        storage.get(result.candidate_version_artifact.uri).info.metadata[
+            "candidate-status"
+        ]
+        == "review_required"
+    )
+    validate_contract_payload(
+        load_contract_pack(),
+        "candidate_dataset_version",
+        candidate.model_dump(mode="json"),
+    )
+
+
 def test_synthetic_metadata_requires_synthetic_dataset_report_artifact() -> None:
     """Synthetic candidate without artifact ref raises explicit reason code."""
     storage, registry = _storage_and_registry()

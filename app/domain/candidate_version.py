@@ -11,7 +11,7 @@ the run into a finalized dataset version:
 - every output artifact ref produced by the run;
 - the validation-gates summary;
 - synthetic-method metadata when the candidate carries synthetic rows;
-- explicit ``status`` (proposed / blocked / failed).
+- explicit ``status`` (proposed / review_required / blocked / failed).
 
 The Python compute plane never writes the *final* lifecycle state of a
 dataset version into the platform database. It only persists the
@@ -50,12 +50,18 @@ class CandidateVersionStatus(StrEnum):
         artifacts remain in storage for audit, but the candidate must
         not be promoted as-is.
 
+        ``REVIEW_REQUIRED`` — validation completed without a hard
+        blocker, but at least one warning/review gate failed. The
+        platform approval workflow must resolve the review before
+        promotion.
+
         ``FAILED`` — execution itself failed before validation could
         complete. The candidate is recorded so the platform can surface
         the failure with its evidence.
     """
 
     PROPOSED = "proposed"
+    REVIEW_REQUIRED = "review_required"
     BLOCKED = "blocked"
     FAILED = "failed"
 

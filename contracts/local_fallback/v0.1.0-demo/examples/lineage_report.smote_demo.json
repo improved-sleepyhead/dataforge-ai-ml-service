@@ -1,0 +1,134 @@
+{
+  "lineage_report_id": "lineage_report_001",
+  "lineage_schema_version": "lineage_report.v1",
+  "organization_id": "org_1",
+  "project_id": "project_1",
+  "dataset_id": "dataset_1",
+  "parent_version_id": "dataset_version_v1",
+  "output_dataset_version_id": "dataset_version_v2_candidate",
+  "job_id": "compute_run_apply_001",
+  "input_artifact_hashes": [
+    "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "output_artifact_hashes": [
+    "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  ],
+  "algorithm_name": "smote",
+  "algorithm_version": "0.1.0",
+  "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "policy_version": "method_policy_v0",
+  "random_seed": 42,
+  "action_plan_id": "action_plan_smote_001",
+  "decision_report_id": "decision_report_001",
+  "candidate_version_artifact": {
+    "artifact_id": "candidate_dataset_version:aaaaaaaaaaaaaaaa",
+    "kind": "candidate_dataset_version",
+    "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/candidate_dataset_version.json",
+    "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "media_type": "application/json",
+    "size_bytes": 2048,
+    "schema_version": "candidate_dataset_version.v1",
+    "lineage": {
+      "parent_version_id": "dataset_version_v2_candidate",
+      "job_id": "compute_run_apply_001",
+      "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "created_at": "2026-05-25T12:15:00Z"
+    }
+  },
+  "export_package_artifact": {
+    "artifact_id": "export_package:dddddddddddddddd",
+    "kind": "export_package",
+    "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/export/export_package.json",
+    "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "media_type": "application/json",
+    "size_bytes": 4096,
+    "schema_version": "export_package.v1",
+    "lineage": {
+      "parent_version_id": "dataset_version_v2_candidate",
+      "job_id": "compute_run_apply_001",
+      "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "created_at": "2026-05-30T12:30:00Z"
+    }
+  },
+  "algorithms": [
+    {
+      "step_id": "create_split_tabular",
+      "step_type": "CREATE_SPLIT",
+      "algorithm_name": "group_stratified",
+      "algorithm_version": "0.1.0",
+      "plugin_id": "dataforge.tabular",
+      "plugin_version": "0.1.0",
+      "config_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "random_seed": 42
+    },
+    {
+      "step_id": "augment_rare_class_smote",
+      "step_type": "AUGMENT_RARE_CLASS",
+      "algorithm_name": "smote",
+      "algorithm_version": "0.1.0",
+      "plugin_id": "dataforge.tabular",
+      "plugin_version": "0.1.0",
+      "config_hash": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "random_seed": 42
+    }
+  ],
+  "policy_versions": {
+    "profile_policy_version": "demo_strict_v1",
+    "decision_policy_version": "decision_policy_v0",
+    "score_policy_version": "dataforge_score_v0",
+    "method_policy_version": "method_policy_v0",
+    "validation_gates_policy_version": "validation_gates_policy_v0",
+    "privacy_policy_version": "privacy_v0",
+    "export_policy_version": "export_policy_v0"
+  },
+  "input_artifact_refs": [],
+  "output_artifact_refs": [],
+  "openlineage": {
+    "run": {
+      "run_id": "compute_run_apply_001",
+      "job_namespace": "dataforgeai-ml-service",
+      "job_name": "apply_selected_actions",
+      "started_at": "2026-05-30T12:00:00Z",
+      "completed_at": "2026-05-30T12:30:00Z",
+      "facets": {
+        "step_count": 2,
+        "policy_version": "method_policy_v0",
+        "decision_policy_version": "decision_policy_v0"
+      }
+    },
+    "inputs": [
+      {
+        "namespace": "dataforgeai-ml-service",
+        "name": "dataset_version_v1",
+        "facets": {
+          "kind": "dataset_version",
+          "version_id": "dataset_version_v1"
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "namespace": "dataforgeai-ml-service",
+        "name": "dataset_version_v2_candidate",
+        "facets": {
+          "kind": "candidate_dataset_version",
+          "candidate_version_id": "candidate_dataset_version_001",
+          "status": "proposed"
+        }
+      },
+      {
+        "namespace": "dataforgeai-ml-service",
+        "name": "export_package_001",
+        "facets": {
+          "kind": "export_package",
+          "status": "READY",
+          "included": 100,
+          "blocked": 0,
+          "excluded": 0
+        }
+      }
+    ]
+  },
+  "created_at": "2026-05-30T12:30:30Z"
+}

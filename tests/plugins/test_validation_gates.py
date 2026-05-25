@@ -323,6 +323,83 @@ def test_synthetic_exact_duplicate_to_real_blocks_export() -> None:
     assert dcr_min.value == 0.0
 
 
+def test_dcr_uses_immutable_source_rows_not_only_candidate_real_rows() -> None:
+    """DCR must compare synthetic rows to source D_real even if candidate omits a row."""
+    storage, registry = _storage_and_registry()
+    source_csv = (
+        "object_id,is_fraud,amount,monthly_income\n"
+        "txn_1,0,10,1000\n"
+        "txn_source_only,1,999,9999\n"
+        "txn_3,0,30,1200\n"
+    )
+    source_artifact = registry.save_artifact(
+        artifact_kind="raw_transactions",
+        data=source_csv.encode("utf-8"),
+        artifact_format="csv",
+        media_type="text/csv",
+        schema_version="tabular_dataset.v1",
+        dataset_version_id="dataset_version_1",
+        created_by_job_id="compute_run_apply_001",
+        config_hash=_CONFIG_HASH,
+    ).artifact_ref
+    candidate_csv = (
+        "object_id,is_fraud,amount,monthly_income,is_synthetic,synthetic_source_split\n"
+        "txn_1,0,10,1000,0,\n"
+        "txn_3,0,30,1200,0,\n"
+        "txn_synth_0001,1,999,9999,1,train\n"
+    )
+    candidate_artifact = registry.save_artifact(
+        artifact_kind="candidate_tabular_dataset",
+        data=candidate_csv.encode("utf-8"),
+        artifact_format="csv",
+        media_type="text/csv",
+        schema_version="tabular_dataset.v1",
+        dataset_version_id="dataset_version_2_candidate",
+        created_by_job_id="compute_run_apply_001",
+        config_hash=_GATES_CONFIG_HASH,
+    ).artifact_ref
+    synthetic_report = _make_synthetic_report(
+        source_artifact=source_artifact,
+        candidate_artifact=candidate_artifact,
+    )
+
+    result = run_validation_gates(
+        RunValidationGatesRequest(
+            dataset_id="dataset_1",
+            source_dataset_version_id="dataset_version_1",
+            candidate_dataset_version_id="dataset_version_2_candidate",
+            candidate_artifact=candidate_artifact,
+            source_artifact=source_artifact,
+            candidate_artifact_kind="candidate_tabular_dataset",
+            schema_columns=("object_id", "is_fraud", "amount", "monthly_income"),
+            numeric_columns=("amount", "monthly_income"),
+            synthetic_dataset_report=synthetic_report,
+            dcr_thresholds=DcrThresholds(),
+            created_by_job_id="compute_run_apply_001",
+            config_hash=_GATES_CONFIG_HASH,
+            action_plan_id="action_plan_smote_001",
+            step_id="augment_rare_class_smote",
+            report_id="validation_gates_source_dcr",
+            generated_at=_GENERATED_AT,
+        ),
+        storage=storage,
+        registry=registry,
+    )
+
+    dcr_gate = next(
+        gate
+        for gate in result.report.gates
+        if gate.gate_type is ValidationGateType.SYNTHETIC_DCR_CHECK
+    )
+    assert dcr_gate.status is ValidationGateStatus.FAILED
+    assert next(metric for metric in dcr_gate.metrics if metric.name == "dcr_min").value == 0.0
+    reference_metric = next(
+        metric for metric in dcr_gate.metrics if metric.name == "real_reference_count"
+    )
+    assert reference_metric.value == 3.0
+    assert reference_metric.notes == "source_artifact"
+
+
 # ---------------------------------------------------------------------------
 # Step 5: explicit not_applicable reasons for unsupported metrics
 # ---------------------------------------------------------------------------
