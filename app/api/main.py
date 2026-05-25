@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import RequestResponseEndpoint
 
 from app.adapters import FakePlatformMetadataClient
+from app.api.error_taxonomy import remediation_hint_for
 from app.api.schemas import (
     ActionPlanExecuteApprovedRequest,
     ActionPlanExecuteApprovedResponse,
@@ -84,7 +85,10 @@ def create_app(
     ) -> Response:
         try:
             return await call_next(request)
-        except Exception:  # noqa: BLE001 - boundary middleware must sanitize all unhandled errors
+        except Exception as exc:  # noqa: BLE001 - boundary middleware must sanitize all unhandled errors
+            normalized = _normalize_plugin_error(exc)
+            if normalized is not None:
+                return normalized
             return error_json_response(
                 status_code=500,
                 code=ErrorCode.PLUGIN_EXECUTION_FAILED,
@@ -173,6 +177,50 @@ def create_app(
             stage="api.compute_run_cancelled",
             details={"reason_code": exc.reason_code},
         )
+
+    @application.middleware("http")
+    async def normalize_plugin_errors_middleware(
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        """Normalize plugin/kernel errors that carry stable ``code``/``reason_code`` attributes.
+
+        Plugin and kernel modules raise ``ValueError`` subclasses that pin
+        a stable :class:`ErrorCode` on the ``code`` attribute (and a more
+        specific ``reason_code`` string). Without a dedicated handler
+        these would surface through the safe outer middleware as a
+        generic ``PLUGIN_EXECUTION_FAILED`` 500. We catch them here,
+        preserve the stable code, and emit a normalized
+        :class:`ErrorResponse` while keeping raw exception messages and
+        tracebacks out of the wire.
+        """
+        try:
+            return await call_next(request)
+        except Exception as exc:  # noqa: BLE001 - boundary middleware normalizes plugin errors
+            code = getattr(exc, "code", None)
+            reason_code = getattr(exc, "reason_code", None)
+            if not isinstance(code, ErrorCode) or not isinstance(reason_code, str):
+                raise
+            details_attr = getattr(exc, "details", None)
+            details: dict[str, object] = (
+                dict(details_attr) if isinstance(details_attr, dict) else {}
+            )
+            details["reason_code"] = reason_code
+            status_code = getattr(exc, "status_code", None)
+            if not isinstance(status_code, int):
+                status_code = _default_status_for_code(code)
+            return error_json_response(
+                status_code=status_code,
+                code=code,
+                message="Plugin or kernel error normalized into a stable error response.",
+                recoverable=status_code < 500,
+                stage="api.plugin_normalized",
+                details=details,
+                plugin_id=_optional_str(getattr(exc, "plugin_id", None)),
+                job_id=_optional_str(getattr(exc, "job_id", None)),
+            )
+
+    
 
     @application.get(
         f"{API_PREFIX}/health",
@@ -569,6 +617,9 @@ def error_json_response(
     recoverable: bool,
     stage: str,
     details: dict[str, object] | None = None,
+    job_id: str | None = None,
+    plugin_id: str | None = None,
+    remediation_hint: str | None = None,
 ) -> JSONResponse:
     """Build a safe ErrorResponse JSON body without raw exception details."""
     response = ErrorResponse(
@@ -577,6 +628,9 @@ def error_json_response(
             message=message,
             recoverable=recoverable,
             stage=stage,
+            job_id=job_id,
+            plugin_id=plugin_id,
+            remediation_hint=remediation_hint or remediation_hint_for(code),
             details={} if details is None else details,
         )
     )
@@ -604,6 +658,81 @@ def _http_error_code(status_code: int) -> ErrorCode:
     if status_code in {400, 401, 403, 405, 409, 422}:
         return ErrorCode.INVALID_JOB_PAYLOAD
     return ErrorCode.PLUGIN_EXECUTION_FAILED
+
+
+def _normalize_plugin_error(exc: BaseException) -> JSONResponse | None:
+    """Return a normalized ErrorResponse for plugin/kernel errors, else ``None``.
+
+    Plugin and kernel modules raise ``ValueError`` subclasses that pin a
+    stable :class:`ErrorCode` on the ``code`` attribute (with an optional
+    ``reason_code`` string). When such an exception escapes the request
+    pipeline the safe boundary middleware delegates to this helper so
+    the wire response carries the stable code instead of a generic 500.
+    Raw exception messages and tracebacks are intentionally not
+    forwarded.
+    """
+    code = getattr(exc, "code", None)
+    reason_code = getattr(exc, "reason_code", None)
+    if not isinstance(code, ErrorCode) or not isinstance(reason_code, str):
+        return None
+    details_attr = getattr(exc, "details", None)
+    details: dict[str, object] = (
+        dict(details_attr) if isinstance(details_attr, dict) else {}
+    )
+    details["reason_code"] = reason_code
+    status_code = getattr(exc, "status_code", None)
+    if not isinstance(status_code, int):
+        status_code = _default_status_for_code(code)
+    return error_json_response(
+        status_code=status_code,
+        code=code,
+        message="Plugin or kernel error normalized into a stable error response.",
+        recoverable=status_code < 500,
+        stage="api.plugin_normalized",
+        details=details,
+        plugin_id=_optional_str(getattr(exc, "plugin_id", None)),
+        job_id=_optional_str(getattr(exc, "job_id", None)),
+    )
+
+
+def _default_status_for_code(code: ErrorCode) -> int:
+    """Stable HTTP status for plugin errors that don't carry a status_code."""
+    if code in {
+        ErrorCode.INVALID_JOB_PAYLOAD,
+        ErrorCode.UNSUPPORTED_MODALITY,
+        ErrorCode.INVALID_ARCHIVE_STRUCTURE,
+        ErrorCode.ARCHIVE_SAFETY_VIOLATION,
+        ErrorCode.CONTRACT_VALIDATION_FAILED,
+        ErrorCode.PREDICTION_VALIDATION_FAILED,
+        ErrorCode.ACTION_PLAN_PRECONDITION_FAILED,
+        ErrorCode.VALIDATION_GATE_FAILED,
+        ErrorCode.MODEL_IMPACT_NOT_ELIGIBLE,
+        ErrorCode.LEAKAGE_DETECTED,
+    }:
+        return 422
+    if code is ErrorCode.ARTIFACT_NOT_FOUND:
+        return 404
+    if code in {ErrorCode.ACTION_PLAN_REQUIRES_APPROVAL, ErrorCode.ARTIFACT_OUT_OF_SCOPE}:
+        return 403
+    if code is ErrorCode.ACTION_PLAN_SIGNATURE_INVALID:
+        return 401
+    if code in {
+        ErrorCode.POLICY_BLOCKED,
+        ErrorCode.PII_RESTRICTED,
+        ErrorCode.PLUGIN_NOT_ENABLED,
+        ErrorCode.EXPORT_BLOCKED,
+        ErrorCode.EXTERNAL_API_BLOCKED,
+        ErrorCode.RESOURCE_LIMIT_EXCEEDED,
+        ErrorCode.TENANT_SCOPE_VIOLATION,
+    }:
+        return 422
+    return 500
+
+
+def _optional_str(value: object) -> str | None:
+    if isinstance(value, str) and value:
+        return value
+    return None
 
 
 def _add_test_error_routes(application: FastAPI) -> None:
