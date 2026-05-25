@@ -91,6 +91,15 @@ from app.domain.leakage import (
     SplitLeakageLineage,
     SplitLeakageReport,
 )
+from app.domain.lineage import (
+    LINEAGE_REPORT_SCHEMA_VERSION,
+    LineageAlgorithm,
+    LineagePolicyVersions,
+    LineageReport,
+    OpenLineageDataset,
+    OpenLineageEnvelope,
+    OpenLineageRun,
+)
 from app.domain.manifest import (
     DataModality,
     DataSplit,
@@ -288,6 +297,13 @@ __all__ = [
     "LeakageCrossSplitFinding",
     "LeakageDiagnostics",
     "LearningValueSignals",
+    "LINEAGE_REPORT_SCHEMA_VERSION",
+    "LineageAlgorithm",
+    "LineagePolicyVersions",
+    "LineageReport",
+    "OpenLineageDataset",
+    "OpenLineageEnvelope",
+    "OpenLineageRun",
     "ManifestLineage",
     "ManifestRow",
     "MethodCandidate",

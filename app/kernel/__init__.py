@@ -81,6 +81,17 @@ from app.kernel.export_package import (
     ExportPackageBuilderError,
     build_export_package,
 )
+from app.kernel.lineage import (
+    LINEAGE_REPORT_FORMAT,
+    LINEAGE_REPORT_KIND,
+    LINEAGE_REPORT_MEDIA_TYPE,
+    OPENLINEAGE_JOB_NAME,
+    OPENLINEAGE_NAMESPACE,
+    BuildLineageReportRequest,
+    BuildLineageReportResult,
+    LineageBuilderError,
+    build_lineage_report,
+)
 from app.kernel.method_selection import (
     IMPUTATION_POLICY_COMPONENT_WEIGHTS,
     METHOD_SCORE_FORMULA,
@@ -228,4 +239,13 @@ __all__ = [
     "BuildExportPackageResult",
     "ExportPackageBuilderError",
     "build_export_package",
+    "LINEAGE_REPORT_FORMAT",
+    "LINEAGE_REPORT_KIND",
+    "LINEAGE_REPORT_MEDIA_TYPE",
+    "OPENLINEAGE_JOB_NAME",
+    "OPENLINEAGE_NAMESPACE",
+    "BuildLineageReportRequest",
+    "BuildLineageReportResult",
+    "LineageBuilderError",
+    "build_lineage_report",
 ]

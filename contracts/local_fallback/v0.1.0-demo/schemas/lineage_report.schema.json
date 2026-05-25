@@ -1,0 +1,445 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/lineage_report.schema.json",
+  "title": "LineageReport",
+  "type": "object",
+  "required": [
+    "lineage_report_id",
+    "lineage_schema_version",
+    "organization_id",
+    "project_id",
+    "dataset_id",
+    "parent_version_id",
+    "output_dataset_version_id",
+    "job_id",
+    "input_artifact_hashes",
+    "output_artifact_hashes",
+    "algorithm_name",
+    "algorithm_version",
+    "config_hash",
+    "policy_version",
+    "algorithms",
+    "policy_versions",
+    "openlineage",
+    "created_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "non_empty_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "facet_value": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "number"
+        }
+      ]
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "kind": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "lineage": {
+          "type": "object",
+          "required": [
+            "parent_version_id",
+            "job_id",
+            "config_hash",
+            "created_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "job_id": {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            "config_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "lineage_algorithm": {
+      "type": "object",
+      "required": [
+        "step_id",
+        "step_type",
+        "algorithm_name",
+        "algorithm_version",
+        "plugin_id",
+        "plugin_version",
+        "config_hash"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "step_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "step_type": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "algorithm_name": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "algorithm_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "plugin_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "plugin_version": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "random_seed": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "policy_versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile_policy_version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "decision_policy_version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "score_policy_version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "method_policy_version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "validation_gates_policy_version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "privacy_policy_version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "export_policy_version": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/non_empty_string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "openlineage_dataset": {
+      "type": "object",
+      "required": [
+        "namespace",
+        "name",
+        "facets"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "namespace": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "name": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "facets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/facet_value"
+          }
+        }
+      }
+    },
+    "openlineage_run": {
+      "type": "object",
+      "required": [
+        "run_id",
+        "job_namespace",
+        "job_name",
+        "started_at",
+        "completed_at",
+        "facets"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "job_namespace": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "job_name": {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "facets": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/facet_value"
+          }
+        }
+      }
+    },
+    "openlineage_envelope": {
+      "type": "object",
+      "required": [
+        "run",
+        "inputs",
+        "outputs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/openlineage_run"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/openlineage_dataset"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/openlineage_dataset"
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "lineage_report_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "lineage_schema_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "organization_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "project_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "dataset_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "parent_version_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "output_dataset_version_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "job_id": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "input_artifact_hashes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sha256"
+      }
+    },
+    "output_artifact_hashes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sha256"
+      }
+    },
+    "algorithm_name": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "algorithm_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "config_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "policy_version": {
+      "$ref": "#/$defs/non_empty_string"
+    },
+    "random_seed": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "action_plan_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "decision_report_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/non_empty_string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "candidate_version_artifact": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "export_package_artifact": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "algorithms": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/lineage_algorithm"
+      }
+    },
+    "policy_versions": {
+      "$ref": "#/$defs/policy_versions"
+    },
+    "input_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact_ref"
+      }
+    },
+    "output_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/artifact_ref"
+      }
+    },
+    "openlineage": {
+      "$ref": "#/$defs/openlineage_envelope"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

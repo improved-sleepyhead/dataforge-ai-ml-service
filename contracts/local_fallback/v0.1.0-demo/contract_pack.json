@@ -100,6 +100,10 @@
       "path": "schemas/version_compare_report.schema.json"
     },
     {
+      "name": "lineage_report",
+      "path": "schemas/lineage_report.schema.json"
+    },
+    {
       "name": "tabular_profile_report",
       "path": "schemas/tabular_profile_report.schema.json"
     },
@@ -246,6 +250,11 @@
       "name": "version_compare_report.smote_demo",
       "schema": "version_compare_report",
       "path": "examples/version_compare_report.smote_demo.json"
+    },
+    {
+      "name": "lineage_report.smote_demo",
+      "schema": "lineage_report",
+      "path": "examples/lineage_report.smote_demo.json"
     },
     {
       "name": "tabular_profile_report.fraud",

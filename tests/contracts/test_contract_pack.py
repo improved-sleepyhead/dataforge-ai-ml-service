@@ -51,6 +51,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
     assert "model_impact_eligibility" in pack.schemas
     assert "model_impact_report" in pack.schemas
     assert "version_compare_report" in pack.schemas
+    assert "lineage_report" in pack.schemas
     assert {example.name for example in pack.examples} == {
         "artifact_ref.basic",
         "compute_run.analyze_only",
@@ -78,6 +79,7 @@ def test_local_contract_pack_loads_schemas_and_examples() -> None:
         "model_impact_eligibility.eligible_demo",
         "model_impact_report.smote_demo",
         "version_compare_report.smote_demo",
+        "lineage_report.smote_demo",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
         "tabular_imputation_report.group_median",
@@ -115,6 +117,7 @@ def test_all_contract_examples_validate() -> None:
         "model_impact_eligibility.eligible_demo",
         "model_impact_report.smote_demo",
         "version_compare_report.smote_demo",
+        "lineage_report.smote_demo",
         "tabular_profile_report.fraud",
         "prediction_manifest_row.fraud",
         "tabular_imputation_report.group_median",
