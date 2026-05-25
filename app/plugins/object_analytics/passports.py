@@ -279,7 +279,11 @@ def _privacy_block(
             export_eligibility="policy_review_required",
         )
     if row.modality in {DataModality.TEXT, DataModality.DOCUMENT_OCR}:
-        score = text_signal.pii_risk_score if text_signal else 0.0
+        score = (
+            text_signal.pii_risk_score
+            if text_signal is not None and text_signal.pii_risk_score is not None
+            else 0.0
+        )
         pii_detected = text_signal.pii_detected if text_signal else False
         pii_types = text_signal.pii_types if text_signal else ()
         return PrivacyBlock(
@@ -318,7 +322,11 @@ def _duplicate_block(
             status=SignalStatus.AVAILABLE,
             duplicate_cluster_id="tabular_exact_duplicate" if is_duplicate else None,
         )
-    duplicate_score = text_signal.duplicate_score if text_signal else 0.0
+    duplicate_score = (
+        text_signal.duplicate_score
+        if text_signal is not None and text_signal.duplicate_score is not None
+        else 0.0
+    )
     return DuplicateSignals(
         duplicate_score=duplicate_score,
         status=SignalStatus.AVAILABLE,
