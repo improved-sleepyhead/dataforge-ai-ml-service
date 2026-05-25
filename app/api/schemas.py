@@ -45,6 +45,7 @@ class AnalyzeDatasetAcceptedResponse(BaseModel):
     status_url: NonEmptyStr
     expected_outputs: tuple[NonEmptyStr, ...]
     materialized_assets: tuple[NonEmptyStr, ...]
+    idempotency_key: Sha256Digest
     mutates_dataset: Literal[False] = False
 
 
@@ -106,6 +107,7 @@ class ActionPlanExecuteApprovedResponse(BaseModel):
     status_url: NonEmptyStr
     expected_outputs: tuple[NonEmptyStr, ...]
     materialized_assets: tuple[NonEmptyStr, ...]
+    idempotency_key: Sha256Digest
     candidate_artifact_uri: S3Uri | None = None
     candidate_artifact_hash: Sha256Digest | None = None
     synthetic_artifact_uri: S3Uri | None = None

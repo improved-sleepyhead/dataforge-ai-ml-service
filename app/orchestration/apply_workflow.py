@@ -52,6 +52,11 @@ from app.domain import (
 )
 from app.domain.common import Sha256Digest
 from app.kernel.config import ServiceConfig
+from app.kernel.idempotency import (
+    ApplyIdempotencyInputs,
+    collect_artifact_hashes,
+    compute_apply_idempotency_key,
+)
 from app.orchestration.apply_assets import (
     APPLY_ASSET_KEYS,
     APPLY_ASSETS,
@@ -73,6 +78,7 @@ class ApplyWorkflowResult:
     materialized_assets: tuple[str, ...]
     action_plan_id: str
     action_plan_hash: Sha256Digest
+    idempotency_key: Sha256Digest
     candidate_artifact_uri: str | None
     candidate_artifact_hash: Sha256Digest | None
     synthetic_artifact_uri: str | None
@@ -122,6 +128,32 @@ def launch_apply_actions_workflow(
         policy_versions=policy_versions,
         input_artifacts=input_artifacts,
         require_model_impact_eligibility=require_model_impact_eligibility,
+    )
+    idempotency_key = compute_apply_idempotency_key(
+        ApplyIdempotencyInputs(
+            organization_id=request.organization_id,
+            project_id=request.project_id,
+            dataset_id=request.dataset_id,
+            source_dataset_version_id=apply_context.source_dataset_version_id,
+            proposed_version_name=apply_context.proposed_version_name,
+            action_plan_hash=action_plan_hash,
+            input_artifact_hashes=collect_artifact_hashes(input_artifacts),
+            config_hash=apply_context.config_hash,
+            contract_pack_version=config.contract_pack_version,
+            policy_versions={
+                "profile": apply_context.policy_versions.profile_policy_version,
+                "decision": apply_context.policy_versions.decision_policy_version,
+                "score": apply_context.policy_versions.score_policy_version,
+                "method": apply_context.policy_versions.method_policy_version,
+                "validation_gates": (
+                    apply_context.policy_versions.validation_gates_policy_version
+                    or "not_recorded"
+                ),
+            },
+            step_idempotency_keys=tuple(
+                step.idempotency_key for step in request.action_plan.steps
+            ),
+        )
     )
     run_context = RunContext(
         compute_run_id=f"compute_{request.platform_job_id}",
@@ -196,6 +228,7 @@ def launch_apply_actions_workflow(
         materialized_assets=tuple(materialized_assets),
         action_plan_id=request.action_plan.action_plan_id,
         action_plan_hash=action_plan_hash,
+        idempotency_key=idempotency_key,
         candidate_artifact_uri=candidate_uri,
         candidate_artifact_hash=candidate_hash,
         synthetic_artifact_uri=synthetic_uri,

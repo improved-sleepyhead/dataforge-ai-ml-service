@@ -19,6 +19,11 @@ from app.adapters.object_storage import ObjectStorageError
 from app.api.schemas import AnalyzeDatasetRequest
 from app.domain import ComputeRunStatus, ErrorCode, WorkflowType
 from app.kernel.config import ServiceConfig
+from app.kernel.idempotency import (
+    AnalyzeIdempotencyInputs,
+    collect_artifact_hashes,
+    compute_analyze_idempotency_key,
+)
 from app.orchestration.assets import (
     ANALYZE_ASSETS,
     BASE_ANALYZE_ASSET_KEYS,
@@ -39,6 +44,7 @@ class AnalyzeWorkflowResult:
     status_url: str
     expected_outputs: tuple[str, ...]
     materialized_assets: tuple[str, ...]
+    idempotency_key: str
     mutates_dataset: bool = False
 
 
@@ -57,6 +63,22 @@ def launch_analyze_dataset_workflow(
     """
     expected_outputs = expected_analyze_outputs(
         include_predictions=bool(request.prediction_artifact_refs)
+    )
+    idempotency_key = compute_analyze_idempotency_key(
+        AnalyzeIdempotencyInputs(
+            organization_id=request.organization_id,
+            project_id=request.project_id,
+            dataset_id=request.dataset_id,
+            dataset_version_id=request.dataset_version_id,
+            input_artifact_hashes=collect_artifact_hashes(
+                request.dataset_object_refs
+            ),
+            prediction_artifact_hashes=collect_artifact_hashes(
+                request.prediction_artifact_refs
+            ),
+            config_hash=config.config_hash,
+            contract_pack_version=config.contract_pack_version,
+        )
     )
     run_context = RunContext(
         compute_run_id=f"compute_{request.platform_job_id}",
@@ -102,6 +124,7 @@ def launch_analyze_dataset_workflow(
         status_url=f"/api/v1/jobs/{request.platform_job_id}/status",
         expected_outputs=expected_outputs,
         materialized_assets=materialized_assets,
+        idempotency_key=idempotency_key,
         mutates_dataset=False,
     )
 

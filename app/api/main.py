@@ -188,6 +188,7 @@ def create_app(
             status_url=result.status_url,
             expected_outputs=result.expected_outputs,
             materialized_assets=result.materialized_assets,
+            idempotency_key=result.idempotency_key,
             mutates_dataset=False,
         )
 
@@ -261,6 +262,7 @@ def create_app(
             status_url=result.status_url,
             expected_outputs=result.expected_outputs,
             materialized_assets=result.materialized_assets,
+            idempotency_key=result.idempotency_key,
             candidate_artifact_uri=result.candidate_artifact_uri,
             candidate_artifact_hash=result.candidate_artifact_hash,
             synthetic_artifact_uri=result.synthetic_artifact_uri,
