@@ -290,6 +290,11 @@ def execute_smote_augmentation_action(
         "random-seed": str(request.random_seed),
         "k-neighbors": str(effective_k),
         "sampling-strategy": str(request.sampling_strategy),
+        **(
+            {"created-at": request.generated_at.isoformat()}
+            if request.generated_at is not None
+            else {}
+        ),
     }
     persistence = persist_synthetic_artifacts(
         method=SyntheticGenerationMethod.SMOTE,

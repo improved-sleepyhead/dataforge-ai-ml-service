@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -55,6 +56,7 @@ from app.orchestration import (
     build_definitions,
     build_local_demo_definitions,
 )
+from tests.test_apply_workflow import _execute_request, _test_config
 
 
 def test_local_demo_definitions_load_without_errors() -> None:
@@ -170,21 +172,11 @@ def test_apply_assets_require_apply_context() -> None:
     assert not result.success
 
 
-def test_apply_assets_succeed_with_apply_context_and_emit_stage_events() -> None:
+def test_apply_assets_succeed_with_apply_context_and_emit_stage_events(
+    tmp_path: Path,
+) -> None:
     fake_platform = FakePlatformMetadataClient()
-    compute_resources = _build_in_memory_resources(fake_platform=fake_platform)
-    run_context_resource = RunContextResource(
-        run_context=_run_context(),
-        workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
-        apply_context=ApplyRunContext(
-            action_plan_id="action_plan_001",
-            decision_report_id="decision_report_001",
-        ),
-    )
-    definitions = build_definitions(
-        compute_resources=compute_resources,
-        run_context_resource=run_context_resource,
-    )
+    definitions = _build_real_apply_definitions(tmp_path, fake_platform=fake_platform)
 
     apply_job = _job_by_name(definitions, APPLY_JOB_NAME)
     result = apply_job.execute_in_process()
@@ -254,6 +246,44 @@ def _build_in_memory_resources(
         object_storage=storage,
         artifact_registry=registry,
         fake_platform=fake_platform,
+    )
+
+
+def _build_real_apply_definitions(
+    tmp_path: Path,
+    *,
+    fake_platform: FakePlatformMetadataClient,
+) -> Definitions:
+    config = _test_config()
+    request, _plan_hash, compute_resources = _execute_request(
+        tmp_path,
+        config,
+        fake_platform,
+    )
+    plan = request.action_plan
+    run_context_resource = RunContextResource(
+        run_context=RunContext(
+            compute_run_id=f"compute_{request.platform_job_id}",
+            platform_job_id=request.platform_job_id,
+            organization_id=request.organization_id,
+            project_id=request.project_id,
+            dataset_id=request.dataset_id,
+            dataset_version_id=plan.target_version_name,
+        ),
+        workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
+        apply_context=ApplyRunContext(
+            action_plan_id=plan.action_plan_id,
+            decision_report_id=plan.created_from_decision_report,
+            source_dataset_version_id=request.source_dataset_version_id,
+            proposed_version_name=plan.target_version_name,
+            config_hash=plan.steps[0].config_hash,
+            action_plan=plan,
+            input_artifacts=request.source_artifacts,
+        ),
+    )
+    return build_definitions(
+        compute_resources=compute_resources,
+        run_context_resource=run_context_resource,
     )
 
 

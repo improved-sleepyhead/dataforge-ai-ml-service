@@ -12,6 +12,7 @@ These tests cover the compute-plane → platform status bridge:
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from app.adapters import FakePlatformMetadataClient
 from app.domain import (
@@ -23,7 +24,6 @@ from app.domain import (
 from app.orchestration import (
     ANALYZE_JOB_NAME,
     APPLY_JOB_NAME,
-    ApplyRunContext,
     JobEvent,
     JobStage,
     RunContextResource,
@@ -33,6 +33,7 @@ from app.orchestration import (
 )
 from tests.orchestration.test_dagster_runtime import (
     _build_in_memory_resources,
+    _build_real_apply_definitions,
     _job_by_name,
     _run_context,
 )
@@ -169,21 +170,9 @@ def test_analyze_job_emits_canonical_lifecycle_stages() -> None:
     assert snapshot.job_events[-1].status is ComputeRunStatus.COMPLETED
 
 
-def test_apply_job_emits_completed_terminal_event() -> None:
+def test_apply_job_emits_completed_terminal_event(tmp_path: Path) -> None:
     fake_platform = FakePlatformMetadataClient()
-    compute_resources = _build_in_memory_resources(fake_platform=fake_platform)
-    run_context_resource = RunContextResource(
-        run_context=_run_context(),
-        workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
-        apply_context=ApplyRunContext(
-            action_plan_id="action_plan_001",
-            decision_report_id="decision_report_001",
-        ),
-    )
-    definitions = build_definitions(
-        compute_resources=compute_resources,
-        run_context_resource=run_context_resource,
-    )
+    definitions = _build_real_apply_definitions(tmp_path, fake_platform=fake_platform)
     apply_job = _job_by_name(definitions, APPLY_JOB_NAME)
 
     result = apply_job.execute_in_process()

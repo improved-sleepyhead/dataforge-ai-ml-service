@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -256,11 +257,13 @@ def test_analyze_launcher_raises_run_cancelled_when_token_pre_set() -> None:
     assert artifact_uris == []
 
 
-def test_apply_launcher_cancellation_does_not_publish_apply_workflow_result() -> None:
+def test_apply_launcher_cancellation_does_not_publish_apply_workflow_result(
+    tmp_path: Path,
+) -> None:
     """Step 2+3: cancel APPLY mid-flight, no ApplyWorkflowResult is returned."""
     fake_platform = FakePlatformMetadataClient()
     config = _test_config()
-    request, plan_hash = _execute_request()
+    request, plan_hash, resources = _execute_request(tmp_path, config, fake_platform)
 
     token = CancellationToken()
     token.cancel(reason_code="platform_user_cancelled")
@@ -271,6 +274,8 @@ def test_apply_launcher_cancellation_does_not_publish_apply_workflow_result() ->
             action_plan_hash=plan_hash,
             config=config,
             fake_platform=fake_platform,
+            input_artifacts=request.source_artifacts,
+            compute_resources=resources,
             cancellation_token=token,
         )
 

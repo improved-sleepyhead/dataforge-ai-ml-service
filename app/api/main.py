@@ -51,6 +51,7 @@ from app.kernel.config import ServiceConfig, load_config
 from app.orchestration.analyze_workflow import launch_analyze_dataset_workflow
 from app.orchestration.apply_workflow import launch_apply_actions_workflow
 from app.orchestration.cancellation import CancellationRegistry, RunCancelledError
+from app.orchestration.resources import ComputeResources
 from app.plugin_sdk import CapabilitiesResponse
 from app.plugins import build_static_plugin_manager
 from app.validation.contracts import load_contract_pack
@@ -64,6 +65,7 @@ def create_app(
     include_test_error_route: bool = False,
     include_test_protected_route: bool = False,
     config: ServiceConfig | None = None,
+    compute_resources: ComputeResources | None = None,
 ) -> FastAPI:
     """Create the FastAPI app without requiring production secrets."""
     application = FastAPI(
@@ -74,9 +76,14 @@ def create_app(
         openapi_url="/api/openapi.json",
     )
     application.state.service_config = config
-    application.state.fake_platform_client = FakePlatformMetadataClient()
+    application.state.fake_platform_client = (
+        compute_resources.fake_platform
+        if compute_resources is not None
+        else FakePlatformMetadataClient()
+    )
     application.state.cancellation_registry = CancellationRegistry()
     application.state.compute_store = ComputeResultStore()
+    application.state.compute_resources = compute_resources
 
     @application.middleware("http")
     async def safe_unhandled_error_middleware(
@@ -359,6 +366,8 @@ def create_app(
                 action_plan_hash=action_plan_hash,
                 config=_resolve_service_config(request),
                 fake_platform=request.app.state.fake_platform_client,
+                input_artifacts=payload.source_artifacts,
+                compute_resources=getattr(request.app.state, "compute_resources", None),
                 cancellation_token=token,
             )
         finally:

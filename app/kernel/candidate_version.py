@@ -189,6 +189,7 @@ def build_candidate_dataset_version(
         "action-plan-id": request.action_plan.action_plan_id,
         "parent-version-id": request.parent_version_id,
         "proposed-version-name": request.proposed_version_name,
+        "created-at": candidate_version.proposed_at.isoformat(),
     }
     if synthetic_metadata is not None:
         metadata_label["synthetic-method-id"] = synthetic_metadata.method_id

@@ -186,6 +186,7 @@ def build_export_package(
         "version-id": package.version_id,
         "source-version-id": package.source_version_id,
         "blocker-count": str(len(blocker_codes)),
+        "created-at": package.created_at.isoformat(),
     }
     artifact = registry.save_artifact(
         artifact_kind=EXPORT_PACKAGE_KIND,

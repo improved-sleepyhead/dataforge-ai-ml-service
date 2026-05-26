@@ -160,6 +160,11 @@ def build_dataset_card_artifact(
         "source-version-id": (
             request.candidate_dataset_version.lineage.parent_version_id
         ),
+        **(
+            {"created-at": request.generated_at.isoformat()}
+            if request.generated_at is not None
+            else {}
+        ),
     }
     artifact = registry.save_artifact(
         artifact_kind=DATASET_CARD_ARTIFACT_KIND,

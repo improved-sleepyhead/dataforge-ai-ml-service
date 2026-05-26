@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -236,39 +237,45 @@ def test_analyze_launcher_key_is_stable_across_input_artifact_order() -> None:
     assert first.idempotency_key == second.idempotency_key
 
 
-def test_apply_launcher_returns_stable_idempotency_key() -> None:
+def test_apply_launcher_returns_stable_idempotency_key(tmp_path: Path) -> None:
     """Step 1+2+3: identical APPLY runs share idempotency_key and artifact hashes."""
     config = _test_config()
-    request, plan_hash = _execute_request()
+    fake_platform = FakePlatformMetadataClient()
+    request, plan_hash, resources = _execute_request(tmp_path, config, fake_platform)
 
     first = launch_apply_actions_workflow(
         request=request,
         action_plan_hash=plan_hash,
         config=config,
-        fake_platform=FakePlatformMetadataClient(),
+        fake_platform=fake_platform,
+        input_artifacts=request.source_artifacts,
+        compute_resources=resources,
     )
     second = launch_apply_actions_workflow(
         request=request,
         action_plan_hash=plan_hash,
         config=config,
         fake_platform=FakePlatformMetadataClient(),
+        input_artifacts=request.source_artifacts,
+        compute_resources=resources,
     )
 
     assert first.idempotency_key == second.idempotency_key
-    # Placeholder APPLY currently exposes no final candidate hash.
-    assert first.candidate_artifact_hash is None
-    assert second.candidate_artifact_hash is None
+    assert first.candidate_artifact_hash == second.candidate_artifact_hash
 
 
-def test_apply_launcher_key_changes_when_step_plugin_version_changes() -> None:
+def test_apply_launcher_key_changes_when_step_plugin_version_changes(tmp_path: Path) -> None:
     """Selected ActionPlan step plugin versions must invalidate APPLY keys."""
     config = _test_config()
-    request, plan_hash = _execute_request()
+    fake_platform = FakePlatformMetadataClient()
+    request, plan_hash, resources = _execute_request(tmp_path, config, fake_platform)
     base = launch_apply_actions_workflow(
         request=request,
         action_plan_hash=plan_hash,
         config=config,
-        fake_platform=FakePlatformMetadataClient(),
+        fake_platform=fake_platform,
+        input_artifacts=request.source_artifacts,
+        compute_resources=resources,
     )
     step = request.action_plan.steps[0]
     patched_step = step.model_copy(update={"plugin_version": "0.2.0"})
@@ -280,19 +287,20 @@ def test_apply_launcher_key_changes_when_step_plugin_version_changes() -> None:
         action_plan_hash=plan_hash,
         config=config,
         fake_platform=FakePlatformMetadataClient(),
+        input_artifacts=patched_request.source_artifacts,
+        compute_resources=resources,
     )
 
     assert base.idempotency_key != changed.idempotency_key
 
 
-def test_apply_launcher_key_is_stable_across_input_artifact_order() -> None:
+def test_apply_launcher_key_is_stable_across_input_artifact_order(tmp_path: Path) -> None:
     """Same APPLY input artifacts in a different order must share one key."""
     config = _test_config()
-    request, plan_hash = _execute_request()
-    input_refs = (
-        _artifact_ref("b", "kind_b", "sha256:" + "b" * 64),
-        _artifact_ref("a", "kind_a", "sha256:" + "a" * 64),
-    )
+    fake_platform = FakePlatformMetadataClient()
+    request, plan_hash, resources = _execute_request(tmp_path, config, fake_platform)
+    extra_ref = _artifact_ref("metadata_sidecar", "metadata_sidecar", "sha256:" + "c" * 64)
+    input_refs = (*request.source_artifacts, extra_ref)
 
     first = launch_apply_actions_workflow(
         request=request,
@@ -300,6 +308,7 @@ def test_apply_launcher_key_is_stable_across_input_artifact_order() -> None:
         config=config,
         fake_platform=FakePlatformMetadataClient(),
         input_artifacts=input_refs,
+        compute_resources=resources,
     )
     second = launch_apply_actions_workflow(
         request=request,
@@ -307,12 +316,13 @@ def test_apply_launcher_key_is_stable_across_input_artifact_order() -> None:
         config=config,
         fake_platform=FakePlatformMetadataClient(),
         input_artifacts=tuple(reversed(input_refs)),
+        compute_resources=resources,
     )
 
     assert first.idempotency_key == second.idempotency_key
 
 
-def test_apply_launcher_does_not_mask_validation_failures_via_cache() -> None:
+def test_apply_launcher_does_not_mask_validation_failures_via_cache(tmp_path: Path) -> None:
     """Failed validation gates must still surface even if upstream artifacts cache.
 
     The ApplyWorkflowResult does not cache the response; the launcher
@@ -322,7 +332,7 @@ def test_apply_launcher_does_not_mask_validation_failures_via_cache() -> None:
     """
     fake_platform = FakePlatformMetadataClient()
     config = _test_config()
-    request, plan_hash = _execute_request()
+    request, plan_hash, resources = _execute_request(tmp_path, config, fake_platform)
 
     # Sanity: a healthy run is ACCEPTED.
     healthy = launch_apply_actions_workflow(
@@ -330,6 +340,8 @@ def test_apply_launcher_does_not_mask_validation_failures_via_cache() -> None:
         action_plan_hash=plan_hash,
         config=config,
         fake_platform=fake_platform,
+        input_artifacts=request.source_artifacts,
+        compute_resources=resources,
     )
     assert healthy.status.value == "ACCEPTED"
 
@@ -341,6 +353,8 @@ def test_apply_launcher_does_not_mask_validation_failures_via_cache() -> None:
             action_plan_hash=plan_hash,
             config=config,
             fake_platform=fake_platform,
+            input_artifacts=request.source_artifacts,
+            compute_resources=resources,
         )
 
 

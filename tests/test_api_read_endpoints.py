@@ -21,10 +21,12 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app.adapters import FakePlatformMetadataClient
 from app.api.main import create_app
 from app.api.security import (
     ORGANIZATION_ID_HEADER,
@@ -56,14 +58,20 @@ from app.kernel import (
 )
 from app.kernel.config import ServiceConfig, load_config
 from app.validation.contracts import load_contract_pack
+from tests.test_apply_workflow import _compute_resources_with_source_artifact
 
 _GENERATED_AT = datetime(2026, 6, 4, 12, 0, tzinfo=UTC)
 
 
-def test_read_endpoints_return_recorded_analyze_apply_state() -> None:
+def test_read_endpoints_return_recorded_analyze_apply_state(tmp_path: Path) -> None:
     """Steps 1+2: run analyze/execute, read artifacts back through GET endpoints."""
     config = _test_config()
-    app = create_app(config=config)
+    resources, source_artifact = _compute_resources_with_source_artifact(
+        tmp_path=tmp_path,
+        config=config,
+        fake_platform=FakePlatformMetadataClient(),
+    )
+    app = create_app(config=config, compute_resources=resources)
     client = TestClient(app, raise_server_exceptions=False)
 
     # Step 1: analyze flow records a job.
@@ -89,7 +97,7 @@ def test_read_endpoints_return_recorded_analyze_apply_state() -> None:
     preview_plan = preview_resp.json()["action_plan"]
     preview_action_plan_id = preview_plan["action_plan_id"]
 
-    execute_payload = _action_plan_execute_payload()
+    execute_payload = _action_plan_execute_payload(source_artifacts=[source_artifact])
     execute_body = _body_bytes(execute_payload)
     execute_resp = client.post(
         "/api/v1/action-plans/execute-approved",
@@ -118,8 +126,7 @@ def test_read_endpoints_return_recorded_analyze_apply_state() -> None:
     # raw payloads/PII never present.
     _assert_safe_response_text(job_resp.text)
 
-    # Step 2: GET /jobs/{job_id} returns apply run summary. Placeholder
-    # APPLY materializations must not be exposed as final candidate/export refs.
+    # Step 2: GET /jobs/{job_id} returns apply run summary with real gated refs.
     apply_job_resp = client.get(f"/api/v1/jobs/{execute_job_id}", headers=headers)
     assert apply_job_resp.status_code == 200
     apply_job_body = apply_job_resp.json()
@@ -127,8 +134,10 @@ def test_read_endpoints_return_recorded_analyze_apply_state() -> None:
     assert apply_job_body["mutates_dataset"] is True
     assert apply_job_body["action_plan_id"] == execute_action_plan_id
     assert apply_job_body["action_plan_hash"] == expected_action_plan_hash
-    assert apply_job_body["candidate_artifact_uri"] is None
-    assert apply_job_body["export_package_artifact_uri"] is None
+    assert apply_job_body["candidate_artifact_uri"] is not None
+    assert apply_job_body["export_package_artifact_uri"] is not None
+    assert ".placeholder." not in apply_job_body["candidate_artifact_uri"]
+    assert ".placeholder." not in apply_job_body["export_package_artifact_uri"]
     _assert_safe_response_text(apply_job_resp.text)
 
     # Step 2: GET /action-plans/{id} returns preview-only metadata for previewed plan
@@ -421,9 +430,19 @@ def _action_plan_preview_payload() -> dict[str, object]:
     }
 
 
-def _action_plan_execute_payload() -> dict[str, object]:
+def _action_plan_execute_payload(
+    *,
+    source_artifacts: list[ArtifactRef] | None = None,
+) -> dict[str, object]:
     recommendations = build_method_recommendations(
         BuildMethodRecommendationsRequest(tabular_profile=_demo_tabular_profile())
+    )
+    input_artifacts = (
+        tuple(artifact.uri for artifact in source_artifacts)
+        if source_artifacts
+        else (
+            "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/manifest.jsonl",
+        )
     )
     plan = build_action_plan_preview(
         BuildActionPlanPreviewRequest(
@@ -433,9 +452,7 @@ def _action_plan_execute_payload() -> dict[str, object]:
             selected_method_overrides={},
             method_recommendations=(recommendations[0],),
             created_by_user_id="platform_user_read_apply",
-            input_artifacts=(
-                "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/manifest.jsonl",
-            ),
+            input_artifacts=input_artifacts,
             target_version_name="dataset_version_2_candidate_read",
             created_at=_GENERATED_AT,
         )
@@ -463,6 +480,9 @@ def _action_plan_execute_payload() -> dict[str, object]:
             "decision_report_id": action_plan["created_from_decision_report"],
             "source_dataset_version_id": action_plan["source_dataset_version_id"],
         },
+        "source_artifacts": []
+        if source_artifacts is None
+        else [artifact.model_dump(mode="json") for artifact in source_artifacts],
     }
 
 
