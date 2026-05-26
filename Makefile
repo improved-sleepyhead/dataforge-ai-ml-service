@@ -2,16 +2,16 @@ PYTHON ?= python
 DOCKER ?= docker
 IMAGE ?= dataforgeai-ml-service:local
 
-.PHONY: install-dev lint typecheck test test-contracts test-plugins test-security test-e2e-compute-demo test-performance docker-build
+.PHONY: install-dev lint typecheck test test-contracts test-plugins test-security test-e2e-compute-demo test-performance docker-build quality-gate
 
 install-dev:
 	$(PYTHON) -m pip install -e ".[dev]"
 
 lint:
-	$(PYTHON) -m ruff check app tests
+	$(PYTHON) -m ruff check app tools tests
 
 typecheck:
-	$(PYTHON) -m mypy app tests
+	$(PYTHON) -m mypy app tools tests
 
 test:
 	$(PYTHON) -m pytest tests
@@ -33,3 +33,6 @@ test-performance:
 
 docker-build:
 	$(DOCKER) build --tag $(IMAGE) .
+
+quality-gate:
+	$(PYTHON) -m tools.quality_gate --python $(PYTHON) --report build/quality_gate.json

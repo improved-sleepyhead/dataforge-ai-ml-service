@@ -72,6 +72,20 @@ PYTHON=.venv/bin/python make test-e2e-compute-demo
 PYTHON=.venv/bin/python make test-performance
 ```
 
+Or run the unified quality gate, which executes every suite above in
+the canonical order, prints a deterministic passed/failed summary, and
+writes a JSON report to `build/quality_gate.json`:
+
+```bash
+PYTHON=.venv/bin/python make quality-gate
+```
+
+The unified gate is the **mandatory check before marking any final
+delivery task `status=done`**. Any failed suite (lint, typecheck, unit,
+contract, plugin, security/privacy, e2e_compute, performance) fails the
+command with a non-zero exit code; the JSON report lists per-suite
+durations, exit codes, and skip reasons.
+
 Targeted runs:
 
 ```bash

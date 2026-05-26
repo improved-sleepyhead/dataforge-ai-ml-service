@@ -28,7 +28,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["app*", "tools*"]
 
 [tool.pytest.ini_options]
 addopts = "-q"
@@ -46,7 +46,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.mypy]
 python_version = "3.11"
-packages = ["app"]
+packages = ["app", "tools"]
 strict = true
 warn_unused_configs = true
 
