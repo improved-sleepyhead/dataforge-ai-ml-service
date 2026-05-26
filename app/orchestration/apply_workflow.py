@@ -56,6 +56,7 @@ from app.kernel.idempotency import (
     ApplyIdempotencyInputs,
     collect_artifact_hashes,
     compute_apply_idempotency_key,
+    plugin_footprints_from_action_plan,
 )
 from app.orchestration.apply_assets import (
     APPLY_ASSET_KEYS,
@@ -177,6 +178,7 @@ def launch_apply_actions_workflow(
             step_idempotency_keys=tuple(
                 step.idempotency_key for step in request.action_plan.steps
             ),
+            plugin_versions=plugin_footprints_from_action_plan(request.action_plan),
         )
     )
     run_context = RunContext(

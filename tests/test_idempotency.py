@@ -17,7 +17,10 @@ from app.kernel.idempotency import (
     compute_analyze_idempotency_key,
     compute_apply_idempotency_key,
 )
-from app.orchestration.analyze_workflow import launch_analyze_dataset_workflow
+from app.orchestration.analyze_workflow import (
+    _analyze_plugin_footprints,
+    launch_analyze_dataset_workflow,
+)
 from app.orchestration.apply_workflow import launch_apply_actions_workflow
 from tests.test_apply_workflow import _execute_request, _test_config
 
@@ -137,10 +140,10 @@ def test_apply_idempotency_key_is_stable_across_dict_orderings() -> None:
     assert compute_apply_idempotency_key(base) == compute_apply_idempotency_key(reordered)
 
 
-def test_collect_artifact_hashes_dedupes_and_preserves_first_seen_order() -> None:
+def test_collect_artifact_hashes_dedupes_and_sorts_logical_input_set() -> None:
     refs = (
-        _artifact_ref("a", "kind_a", "sha256:" + "a" * 64),
         _artifact_ref("b", "kind_b", "sha256:" + "b" * 64),
+        _artifact_ref("a", "kind_a", "sha256:" + "a" * 64),
         # Duplicate hash should be deduped
         _artifact_ref("c", "kind_c", "sha256:" + "a" * 64),
     )
@@ -176,6 +179,63 @@ def test_analyze_launcher_returns_stable_idempotency_key_and_artifact_hashes() -
     assert first.materialized_assets == second.materialized_assets
 
 
+def test_analyze_launcher_key_matches_static_plugin_footprint() -> None:
+    """The real launcher folds the static plugin capability versions into its key."""
+    config = _test_config()
+    request = _analyze_request()
+
+    result = launch_analyze_dataset_workflow(
+        request=request,
+        config=config,
+        fake_platform=FakePlatformMetadataClient(),
+    )
+    expected = compute_analyze_idempotency_key(
+        AnalyzeIdempotencyInputs(
+            organization_id=request.organization_id,
+            project_id=request.project_id,
+            dataset_id=request.dataset_id,
+            dataset_version_id=request.dataset_version_id,
+            input_artifact_hashes=collect_artifact_hashes(request.dataset_object_refs),
+            prediction_artifact_hashes=collect_artifact_hashes(
+                request.prediction_artifact_refs
+            ),
+            config_hash=config.config_hash,
+            contract_pack_version=config.contract_pack_version,
+            plugin_versions=_analyze_plugin_footprints(),
+        )
+    )
+
+    assert result.idempotency_key == expected
+    assert _analyze_plugin_footprints()
+
+
+def test_analyze_launcher_key_is_stable_across_input_artifact_order() -> None:
+    """Same logical analyze input set must not duplicate runs because refs were reordered."""
+    config = _test_config()
+    first_request = _analyze_request(
+        dataset_object_refs=(
+            _artifact_ref("b", "kind_b", "sha256:" + "b" * 64),
+            _artifact_ref("a", "kind_a", "sha256:" + "a" * 64),
+        )
+    )
+    second_request = first_request.model_copy(
+        update={"dataset_object_refs": tuple(reversed(first_request.dataset_object_refs))}
+    )
+
+    first = launch_analyze_dataset_workflow(
+        request=first_request,
+        config=config,
+        fake_platform=FakePlatformMetadataClient(),
+    )
+    second = launch_analyze_dataset_workflow(
+        request=second_request,
+        config=config,
+        fake_platform=FakePlatformMetadataClient(),
+    )
+
+    assert first.idempotency_key == second.idempotency_key
+
+
 def test_apply_launcher_returns_stable_idempotency_key() -> None:
     """Step 1+2+3: identical APPLY runs share idempotency_key and artifact hashes."""
     config = _test_config()
@@ -198,6 +258,58 @@ def test_apply_launcher_returns_stable_idempotency_key() -> None:
     # Step 3: candidate/synthetic/model_impact/export hashes are
     # identical across reruns because ArtifactRegistry is content-addressed.
     assert first.candidate_artifact_hash == second.candidate_artifact_hash
+
+
+def test_apply_launcher_key_changes_when_step_plugin_version_changes() -> None:
+    """Selected ActionPlan step plugin versions must invalidate APPLY keys."""
+    config = _test_config()
+    request, plan_hash = _execute_request()
+    base = launch_apply_actions_workflow(
+        request=request,
+        action_plan_hash=plan_hash,
+        config=config,
+        fake_platform=FakePlatformMetadataClient(),
+    )
+    step = request.action_plan.steps[0]
+    patched_step = step.model_copy(update={"plugin_version": "0.2.0"})
+    patched_plan = request.action_plan.model_copy(update={"steps": (patched_step,)})
+    patched_request = request.model_copy(update={"action_plan": patched_plan})
+
+    changed = launch_apply_actions_workflow(
+        request=patched_request,
+        action_plan_hash=plan_hash,
+        config=config,
+        fake_platform=FakePlatformMetadataClient(),
+    )
+
+    assert base.idempotency_key != changed.idempotency_key
+
+
+def test_apply_launcher_key_is_stable_across_input_artifact_order() -> None:
+    """Same APPLY input artifacts in a different order must share one key."""
+    config = _test_config()
+    request, plan_hash = _execute_request()
+    input_refs = (
+        _artifact_ref("b", "kind_b", "sha256:" + "b" * 64),
+        _artifact_ref("a", "kind_a", "sha256:" + "a" * 64),
+    )
+
+    first = launch_apply_actions_workflow(
+        request=request,
+        action_plan_hash=plan_hash,
+        config=config,
+        fake_platform=FakePlatformMetadataClient(),
+        input_artifacts=input_refs,
+    )
+    second = launch_apply_actions_workflow(
+        request=request,
+        action_plan_hash=plan_hash,
+        config=config,
+        fake_platform=FakePlatformMetadataClient(),
+        input_artifacts=tuple(reversed(input_refs)),
+    )
+
+    assert first.idempotency_key == second.idempotency_key
 
 
 def test_apply_launcher_does_not_mask_validation_failures_via_cache() -> None:
@@ -279,14 +391,18 @@ def _apply_inputs() -> ApplyIdempotencyInputs:
     )
 
 
-def _analyze_request() -> AnalyzeDatasetRequest:
+def _analyze_request(
+    *,
+    dataset_object_refs: tuple[ArtifactRef, ...] | None = None,
+) -> AnalyzeDatasetRequest:
     return AnalyzeDatasetRequest(
         platform_job_id="platform_job_idempotent_001",
         organization_id="org_1",
         project_id="project_1",
         dataset_id="dataset_1",
         dataset_version_id="dataset_version_v1",
-        dataset_object_refs=(
+        dataset_object_refs=dataset_object_refs
+        or (
             _artifact_ref(
                 "raw_transactions",
                 "raw_transactions",

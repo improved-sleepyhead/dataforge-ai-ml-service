@@ -42,7 +42,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from app.domain import ArtifactRef, WorkflowType
+from app.domain import ActionPlan, ArtifactRef, WorkflowType
 from app.domain.common import NonEmptyStr, Sha256Digest
 
 
@@ -117,8 +117,8 @@ def compute_analyze_idempotency_key(inputs: AnalyzeIdempotencyInputs) -> Sha256D
             "dataset_id": inputs.dataset_id,
             "dataset_version_id": inputs.dataset_version_id,
         },
-        "input_artifact_hashes": _ordered_unique(inputs.input_artifact_hashes),
-        "prediction_artifact_hashes": _ordered_unique(
+        "input_artifact_hashes": _sorted_unique(inputs.input_artifact_hashes),
+        "prediction_artifact_hashes": _sorted_unique(
             inputs.prediction_artifact_hashes
         ),
         "config_hash": inputs.config_hash,
@@ -140,8 +140,8 @@ def compute_apply_idempotency_key(inputs: ApplyIdempotencyInputs) -> Sha256Diges
             "proposed_version_name": inputs.proposed_version_name,
         },
         "action_plan_hash": inputs.action_plan_hash,
-        "input_artifact_hashes": _ordered_unique(inputs.input_artifact_hashes),
-        "prediction_artifact_hashes": _ordered_unique(
+        "input_artifact_hashes": _sorted_unique(inputs.input_artifact_hashes),
+        "prediction_artifact_hashes": _sorted_unique(
             inputs.prediction_artifact_hashes
         ),
         "config_hash": inputs.config_hash,
@@ -156,19 +156,26 @@ def compute_apply_idempotency_key(inputs: ApplyIdempotencyInputs) -> Sha256Diges
 def collect_artifact_hashes(refs: Iterable[ArtifactRef]) -> tuple[Sha256Digest, ...]:
     """Return artifact hashes for an iterable of refs.
 
-    The result preserves a deterministic order: hashes are deduplicated
-    and emitted in their first-seen order. Empty inputs return an
-    empty tuple.
+    Artifact order in API payloads is not semantically meaningful for
+    idempotency. Hashes are therefore deduplicated and sorted so two
+    requests with the same logical input set share the same key.
     """
-    seen: list[str] = []
-    seen_set: set[str] = set()
-    for ref in refs:
-        digest = ref.hash
-        if digest in seen_set:
-            continue
-        seen_set.add(digest)
-        seen.append(digest)
-    return tuple(seen)
+    return tuple(_sorted_unique(ref.hash for ref in refs))
+
+
+def plugin_footprints_from_action_plan(
+    action_plan: ActionPlan,
+) -> tuple[PluginVersionFootprint, ...]:
+    """Return plugin/algorithm version pins from selected ActionPlan steps."""
+    return tuple(
+        PluginVersionFootprint(
+            plugin_id=step.plugin_id,
+            plugin_version=step.plugin_version,
+            algorithm_name=step.method_id,
+            algorithm_version=step.plugin_version,
+        )
+        for step in action_plan.steps
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -183,15 +190,8 @@ def _digest(payload: object) -> Sha256Digest:
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
 
 
-def _ordered_unique(values: Iterable[str]) -> list[str]:
-    seen: set[str] = set()
-    out: list[str] = []
-    for value in values:
-        if not value or value in seen:
-            continue
-        seen.add(value)
-        out.append(value)
-    return out
+def _sorted_unique(values: Iterable[str]) -> list[str]:
+    return sorted({value for value in values if value})
 
 
 def _ordered_dict(mapping: Mapping[str, str]) -> dict[str, str]:
@@ -229,4 +229,5 @@ __all__ = [
     "collect_artifact_hashes",
     "compute_analyze_idempotency_key",
     "compute_apply_idempotency_key",
+    "plugin_footprints_from_action_plan",
 ]
