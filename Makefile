@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: install-dev lint typecheck test test-contracts test-plugins test-security test-e2e-compute-demo
+.PHONY: install-dev lint typecheck test test-contracts test-plugins test-security test-e2e-compute-demo test-performance
 
 install-dev:
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -25,3 +25,6 @@ test-security:
 
 test-e2e-compute-demo:
 	$(PYTHON) -m pytest tests/e2e
+
+test-performance:
+	$(PYTHON) -m pytest tests/performance
