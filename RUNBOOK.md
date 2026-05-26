@@ -239,6 +239,26 @@ artifact but never publishes a `candidate_artifact_uri` or
 `export_package_artifact_uri` — proving "Export package создается
 только если gates pass".
 
+### 6.3 Operator demo runner
+
+`tools/run_mvp_demo.py` (also wired as `make run-mvp-demo`) executes
+the same flow as a runnable script — useful for hackathon demos and
+manual smoke checks. It boots the FastAPI app on a free port, probes
+`/api/v1/health` + `/api/v1/capabilities`, builds the demo archive,
+runs ANALYZE_ONLY through `launch_analyze_dataset_workflow`, builds an
+`ActionPlan` from `build_method_recommendations`, runs APPLY through
+`launch_apply_actions_workflow`, verifies raw immutability, dumps the
+`ExportPackage` readiness gates, prints the model-impact verdict, and
+prints the full `FakePlatform` event tape with progress percentages.
+
+```bash
+PYTHON=.venv/bin/python make run-mvp-demo
+# or skip the FastAPI smoke part:
+.venv/bin/python -m tools.run_mvp_demo --skip-fastapi
+# or pin the workdir:
+.venv/bin/python -m tools.run_mvp_demo --workdir /tmp/dataforge-demo
+```
+
 ---
 
 ## 7. Expected demo blockers and recommendations
