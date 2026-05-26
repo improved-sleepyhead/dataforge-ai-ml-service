@@ -176,3 +176,22 @@ prerequisites, quality gates, the deterministic demo archive, the optional
 `PredictionManifest` input, the fake platform client, the analyze-only and
 full-flow E2E tests, expected demo blockers, performance acceptance, the
 Docker image, and a stable-error-code troubleshooting table.
+
+## MVP Scope and Known Limitations
+
+See [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) for the honest accounting
+of what the current MVP build ships at `implemented`, `proof`, and
+`contract-ready` readiness levels — including which synthesizers, modalities,
+adapters, and production capabilities are intentionally out of scope.
+
+## Final Quality Gate
+
+Before marking any final delivery task `status=done`, run the unified gate:
+
+```bash
+PYTHON=.venv/bin/python make quality-gate
+```
+
+The command runs every documented suite (lint, typecheck, unit, contract,
+plugin, security/privacy, e2e_compute, performance) in stable order and
+writes `build/quality_gate.json`. Any failed suite fails the command.

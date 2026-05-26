@@ -396,3 +396,13 @@ candidate / export artifact is produced when validation gates fail.
 If any of the documented blockers (§7) does not appear, the
 deterministic fixture has drifted — regenerate it via the builder and
 update `expected_counts.json`.
+
+---
+
+## 12. Known limitations and MVP scope
+
+For a deliberate, honest accounting of what this MVP build actually
+ships at `implemented`, `proof`, and `contract-ready` readiness
+levels, plus which synthesizers, modalities, adapters, and production
+capabilities are intentionally out of scope, see
+[`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md).
