@@ -11,9 +11,11 @@ from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import RequestResponseEndpoint
 
 from app.adapters import FakePlatformMetadataClient
+from app.api.error_taxonomy import remediation_hint_for
 from app.api.schemas import (
     ActionPlanExecuteApprovedRequest,
     ActionPlanExecuteApprovedResponse,
+    ActionPlanGetResponse,
     ActionPlanPreviewRequest,
     ActionPlanPreviewResponse,
     AnalyzeDatasetAcceptedResponse,
@@ -21,9 +23,22 @@ from app.api.schemas import (
     CancelJobRequest,
     CancelJobResponse,
     HealthResponse,
+    JobStatusResponse,
+    ReportIssuesResponse,
+    ReviewQueueSummaryEntry,
 )
-from app.api.security import PlatformIdentityDep, ServiceSignatureError
-from app.domain import ComputeRunStatus, ErrorBody, ErrorCode, ErrorResponse, WorkflowType
+from app.api.security import PlatformIdentityDep, PlatformIdentityNoBodyDep, ServiceSignatureError
+from app.api.store import ActionPlanRecord, ComputeResultStore, JobResultRecord
+from app.domain import (
+    ComputeRunStatus,
+    DataForgeReport,
+    DecisionReport,
+    ErrorBody,
+    ErrorCode,
+    ErrorResponse,
+    VersionCompareReport,
+    WorkflowType,
+)
 from app.kernel import (
     ActionPlanExecutionError,
     ActionPlanPreviewError,
@@ -61,6 +76,7 @@ def create_app(
     application.state.service_config = config
     application.state.fake_platform_client = FakePlatformMetadataClient()
     application.state.cancellation_registry = CancellationRegistry()
+    application.state.compute_store = ComputeResultStore()
 
     @application.middleware("http")
     async def safe_unhandled_error_middleware(
@@ -69,7 +85,10 @@ def create_app(
     ) -> Response:
         try:
             return await call_next(request)
-        except Exception:  # noqa: BLE001 - boundary middleware must sanitize all unhandled errors
+        except Exception as exc:  # noqa: BLE001 - boundary middleware must sanitize all unhandled errors
+            normalized = _normalize_plugin_error(exc)
+            if normalized is not None:
+                return normalized
             return error_json_response(
                 status_code=500,
                 code=ErrorCode.PLUGIN_EXECUTION_FAILED,
@@ -159,6 +178,50 @@ def create_app(
             details={"reason_code": exc.reason_code},
         )
 
+    @application.middleware("http")
+    async def normalize_plugin_errors_middleware(
+        request: Request,
+        call_next: RequestResponseEndpoint,
+    ) -> Response:
+        """Normalize plugin/kernel errors that carry stable ``code``/``reason_code`` attributes.
+
+        Plugin and kernel modules raise ``ValueError`` subclasses that pin
+        a stable :class:`ErrorCode` on the ``code`` attribute (and a more
+        specific ``reason_code`` string). Without a dedicated handler
+        these would surface through the safe outer middleware as a
+        generic ``PLUGIN_EXECUTION_FAILED`` 500. We catch them here,
+        preserve the stable code, and emit a normalized
+        :class:`ErrorResponse` while keeping raw exception messages and
+        tracebacks out of the wire.
+        """
+        try:
+            return await call_next(request)
+        except Exception as exc:  # noqa: BLE001 - boundary middleware normalizes plugin errors
+            code = getattr(exc, "code", None)
+            reason_code = getattr(exc, "reason_code", None)
+            if not isinstance(code, ErrorCode) or not isinstance(reason_code, str):
+                raise
+            details_attr = getattr(exc, "details", None)
+            details: dict[str, object] = (
+                dict(details_attr) if isinstance(details_attr, dict) else {}
+            )
+            details["reason_code"] = reason_code
+            status_code = getattr(exc, "status_code", None)
+            if not isinstance(status_code, int):
+                status_code = _default_status_for_code(code)
+            return error_json_response(
+                status_code=status_code,
+                code=code,
+                message="Plugin or kernel error normalized into a stable error response.",
+                recoverable=status_code < 500,
+                stage="api.plugin_normalized",
+                details=details,
+                plugin_id=_optional_str(getattr(exc, "plugin_id", None)),
+                job_id=_optional_str(getattr(exc, "job_id", None)),
+            )
+
+    
+
     @application.get(
         f"{API_PREFIX}/health",
         response_model=HealthResponse,
@@ -206,6 +269,19 @@ def create_app(
             )
         finally:
             registry.discard(platform_job_id=payload.platform_job_id)
+        store: ComputeResultStore = request.app.state.compute_store
+        store.record_job(
+            JobResultRecord(
+                job_id=result.job_id,
+                workflow_type=WorkflowType.ANALYZE_ONLY,
+                status=ComputeRunStatus.ACCEPTED,
+                status_url=result.status_url,
+                expected_outputs=result.expected_outputs,
+                materialized_assets=result.materialized_assets,
+                idempotency_key=result.idempotency_key,
+                mutates_dataset=False,
+            )
+        )
         return AnalyzeDatasetAcceptedResponse(
             status=ComputeRunStatus.ACCEPTED,
             job_id=result.job_id,
@@ -225,6 +301,7 @@ def create_app(
     async def preview_action_plan(
         payload: ActionPlanPreviewRequest,
         identity: PlatformIdentityDep,
+        request: Request,
     ) -> ActionPlanPreviewResponse:
         del identity
         action_plan = build_action_plan_preview(
@@ -238,6 +315,10 @@ def create_app(
                 input_artifacts=payload.input_artifacts,
                 target_version_name=payload.target_version_name,
             )
+        )
+        store: ComputeResultStore = request.app.state.compute_store
+        store.record_action_plan(
+            ActionPlanRecord(action_plan=action_plan, job_id=payload.platform_job_id)
         )
         return ActionPlanPreviewResponse(
             status="PREVIEW_READY",
@@ -282,6 +363,37 @@ def create_app(
             )
         finally:
             registry.discard(platform_job_id=payload.platform_job_id)
+        store: ComputeResultStore = request.app.state.compute_store
+        store.record_job(
+            JobResultRecord(
+                job_id=payload.platform_job_id,
+                workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
+                status=ComputeRunStatus.ACCEPTED,
+                status_url=result.status_url,
+                expected_outputs=result.expected_outputs,
+                materialized_assets=result.materialized_assets,
+                idempotency_key=result.idempotency_key,
+                mutates_dataset=True,
+                action_plan_id=payload.action_plan.action_plan_id,
+                action_plan_hash=action_plan_hash,
+                candidate_artifact_uri=result.candidate_artifact_uri,
+                candidate_artifact_hash=result.candidate_artifact_hash,
+                synthetic_artifact_uri=result.synthetic_artifact_uri,
+                synthetic_status=result.synthetic_status,
+                model_impact_artifact_uri=result.model_impact_artifact_uri,
+                export_package_artifact_uri=result.export_package_artifact_uri,
+            )
+        )
+        store.record_action_plan(
+            ActionPlanRecord(
+                action_plan=payload.action_plan,
+                job_id=payload.platform_job_id,
+                action_plan_hash=action_plan_hash,
+                accepted_step_ids=tuple(step.step_id for step in payload.action_plan.steps),
+                workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
+                status_url=result.status_url,
+            )
+        )
         return ActionPlanExecuteApprovedResponse(
             status=ComputeRunStatus.ACCEPTED,
             job_id=payload.platform_job_id,
@@ -338,6 +450,157 @@ def create_app(
             cancellation_accepted=accepted,
         )
 
+    @application.get(
+        f"{API_PREFIX}/jobs/{{job_id}}",
+        response_model=JobStatusResponse,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["jobs"],
+    )
+    async def get_job_status(
+        job_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> JobStatusResponse:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        record = store.get_job(job_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="job_not_found")
+        return JobStatusResponse(
+            job_id=record.job_id,
+            workflow_type=record.workflow_type,
+            status=record.status,
+            status_url=record.status_url,
+            expected_outputs=record.expected_outputs,
+            materialized_assets=record.materialized_assets,
+            mutates_dataset=record.mutates_dataset,
+            idempotency_key=record.idempotency_key,
+            action_plan_id=record.action_plan_id,
+            action_plan_hash=record.action_plan_hash,
+            candidate_artifact_uri=record.candidate_artifact_uri,
+            candidate_artifact_hash=record.candidate_artifact_hash,
+            synthetic_artifact_uri=record.synthetic_artifact_uri,
+            synthetic_status=record.synthetic_status,
+            model_impact_artifact_uri=record.model_impact_artifact_uri,
+            export_package_artifact_uri=record.export_package_artifact_uri,
+        )
+
+    @application.get(
+        f"{API_PREFIX}/action-plans/{{action_plan_id}}",
+        response_model=ActionPlanGetResponse,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["action-plans"],
+    )
+    async def get_action_plan(
+        action_plan_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> ActionPlanGetResponse:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        record = store.get_action_plan(action_plan_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="action_plan_not_found")
+        return ActionPlanGetResponse(
+            action_plan=record.action_plan,
+            job_id=record.job_id,
+            action_plan_hash=record.action_plan_hash,
+            accepted_step_ids=record.accepted_step_ids,
+            workflow_type=record.workflow_type,
+            status_url=record.status_url,
+            mutates_dataset=record.workflow_type is WorkflowType.APPLY_SELECTED_ACTIONS,
+        )
+
+    @application.get(
+        f"{API_PREFIX}/reports/{{report_id}}",
+        response_model=DataForgeReport | DecisionReport,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["reports"],
+    )
+    async def get_report(
+        report_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> DataForgeReport | DecisionReport:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        dataforge = store.get_dataforge_report(report_id)
+        if dataforge is not None:
+            return dataforge
+        decision = store.get_decision_report(report_id)
+        if decision is not None:
+            return decision
+        raise HTTPException(status_code=404, detail="report_not_found")
+
+    @application.get(
+        f"{API_PREFIX}/reports/{{report_id}}/issues",
+        response_model=ReportIssuesResponse,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["reports"],
+    )
+    async def get_report_issues(
+        report_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> ReportIssuesResponse:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        queues = store.get_review_queues(report_id)
+        if queues is None:
+            raise HTTPException(status_code=404, detail="report_issues_not_found")
+        summary = tuple(
+            ReviewQueueSummaryEntry(
+                queue_type=queue.queue_type.value,
+                item_count=len(queue.objects),
+                raw_pii_allowed=queue.export_policy.raw_pii_allowed,
+                redacted_only=queue.export_policy.redacted_only,
+            )
+            for queue in queues
+        )
+        return ReportIssuesResponse(
+            report_id=report_id,
+            review_queue_summary=summary,
+            total_item_count=sum(entry.item_count for entry in summary),
+        )
+
+    @application.get(
+        f"{API_PREFIX}/compare/{{compare_id}}",
+        response_model=VersionCompareReport,
+        responses={
+            401: {"model": ErrorResponse},
+            404: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+        tags=["reports"],
+    )
+    async def get_version_compare(
+        compare_id: str,
+        identity: PlatformIdentityNoBodyDep,
+        request: Request,
+    ) -> VersionCompareReport:
+        del identity
+        store: ComputeResultStore = request.app.state.compute_store
+        report = store.get_version_compare(compare_id)
+        if report is None:
+            raise HTTPException(status_code=404, detail="version_compare_not_found")
+        return report
+
     if include_test_error_route:
         _add_test_error_routes(application)
     if include_test_protected_route:
@@ -354,6 +617,9 @@ def error_json_response(
     recoverable: bool,
     stage: str,
     details: dict[str, object] | None = None,
+    job_id: str | None = None,
+    plugin_id: str | None = None,
+    remediation_hint: str | None = None,
 ) -> JSONResponse:
     """Build a safe ErrorResponse JSON body without raw exception details."""
     response = ErrorResponse(
@@ -362,6 +628,9 @@ def error_json_response(
             message=message,
             recoverable=recoverable,
             stage=stage,
+            job_id=job_id,
+            plugin_id=plugin_id,
+            remediation_hint=remediation_hint or remediation_hint_for(code),
             details={} if details is None else details,
         )
     )
@@ -389,6 +658,81 @@ def _http_error_code(status_code: int) -> ErrorCode:
     if status_code in {400, 401, 403, 405, 409, 422}:
         return ErrorCode.INVALID_JOB_PAYLOAD
     return ErrorCode.PLUGIN_EXECUTION_FAILED
+
+
+def _normalize_plugin_error(exc: BaseException) -> JSONResponse | None:
+    """Return a normalized ErrorResponse for plugin/kernel errors, else ``None``.
+
+    Plugin and kernel modules raise ``ValueError`` subclasses that pin a
+    stable :class:`ErrorCode` on the ``code`` attribute (with an optional
+    ``reason_code`` string). When such an exception escapes the request
+    pipeline the safe boundary middleware delegates to this helper so
+    the wire response carries the stable code instead of a generic 500.
+    Raw exception messages and tracebacks are intentionally not
+    forwarded.
+    """
+    code = getattr(exc, "code", None)
+    reason_code = getattr(exc, "reason_code", None)
+    if not isinstance(code, ErrorCode) or not isinstance(reason_code, str):
+        return None
+    details_attr = getattr(exc, "details", None)
+    details: dict[str, object] = (
+        dict(details_attr) if isinstance(details_attr, dict) else {}
+    )
+    details["reason_code"] = reason_code
+    status_code = getattr(exc, "status_code", None)
+    if not isinstance(status_code, int):
+        status_code = _default_status_for_code(code)
+    return error_json_response(
+        status_code=status_code,
+        code=code,
+        message="Plugin or kernel error normalized into a stable error response.",
+        recoverable=status_code < 500,
+        stage="api.plugin_normalized",
+        details=details,
+        plugin_id=_optional_str(getattr(exc, "plugin_id", None)),
+        job_id=_optional_str(getattr(exc, "job_id", None)),
+    )
+
+
+def _default_status_for_code(code: ErrorCode) -> int:
+    """Stable HTTP status for plugin errors that don't carry a status_code."""
+    if code in {
+        ErrorCode.INVALID_JOB_PAYLOAD,
+        ErrorCode.UNSUPPORTED_MODALITY,
+        ErrorCode.INVALID_ARCHIVE_STRUCTURE,
+        ErrorCode.ARCHIVE_SAFETY_VIOLATION,
+        ErrorCode.CONTRACT_VALIDATION_FAILED,
+        ErrorCode.PREDICTION_VALIDATION_FAILED,
+        ErrorCode.ACTION_PLAN_PRECONDITION_FAILED,
+        ErrorCode.VALIDATION_GATE_FAILED,
+        ErrorCode.MODEL_IMPACT_NOT_ELIGIBLE,
+        ErrorCode.LEAKAGE_DETECTED,
+    }:
+        return 422
+    if code is ErrorCode.ARTIFACT_NOT_FOUND:
+        return 404
+    if code in {ErrorCode.ACTION_PLAN_REQUIRES_APPROVAL, ErrorCode.ARTIFACT_OUT_OF_SCOPE}:
+        return 403
+    if code is ErrorCode.ACTION_PLAN_SIGNATURE_INVALID:
+        return 401
+    if code in {
+        ErrorCode.POLICY_BLOCKED,
+        ErrorCode.PII_RESTRICTED,
+        ErrorCode.PLUGIN_NOT_ENABLED,
+        ErrorCode.EXPORT_BLOCKED,
+        ErrorCode.EXTERNAL_API_BLOCKED,
+        ErrorCode.RESOURCE_LIMIT_EXCEEDED,
+        ErrorCode.TENANT_SCOPE_VIOLATION,
+    }:
+        return 422
+    return 500
+
+
+def _optional_str(value: object) -> str | None:
+    if isinstance(value, str) and value:
+        return value
+    return None
 
 
 def _add_test_error_routes(application: FastAPI) -> None:
