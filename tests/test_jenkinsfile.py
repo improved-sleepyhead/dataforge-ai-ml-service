@@ -17,7 +17,12 @@ invariants.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+import textwrap
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 JENKINSFILE = REPO_ROOT / "Jenkinsfile"
@@ -186,3 +191,53 @@ def test_jenkinsfile_uses_timestamps_and_buildlog_options() -> None:
     assert "timestamps()" in text
     assert "buildDiscarder(logRotator" in text
     assert "timeout(time:" in text
+
+
+
+# ---------------------------------------------------------------------------
+# Optional Groovy syntax check.
+# ---------------------------------------------------------------------------
+#
+# When ``groovy`` (and Java) are available locally, parse the Jenkinsfile
+# through Groovy's ``CompilationUnit`` at the conversion phase so a
+# Groovy-syntax regression fails the suite. The test skips cleanly on
+# agents without a Groovy/Java toolchain so CI Python-only containers
+# stay green.
+
+
+def _has_groovy() -> bool:
+    return shutil.which("groovy") is not None
+
+
+@pytest.mark.skipif(not _has_groovy(), reason="groovy is not installed")
+def test_jenkinsfile_parses_through_groovy_compilation_unit() -> None:
+    """The Jenkinsfile must parse cleanly through Groovy's CompilationUnit."""
+    parser = textwrap.dedent(
+        """
+        import org.codehaus.groovy.control.CompilationUnit
+        import org.codehaus.groovy.control.CompilerConfiguration
+        import org.codehaus.groovy.control.Phases
+
+        def src = new File("Jenkinsfile").text
+        def cu = new CompilationUnit(new CompilerConfiguration())
+        cu.addSource("Jenkinsfile", src)
+        cu.compile(Phases.CONVERSION)
+        println "OK"
+        """
+    ).strip()
+
+    result = subprocess.run(
+        ["groovy", "-e", parser],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+    assert result.returncode == 0, (
+        "Groovy failed to parse Jenkinsfile.\n"
+        f"stdout: {result.stdout}\n"
+        f"stderr: {result.stderr}"
+    )
+    assert "OK" in result.stdout
