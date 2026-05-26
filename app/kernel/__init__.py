@@ -81,6 +81,11 @@ from app.kernel.export_package import (
     ExportPackageBuilderError,
     build_export_package,
 )
+from app.kernel.external_api_policy import (
+    ExternalApiBlockedError,
+    is_external_api_allowed,
+    require_external_api_allowed,
+)
 from app.kernel.idempotency import (
     AnalyzeIdempotencyInputs,
     ApplyIdempotencyInputs,
@@ -264,6 +269,7 @@ __all__ = [
     "BuildExportPackageRequest",
     "BuildExportPackageResult",
     "ExportPackageBuilderError",
+    "ExternalApiBlockedError",
     "build_export_package",
     "LINEAGE_REPORT_FORMAT",
     "LINEAGE_REPORT_KIND",
@@ -274,4 +280,6 @@ __all__ = [
     "BuildLineageReportResult",
     "LineageBuilderError",
     "build_lineage_report",
+    "is_external_api_allowed",
+    "require_external_api_allowed",
 ]
