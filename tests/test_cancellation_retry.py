@@ -189,9 +189,17 @@ def test_cancellation_token_records_explicit_reason_code() -> None:
     assert exc.value.reason_code == "platform_quota_exceeded"
 
 
-def test_cancellation_registry_returns_false_for_unknown_jobs() -> None:
+def test_cancellation_registry_pre_cancel_unknown_job_is_honored_on_register() -> None:
     registry = CancellationRegistry()
-    assert registry.cancel(platform_job_id="never_started") is False
+    assert registry.cancel(
+        platform_job_id="job_pre_cancel",
+        reason_code="platform_user_cancelled",
+    ) is True
+
+    token = registry.register(platform_job_id="job_pre_cancel")
+    assert token.is_cancelled is True
+    assert token.reason_code == "platform_user_cancelled"
+    assert registry.is_cancelled(platform_job_id="job_pre_cancel") is True
 
 
 def test_cancellation_registry_cancel_then_check_then_discard() -> None:
@@ -206,7 +214,8 @@ def test_cancellation_registry_cancel_then_check_then_discard() -> None:
 
     registry.discard(platform_job_id="job_001")
     assert "job_001" not in registry.known_job_ids()
-    # Cancelling a discarded job is a no-op
+    # Cancelling a discarded/completed job is a no-op and does not
+    # resurrect a pending token.
     assert registry.cancel(platform_job_id="job_001") is False
 
 
@@ -297,8 +306,8 @@ def test_apply_launcher_emits_failed_with_classified_reason_on_internal_error() 
 # ---------------------------------------------------------------------------
 
 
-def test_cancel_endpoint_returns_skipped_when_no_running_job() -> None:
-    """Cancel endpoint is a no-op when no token is registered for the job id."""
+def test_cancel_endpoint_records_pending_cancel_when_job_not_registered_yet() -> None:
+    """Cancel before launcher registration is accepted as a pending signal."""
     config = _test_config()
     app = create_app(config=config)
     client = TestClient(app, raise_server_exceptions=False)
@@ -316,9 +325,11 @@ def test_cancel_endpoint_returns_skipped_when_no_running_job() -> None:
     )
     assert response.status_code == 202
     data = response.json()
-    assert data["status"] == ComputeRunStatus.SKIPPED
-    assert data["cancellation_accepted"] is False
+    assert data["status"] == ComputeRunStatus.CANCELLED
+    assert data["cancellation_accepted"] is True
     assert data["reason_code"] == "platform_user_cancelled"
+    registry: CancellationRegistry = app.state.cancellation_registry
+    assert registry.is_cancelled(platform_job_id="platform_job_unknown") is True
 
 
 def test_cancel_endpoint_rejects_mismatched_platform_job_id() -> None:
@@ -394,15 +405,29 @@ def test_cancel_endpoint_rejects_unsigned_request() -> None:
 
 
 def test_execute_approved_endpoint_emits_cancelled_when_pre_cancel_token_set() -> None:
-    """Cancel called BEFORE the apply launcher returns CANCELLED + 409."""
+    """Cancel called through the API before launcher registration returns 409."""
     config = _test_config()
     app = create_app(config=config)
     client = TestClient(app, raise_server_exceptions=False)
     payload = _action_plan_execute_payload()
-    # Pre-cancel the platform_job_id BEFORE the request hits the launcher.
-    registry: CancellationRegistry = app.state.cancellation_registry
-    token = registry.register(platform_job_id=payload["platform_job_id"])  # type: ignore[arg-type]
-    token.cancel(reason_code="platform_user_cancelled")
+    cancel_payload: dict[str, object] = {
+        "platform_job_id": payload["platform_job_id"],
+        "organization_id": payload["organization_id"],
+        "project_id": payload["project_id"],
+        "reason_code": "platform_user_cancelled",
+    }
+    cancel_body = _body_bytes(cancel_payload)
+    cancel_response = client.post(
+        f"/api/v1/jobs/{payload['platform_job_id']}/cancel",
+        content=cancel_body,
+        headers=_signed_headers(
+            config=config,
+            body=cancel_body,
+            payload=cancel_payload,
+        ),
+    )
+    assert cancel_response.status_code == 202
+    assert cancel_response.json()["cancellation_accepted"] is True
 
     body = _body_bytes(payload)
     response = client.post(

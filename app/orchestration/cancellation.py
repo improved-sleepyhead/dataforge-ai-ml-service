@@ -176,6 +176,7 @@ class CancellationRegistry:
 
     def __init__(self) -> None:
         self._tokens: dict[str, CancellationToken] = {}
+        self._discarded_job_ids: set[str] = set()
         self._lock = threading.Lock()
 
     def register(self, *, platform_job_id: str) -> CancellationToken:
@@ -189,6 +190,7 @@ class CancellationRegistry:
         instead of overwriting it with a fresh, uncancelled token.
         """
         with self._lock:
+            self._discarded_job_ids.discard(platform_job_id)
             existing = self._tokens.get(platform_job_id)
             if existing is not None:
                 return existing
@@ -197,15 +199,21 @@ class CancellationRegistry:
         return token
 
     def cancel(self, *, platform_job_id: str, reason_code: str = "platform_user_cancelled") -> bool:
-        """Cancel the token for ``platform_job_id`` if registered.
+        """Cancel the token for ``platform_job_id``.
 
-        Returns ``True`` if a token was found and cancelled, ``False``
-        otherwise. The ``False`` path is the safe default for the
-        platform: cancelling a job that already completed (or never
-        started) is a no-op.
+        Returns ``True`` when a live or pending cancellation token was
+        triggered. If the worker has not registered the job yet, the
+        registry creates a pre-cancelled token so a later ``register``
+        call observes the platform cancel signal. Returns ``False`` for
+        jobs that already reached ``discard`` and are therefore no-ops.
         """
         with self._lock:
             token = self._tokens.get(platform_job_id)
+            if token is None:
+                if platform_job_id in self._discarded_job_ids:
+                    return False
+                token = CancellationToken()
+                self._tokens[platform_job_id] = token
         if token is None:
             return False
         token.cancel(reason_code=reason_code)
@@ -220,6 +228,7 @@ class CancellationRegistry:
         """Remove a token from the registry once the run terminates."""
         with self._lock:
             self._tokens.pop(platform_job_id, None)
+            self._discarded_job_ids.add(platform_job_id)
 
     def known_job_ids(self) -> tuple[str, ...]:
         with self._lock:
