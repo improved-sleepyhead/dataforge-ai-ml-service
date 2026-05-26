@@ -137,7 +137,7 @@ def test_dataset_card_includes_required_sections_and_synthetic_provenance() -> N
     assert stored.info.content_type == DATASET_CARD_MEDIA_TYPE
     assert stored.info.metadata["dataset-card-id"] == "dataset_card_test_001"
     assert stored.info.metadata["version-id"] == "dataset_version_v2_candidate"
-    assert stored.data == result.markdown.encode("utf-8")
+    assert stored.data == serialize_dataset_card(result.markdown)
 
     md = result.markdown
 
@@ -289,9 +289,38 @@ def test_dataset_card_does_not_include_raw_pii() -> None:
 
 def test_serialize_dataset_card_rejects_raw_pii_tokens() -> None:
     """serialize_dataset_card must guard against accidental PII echo."""
-    poisoned_md = "# Dataset Card\n\nfake email john.doe@example.com\n"
+    poisoned_markdown = (
+        "# Dataset Card\n\n"
+        "- fake email john.doe@bank.test\n"
+        "- fake phone +1 415-555-0199\n"
+        "- fake ssn 123-45-6789\n"
+        "- fake token api_key=sk_test_placeholder\n"
+    )
     with pytest.raises(DatasetCardBuilderError) as exc:
-        serialize_dataset_card(poisoned_md)
+        serialize_dataset_card(poisoned_markdown)
+    assert exc.value.reason_code == "dataset_card_contains_raw_pii_tokens"
+
+
+def test_dataset_card_builder_rejects_raw_pii_before_persisting() -> None:
+    """The persistence path must run the same PII guard as the serializer."""
+    _, registry = _storage_and_registry()
+    request = BuildDatasetCardRequest(
+        organization_id="org_1",
+        project_id="project_1",
+        dataset_id="dataset_1",
+        candidate_dataset_version=_candidate(synthetic=False),
+        additional_review_notes=("Call reviewer at +1 415-555-0199",),
+        privacy_policy_version="privacy_v0",
+        export_policy_version="export_policy_v0",
+        created_by_job_id="compute_run_card_pii_guard",
+        config_hash=_CONFIG_HASH,
+        generated_at=_GENERATED_AT,
+        dataset_card_id="dataset_card_test_pii_guard",
+        object_count=80,
+    )
+
+    with pytest.raises(DatasetCardBuilderError) as exc:
+        build_dataset_card_artifact(request, registry=registry)
     assert exc.value.reason_code == "dataset_card_contains_raw_pii_tokens"
 
 

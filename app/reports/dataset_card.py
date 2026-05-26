@@ -34,6 +34,7 @@ so downstream ExportPackage builder can pick it up and surface it as
 from __future__ import annotations
 
 import io
+import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -65,6 +66,30 @@ DATASET_CARD_ARTIFACT_KIND = "DATASET_CARD"
 DATASET_CARD_ARTIFACT_FORMAT = "md"
 DATASET_CARD_MEDIA_TYPE = "text/markdown"
 DATASET_CARD_SCHEMA_VERSION = "dataset_card.v1"
+_INLINE_PII_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "email",
+        re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
+    ),
+    (
+        "us_phone",
+        re.compile(
+            r"\b(?:\+?1[-.\s])?(?:\(?\d{3}\)?[-.\s])\d{3}[-.\s]\d{4}\b"
+        ),
+    ),
+    ("ssn", re.compile(r"\b\d{3}-\d{2}-\d{4}\b")),
+    (
+        "payment_card",
+        re.compile(r"\b(?:\d[ -]?){13,19}\b"),
+    ),
+    (
+        "secret_assignment",
+        re.compile(
+            r"\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*\S+",
+            re.IGNORECASE,
+        ),
+    ),
+)
 
 
 class DatasetCardBuilderError(ValueError):
@@ -125,7 +150,7 @@ def build_dataset_card_artifact(
 ) -> BuildDatasetCardResult:
     """Render and persist a ``dataset_card.md`` artifact."""
     markdown = render_dataset_card(request)
-    payload = markdown.encode("utf-8")
+    payload = serialize_dataset_card(markdown)
     metadata = {
         "dataset-card-id": request.dataset_card_id
         or f"dataset_card_{request.candidate_dataset_version.candidate_version_id}",
@@ -750,19 +775,23 @@ def _write_lineage_section(
 def _enforce_no_inline_pii(text: str) -> None:
     """Defensive guard: dataset_card must never echo raw PII tokens.
 
-    The card builder only consumes typed contract objects, so this
-    guard is mostly belt-and-braces for refactors. It is invoked from
-    tests through ``serialize_dataset_card`` if/when reviewers want a
-    second wall against accidental PII echo.
+    The card builder only consumes typed contract objects, but review
+    notes and future refactors can still accidentally introduce raw
+    snippets. Keep this guard deterministic and conservative: if the
+    Markdown looks like it contains inline identifiers or secrets, fail
+    before bytes are persisted.
     """
-    forbidden = ("@example.com", "@gmail.com", "555-")
-    matches = [token for token in forbidden if token in text]
+    matches = [
+        name
+        for name, pattern in _INLINE_PII_PATTERNS
+        if pattern.search(text) is not None
+    ]
     if matches:
         raise DatasetCardBuilderError(
             reason_code="dataset_card_contains_raw_pii_tokens",
             message=(
-                "dataset_card.md must not echo raw PII tokens; "
-                f"detected: {sorted(set(matches))}"
+                "dataset_card.md must not echo raw PII or secret-looking "
+                f"tokens; detected categories: {sorted(set(matches))}"
             ),
         )
 
