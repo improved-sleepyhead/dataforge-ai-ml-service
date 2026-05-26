@@ -168,3 +168,11 @@ following order:
 Once the upstream `dataforgeai-contracts` repository ships canonical schemas,
 the local fallback pack will be replaced or pinned to a published release; the
 test suite layout above will continue to apply against the published pack.
+
+## Compute Demo Runbook
+
+See [`RUNBOOK.md`](RUNBOOK.md) for the operator-facing walkthrough: local
+prerequisites, quality gates, the deterministic demo archive, the optional
+`PredictionManifest` input, the fake platform client, the analyze-only and
+full-flow E2E tests, expected demo blockers, performance acceptance, the
+Docker image, and a stable-error-code troubleshooting table.
