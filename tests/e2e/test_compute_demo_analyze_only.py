@@ -50,6 +50,8 @@ from app.domain import (
     ModelErrorReport,
     ModelErrorReportStatus,
     ObjectAnalyticalPassport,
+    PredictionArtifactRef,
+    PredictionManifest,
     SyntheticDatasetReport,
     TextOcrReport,
 )
@@ -214,9 +216,30 @@ def test_e2e_analyze_only_compute_demo_runs_full_pipeline(tmp_path: Path) -> Non
 
     prediction_bytes = storage.get(prediction_artifact.uri).data
     prediction_rows = _parse_prediction_rows(prediction_bytes)
-    # Validate every prediction row against the contract pack via the
-    # prediction_manifest_row schema (the prediction_manifest schema
-    # itself is the higher-level wrapper produced by orchestrators).
+    prediction_manifest = PredictionManifest(
+        prediction_manifest_id=f"prediction_manifest_{_JOB_ID}",
+        dataset_id=_DATASET_ID,
+        version_id=_DATASET_VERSION_ID,
+        model_id=_MODEL_ID,
+        model_version=_MODEL_VERSION,
+        task_type="classification",
+        schema_version=pack.version,
+        artifact=PredictionArtifactRef(
+            uri=prediction_artifact.uri,
+            hash=prediction_artifact.hash,
+        ),
+        rows=prediction_rows,
+    )
+    validate_contract_payload(
+        pack,
+        "prediction_manifest",
+        prediction_manifest.model_dump(mode="json"),
+    )
+    assert len(prediction_manifest.rows) == coverage.prediction_row_count
+
+    # Validate every prediction row against the contract pack as well;
+    # the wrapper check above catches manifest-level drift, while this
+    # loop pinpoints bad row payloads.
     for row in prediction_rows:
         validate_contract_payload(
             pack,

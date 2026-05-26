@@ -186,6 +186,11 @@ def execute_tabular_imputation_action(
             "source-dataset-version-id": request.source_dataset_version_id,
             "imputation-column": column,
             "imputation-method": method.value,
+            **(
+                {"created-at": request.generated_at.isoformat()}
+                if request.generated_at is not None
+                else {}
+            ),
         },
     )
 
@@ -245,6 +250,11 @@ def execute_tabular_imputation_action(
             "imputation-method": method.value,
             "before-missing-count": str(before_missing),
             "after-missing-count": str(after_missing),
+            **(
+                {"created-at": request.generated_at.isoformat()}
+                if request.generated_at is not None
+                else {}
+            ),
         },
     )
     return ExecuteTabularImputationResult(

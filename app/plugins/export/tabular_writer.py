@@ -21,6 +21,7 @@ import csv
 import io
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import pyarrow as pa
@@ -79,6 +80,7 @@ class TabularExportRequest(BaseModel):
     created_by_job_id: NonEmptyStr
     config_hash: Sha256Digest
     export_name_prefix: NonEmptyStr = Field(default="export")
+    generated_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -415,6 +417,11 @@ def _artifact_metadata(
         "source-artifact-hash": request.source_artifact.hash,
         "candidate-version-id": request.candidate_dataset_version_id,
         "artifact-format": artifact_format,
+        **(
+            {"created-at": request.generated_at.isoformat()}
+            if request.generated_at is not None
+            else {}
+        ),
     }
     if split is not None:
         metadata["split"] = split.value

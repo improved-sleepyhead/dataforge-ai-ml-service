@@ -361,6 +361,11 @@ def run_model_impact(
             "metric-library-version": sklearn.__version__,
             "random-seed": str(request.random_seed),
             "algorithm": request.algorithm,
+            **(
+                {"created-at": request.generated_at.isoformat()}
+                if request.generated_at is not None
+                else {}
+            ),
         },
     )
     return RunModelImpactResult(report=report, report_artifact=artifact)

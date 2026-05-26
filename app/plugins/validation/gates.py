@@ -424,6 +424,11 @@ def run_validation_gates(
             "block-model-evaluation": "true" if block_model_evaluation else "false",
             "block-training": "true" if block_training else "false",
             **(
+                {"created-at": request.generated_at.isoformat()}
+                if request.generated_at is not None
+                else {}
+            ),
+            **(
                 {"action-plan-id": request.action_plan_id}
                 if request.action_plan_id is not None
                 else {}

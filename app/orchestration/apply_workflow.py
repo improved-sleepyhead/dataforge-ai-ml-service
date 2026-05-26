@@ -9,15 +9,13 @@ asset graph and returns a safe summary of:
 * the platform job id that the request carried;
 * the Dagster status URL stub the platform UI can poll;
 * the asset names that were materialized;
-* the artifact references each apply stage registered (so the platform
-  can pin the candidate / synthetic / model_impact / export artifacts to
-  the platform job record without learning Dagster internals).
+* final candidate, synthetic, model-impact and export refs only when the
+  real APPLY builders and validation gates produced safe outputs.
 
 The launcher never overwrites raw artifacts: it always materializes new
-immutable JSON placeholder records via :class:`ArtifactRegistry`. Real
-algorithm wiring (full SMOTE / Gaussian Copula / model impact) lands in
-TASK-058 and onwards; this launcher provides the pipeline shape so those
-tasks can plug their builders into the corresponding apply assets.
+immutable candidate/report/export artifacts via :class:`ArtifactRegistry`.
+Blocked validation gates still persist audit artifacts, but they are not
+surfaced as final candidate/export refs.
 
 The launcher is also the single place that builds an
 :class:`ApplyRunContext` from an :class:`ActionPlanExecuteApprovedRequest`,
@@ -56,6 +54,7 @@ from app.kernel.idempotency import (
     ApplyIdempotencyInputs,
     collect_artifact_hashes,
     compute_apply_idempotency_key,
+    plugin_footprints_from_action_plan,
 )
 from app.orchestration.apply_assets import (
     APPLY_ASSET_KEYS,
@@ -115,6 +114,7 @@ def launch_apply_actions_workflow(
     policy_versions: CandidatePolicyVersions | None = None,
     require_model_impact_eligibility: bool = False,
     input_artifacts: tuple[ArtifactRef, ...] = (),
+    compute_resources: ComputeResources | None = None,
     cancellation_token: CancellationToken | None = None,
     attempt_number: int = 1,
 ) -> ApplyWorkflowResult:
@@ -130,9 +130,9 @@ def launch_apply_actions_workflow(
     :class:`RunCancelledError` after emitting a CANCELLED stage event,
     so the platform UI shows the run as terminated rather than hanging.
     Cancelled or failed runs MUST NOT publish a candidate artifact: the
-    launcher returns no result and the per-asset placeholders, even if
-    already registered, are not promoted because there is no
-    ``ApplyWorkflowResult`` returned to the caller.
+    launcher returns no result and any already-written audit artifacts are
+    not promoted because there is no ``ApplyWorkflowResult`` returned to
+    the caller.
 
     Failures during Dagster materialization are classified into a stable
     :class:`RunFailureReason`, surfaced as ``recoverable=true|false`` in
@@ -177,6 +177,7 @@ def launch_apply_actions_workflow(
             step_idempotency_keys=tuple(
                 step.idempotency_key for step in request.action_plan.steps
             ),
+            plugin_versions=plugin_footprints_from_action_plan(request.action_plan),
         )
     )
     run_context = RunContext(
@@ -200,7 +201,8 @@ def launch_apply_actions_workflow(
         )
 
     definitions = build_definitions(
-        compute_resources=_build_in_memory_resources(
+        compute_resources=compute_resources
+        or _build_in_memory_resources(
             config=config,
             request=request,
             fake_platform=fake_platform,
@@ -255,7 +257,12 @@ def launch_apply_actions_workflow(
 
     materialized_assets: list[str] = []
     artifact_uris: dict[str, tuple[str, str]] = {}
-    synthetic_status = "registered" if apply_context.has_synthetic else "not_applicable"
+    synthetic_status = "pending" if apply_context.has_synthetic else "not_applicable"
+    candidate_artifact_uri: str | None = None
+    candidate_artifact_hash: str | None = None
+    model_impact_artifact_uri: str | None = None
+    export_package_artifact_uri: str | None = None
+    synthetic_artifact_uri: str | None = None
     for event in result.get_asset_materialization_events():
         asset_name = _asset_name(event.asset_key)
         materialized_assets.append(asset_name)
@@ -268,15 +275,19 @@ def launch_apply_actions_workflow(
             status_value = metadata.get("asset_status")
             if isinstance(status_value, str):
                 synthetic_status = status_value
-
-    candidate_uri, candidate_hash = artifact_uris.get(
-        "prepared_dataset", (None, None)
-    )
-    synthetic_uri = artifact_uris.get("synthetic_dataset", (None, None))[0]
-    model_impact_uri = artifact_uris.get(
-        "model_impact_report", (None, None)
-    )[0]
-    export_uri = artifact_uris.get("export_package", (None, None))[0]
+            if synthetic_status == "materialized" and isinstance(uri_value, str):
+                synthetic_artifact_uri = uri_value
+        if asset_name == "model_impact_report" and isinstance(uri_value, str):
+            model_impact_artifact_uri = uri_value
+        if asset_name == "export_package":
+            final_candidate_uri = metadata.get("final_candidate_artifact_uri")
+            final_candidate_hash = metadata.get("final_candidate_artifact_hash")
+            final_export_uri = metadata.get("final_export_package_uri")
+            if isinstance(final_candidate_uri, str) and isinstance(final_candidate_hash, str):
+                candidate_artifact_uri = final_candidate_uri
+                candidate_artifact_hash = final_candidate_hash
+            if isinstance(final_export_uri, str):
+                export_package_artifact_uri = final_export_uri
 
     return ApplyWorkflowResult(
         job_id=request.platform_job_id,
@@ -288,12 +299,12 @@ def launch_apply_actions_workflow(
         action_plan_hash=action_plan_hash,
         idempotency_key=idempotency_key,
         retry_metadata=RetryMetadata(attempt_number=attempt_number),
-        candidate_artifact_uri=candidate_uri,
-        candidate_artifact_hash=candidate_hash,
-        synthetic_artifact_uri=synthetic_uri,
+        candidate_artifact_uri=candidate_artifact_uri,
+        candidate_artifact_hash=candidate_artifact_hash,
+        synthetic_artifact_uri=synthetic_artifact_uri,
         synthetic_status=synthetic_status,
-        model_impact_artifact_uri=model_impact_uri,
-        export_package_artifact_uri=export_uri,
+        model_impact_artifact_uri=model_impact_artifact_uri,
+        export_package_artifact_uri=export_package_artifact_uri,
         mutates_dataset=True,
     )
 

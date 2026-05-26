@@ -79,6 +79,7 @@ class ExecuteTabularSplitRequest(BaseModel):
     seed: int = 42
     split_ratios: dict[DataSplit, float] = Field(default_factory=lambda: dict(DEFAULT_SPLIT_RATIOS))
     generated_at: datetime | None = None
+    split_manifest_id: str | None = None
 
     @model_validator(mode="after")
     def validate_split_ratios(self) -> ExecuteTabularSplitRequest:
@@ -177,6 +178,11 @@ def execute_tabular_split_action(
             "group-key": group_key or "",
             "policy-version": request.step.policy_version,
             "assignment-count": str(len(assignments)),
+            **(
+                {"created-at": request.generated_at.isoformat()}
+                if request.generated_at is not None
+                else {}
+            ),
         },
     )
     return ExecuteTabularSplitResult(manifest=manifest, split_artifact=artifact)
@@ -367,7 +373,7 @@ def _build_manifest(
     group_key: str | None,
 ) -> SplitManifest:
     return SplitManifest(
-        split_manifest_id=f"split_manifest_{uuid.uuid4().hex[:16]}",
+        split_manifest_id=request.split_manifest_id or f"split_manifest_{uuid.uuid4().hex[:16]}",
         split_schema_version=SPLIT_MANIFEST_SCHEMA_VERSION,
         dataset_id=request.dataset_id,
         source_dataset_version_id=request.source_dataset_version_id,

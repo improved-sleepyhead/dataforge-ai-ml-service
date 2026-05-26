@@ -21,6 +21,7 @@ from app.domain import ComputeRunStatus, ErrorCode, WorkflowType
 from app.kernel.config import ServiceConfig
 from app.kernel.idempotency import (
     AnalyzeIdempotencyInputs,
+    PluginVersionFootprint,
     collect_artifact_hashes,
     compute_analyze_idempotency_key,
 )
@@ -40,6 +41,7 @@ from app.orchestration.definitions import build_definitions
 from app.orchestration.resources import ComputeResources
 from app.orchestration.run_context import RunContextResource
 from app.orchestration.status_bridge import RunContext, RunStatusBridge
+from app.plugins.registry import build_static_plugin_registry
 
 
 @dataclass(frozen=True)
@@ -98,6 +100,7 @@ def launch_analyze_dataset_workflow(
             ),
             config_hash=config.config_hash,
             contract_pack_version=config.contract_pack_version,
+            plugin_versions=_analyze_plugin_footprints(),
         )
     )
     run_context = RunContext(
@@ -192,6 +195,26 @@ def expected_analyze_outputs(*, include_predictions: bool) -> tuple[str, ...]:
         return base
     prediction = tuple(key.path[-1] for key in PREDICTION_ANALYZE_ASSET_KEYS)
     return (*base, *prediction)
+
+
+def _analyze_plugin_footprints() -> tuple[PluginVersionFootprint, ...]:
+    """Return the static plugin capability snapshot folded into analyze keys."""
+    footprints: list[PluginVersionFootprint] = []
+    for manifest in build_static_plugin_registry().manifests:
+        if not manifest.enabled:
+            continue
+        for capability in manifest.capabilities:
+            if "ANALYZE_DATASET" not in capability.task_types or not capability.enabled:
+                continue
+            footprints.append(
+                PluginVersionFootprint(
+                    plugin_id=manifest.plugin_id,
+                    plugin_version=manifest.version,
+                    algorithm_name=capability.capability_id,
+                    algorithm_version=manifest.version,
+                )
+            )
+    return tuple(footprints)
 
 
 def _asset_name(asset_key: object) -> str:

@@ -152,6 +152,7 @@ class MinioObjectStorageAdapter:
             ContentType=media_type,
             Metadata=safe_metadata,
         )
+        created_at = _metadata_datetime(safe_metadata.get("created-at")) or datetime.now(UTC)
         return ArtifactRef(
             artifact_id=f"{kind}:{digest.removeprefix('sha256:')[:16]}",
             kind=kind,
@@ -164,7 +165,7 @@ class MinioObjectStorageAdapter:
                 parent_version_id=parent_version_id,
                 job_id=job_id,
                 config_hash=config_hash,
-                created_at=datetime.now(UTC),
+                created_at=created_at,
             ),
         )
 
@@ -298,7 +299,9 @@ class MinioObjectStorageAdapter:
             digest = hash_override
         if not digest:
             digest = "sha256:" + "0" * 64
-        updated_at = response.get("LastModified")
+        updated_at = _metadata_datetime(metadata.get("created-at"))
+        if updated_at is None:
+            updated_at = response.get("LastModified")
         if not isinstance(updated_at, datetime):
             updated_at = datetime.now(UTC)
         return StoredObjectInfo(
@@ -355,3 +358,16 @@ def _content_length(response: Mapping[str, Any], data: bytes | None) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _metadata_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    normalized = value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)

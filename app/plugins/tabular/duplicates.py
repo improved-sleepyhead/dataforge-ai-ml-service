@@ -210,6 +210,11 @@ def execute_tabular_duplicates_action(
             "after-row-count": str(len(candidate_rows)),
             "marked-count": str(marked_count),
             "removed-count": str(removed_count),
+            **(
+                {"created-at": request.generated_at.isoformat()}
+                if request.generated_at is not None
+                else {}
+            ),
         },
     )
 
@@ -265,6 +270,11 @@ def execute_tabular_duplicates_action(
             "removed-count": str(removed_count),
             "raw-artifact-unchanged": "true" if raw_unchanged else "false",
             "candidate-artifact-hash": candidate_artifact.hash,
+            **(
+                {"created-at": request.generated_at.isoformat()}
+                if request.generated_at is not None
+                else {}
+            ),
         },
     )
     return ExecuteTabularDuplicatesResult(

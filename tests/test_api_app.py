@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
 from fastapi.testclient import TestClient
 
+from app.adapters import FakePlatformMetadataClient
 from app.api.main import create_app
 from app.api.security import (
     ORGANIZATION_ID_HEADER,
@@ -35,6 +37,7 @@ from app.kernel import (
 from app.kernel.config import ServiceConfig, load_config
 from app.orchestration.analyze_workflow import expected_analyze_outputs
 from app.validation.contracts import load_contract_pack, validate_contract_payload
+from tests.test_apply_workflow import _compute_resources_with_source_artifact
 
 
 def test_health_returns_service_and_contract_versions() -> None:
@@ -213,7 +216,7 @@ def test_execute_approved_rejects_unsigned_request() -> None:
     assert error["details"]["reason_code"] == "missing_service_identity"
 
 
-def test_execute_approved_accepts_valid_approval_metadata() -> None:
+def test_execute_approved_accepts_valid_approval_metadata(tmp_path: Path) -> None:
     """TASK-040 step 2-3 + TASK-057: fake valid approval metadata yields accepted state.
 
     The endpoint must also launch the APPLY_SELECTED_ACTIONS Dagster
@@ -222,9 +225,17 @@ def test_execute_approved_accepts_valid_approval_metadata() -> None:
     platform UI can pin them to the platform job record.
     """
     config = _test_config()
-    payload = _action_plan_execute_payload()
+    resources, source_artifact = _compute_resources_with_source_artifact(
+        tmp_path=tmp_path,
+        config=config,
+        fake_platform=FakePlatformMetadataClient(),
+    )
+    payload = _action_plan_execute_payload(source_artifacts=[source_artifact])
     body = _body_bytes(payload)
-    client = TestClient(create_app(config=config), raise_server_exceptions=False)
+    client = TestClient(
+        create_app(config=config, compute_resources=resources),
+        raise_server_exceptions=False,
+    )
 
     response = client.post(
         "/api/v1/action-plans/execute-approved",
@@ -260,17 +271,16 @@ def test_execute_approved_accepts_valid_approval_metadata() -> None:
         ]
     )
     assert sorted(materialized) == sorted(expected)
+    # Real gated APPLY exposes final refs only after validation/export builders run.
     assert data["candidate_artifact_uri"] is not None
-    assert data["candidate_artifact_uri"].startswith("s3://")
     assert data["candidate_artifact_hash"] is not None
-    assert data["candidate_artifact_hash"].startswith("sha256:")
-    assert data["model_impact_artifact_uri"] is not None
     assert data["export_package_artifact_uri"] is not None
+    assert ".placeholder." not in data["candidate_artifact_uri"]
+    assert ".placeholder." not in data["export_package_artifact_uri"]
     # The fixture uses an imputation-only ActionPlan so synthetic_status
-    # must be not_applicable and the synthetic URI is still emitted as
-    # a placeholder marker.
+    # must be not_applicable and no final synthetic artifact is surfaced.
     assert data["synthetic_status"] == "not_applicable"
-    assert data["synthetic_artifact_uri"] is not None
+    assert data["synthetic_artifact_uri"] is None
 
 
 def test_execute_approved_rejects_approval_hash_mismatch() -> None:
@@ -359,9 +369,19 @@ def _analyze_payload(
     }
 
 
-def _action_plan_execute_payload() -> dict[str, object]:
+def _action_plan_execute_payload(
+    *,
+    source_artifacts: list[ArtifactRef] | None = None,
+) -> dict[str, object]:
     recommendations = build_method_recommendations(
         BuildMethodRecommendationsRequest(tabular_profile=_demo_tabular_profile())
+    )
+    input_artifacts = (
+        tuple(artifact.uri for artifact in source_artifacts)
+        if source_artifacts
+        else (
+            "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/manifest.jsonl",
+        )
     )
     plan = build_action_plan_preview(
         BuildActionPlanPreviewRequest(
@@ -371,9 +391,7 @@ def _action_plan_execute_payload() -> dict[str, object]:
             selected_method_overrides={},
             method_recommendations=(recommendations[0],),
             created_by_user_id="platform_user_123",
-            input_artifacts=(
-                "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/manifest.jsonl",
-            ),
+            input_artifacts=input_artifacts,
             target_version_name="dataset_version_2_preview",
             created_at=datetime(2026, 5, 24, 12, 0, tzinfo=UTC),
         )
@@ -398,6 +416,9 @@ def _action_plan_execute_payload() -> dict[str, object]:
             "decision_report_id": action_plan["created_from_decision_report"],
             "source_dataset_version_id": action_plan["source_dataset_version_id"],
         },
+        "source_artifacts": []
+        if source_artifacts is None
+        else [artifact.model_dump(mode="json") for artifact in source_artifacts],
     }
 
 

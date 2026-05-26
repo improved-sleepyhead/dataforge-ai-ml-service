@@ -21,9 +21,49 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.domain import ActionPlan, ArtifactRef, CandidatePolicyVersions, WorkflowType
+from app.adapters import RegisteredArtifact
+from app.domain import (
+    ActionPlan,
+    ArtifactRef,
+    CandidateDatasetVersion,
+    CandidatePolicyVersions,
+    ExportPackage,
+    ModelImpactReport,
+    SplitManifest,
+    SyntheticDatasetReport,
+    ValidationGatesReport,
+    WorkflowType,
+)
 from app.domain.common import Sha256Digest
 from app.orchestration.status_bridge import RunContext
+
+
+@dataclass
+class ApplyExecutionState:
+    """Mutable per-run APPLY outputs shared between ordered Dagster assets."""
+
+    source_artifact: ArtifactRef | None = None
+    primary_candidate_artifact: RegisteredArtifact | None = None
+    action_plan_artifact: RegisteredArtifact | None = None
+    remediation_report_artifact: RegisteredArtifact | None = None
+    step_output_artifacts: list[RegisteredArtifact] = field(default_factory=list)
+    split_manifest: SplitManifest | None = None
+    split_artifact: RegisteredArtifact | None = None
+    synthetic_dataset_report: SyntheticDatasetReport | None = None
+    synthetic_dataset_report_artifact: RegisteredArtifact | None = None
+    synthetic_candidate_artifact: RegisteredArtifact | None = None
+    validation_gates_report: ValidationGatesReport | None = None
+    validation_gates_report_artifact: RegisteredArtifact | None = None
+    model_impact_report: ModelImpactReport | None = None
+    model_impact_report_artifact: RegisteredArtifact | None = None
+    candidate_dataset_version: CandidateDatasetVersion | None = None
+    candidate_version_artifact: RegisteredArtifact | None = None
+    dataset_card_artifact: RegisteredArtifact | None = None
+    lineage_artifact: RegisteredArtifact | None = None
+    export_manifest_artifact: RegisteredArtifact | None = None
+    export_package: ExportPackage | None = None
+    export_package_artifact: RegisteredArtifact | None = None
+    tabular_export_artifacts: tuple[ArtifactRef, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -64,6 +104,7 @@ class ApplyRunContext:
     input_artifacts: tuple[ArtifactRef, ...] = field(default_factory=tuple)
     synthetic_step_ids: tuple[str, ...] = field(default_factory=tuple)
     require_model_impact_eligibility: bool = False
+    execution_state: ApplyExecutionState = field(default_factory=ApplyExecutionState)
 
     @property
     def has_synthetic(self) -> bool:
@@ -80,4 +121,4 @@ class RunContextResource:
     apply_context: ApplyRunContext | None = None
 
 
-__all__ = ["ApplyRunContext", "RunContextResource"]
+__all__ = ["ApplyExecutionState", "ApplyRunContext", "RunContextResource"]

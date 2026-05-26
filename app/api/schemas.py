@@ -113,6 +113,7 @@ class ActionPlanExecuteApprovedRequest(BaseModel):
     source_dataset_version_id: NonEmptyStr
     action_plan: ActionPlan
     approval_metadata: ActionPlanApprovalMetadata | None = None
+    source_artifacts: tuple[ArtifactRef, ...] = ()
 
 
 class ActionPlanExecuteApprovedResponse(BaseModel):

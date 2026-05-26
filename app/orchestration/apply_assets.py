@@ -1,45 +1,35 @@
-"""APPLY_SELECTED_ACTIONS assets for the DataForge AI compute plane (TASK-057).
+"""APPLY_SELECTED_ACTIONS assets for the DataForge AI compute plane.
 
-Apply assets only run after the platform backend has produced an approved
-ActionPlan. They are the only path that may emit dataset-changing artifact
-references (prepared/redacted/synthetic/candidate datasets, export packages),
-and even then they never overwrite raw artifacts — every asset registers
-new immutable artifacts via :class:`ArtifactRegistry`.
-
-This module is intentionally a *thin orchestration layer*. The deep
-algorithms (imputation, SMOTE, Gaussian Copula, duplicate marking, redaction,
-candidate version assembly, model impact, export package) live in
-``app.kernel`` and ``app.plugins``. Apply assets:
-
-* validate the ``RunContextResource`` (workflow type + apply context);
-* register a small, deterministic JSON artifact per asset that captures
-  the asset's status, a stable schema_version and lineage references;
-* emit a stage event through the status bridge so the platform can
-  surface progress without learning Dagster internals;
-* skip synthetic-only material when no synthetic step is selected, but
-  still emit the ``synthetic_dataset`` asset with status
-  ``not_applicable`` so the asset graph stays stable;
-* mark the final ``export_package`` materialization with status
-  ``COMPLETED``.
-
-The placeholder JSON payloads make the assets observable from tests and
-from the platform UI: each artifact ref carries a content hash, the
-schema_version (``apply_*.placeholder.v1``), and a lineage block. This
-gives the candidate-version, model-impact and export builders something
-real to consume in TASK-058+ once they are wired in.
+These assets run only after the platform backend has supplied an approved
+ActionPlan. They execute existing plugin/kernel builders and register immutable
+candidate, validation, model-impact, lineage and export artifacts. Raw source
+artifacts are read from object storage and are never overwritten.
 
 This module intentionally does not use ``from __future__ import annotations``
 because Dagster validates the ``context`` parameter type via runtime
-annotations on the decorated asset functions.
+annotations on decorated asset functions.
 """
 
-import json
 from typing import Any
 
 from dagster import AssetExecutionContext, AssetKey, MaterializeResult, asset
 
 from app.adapters import ArtifactRegistry, FakePlatformMetadataClient, RegisteredArtifact
-from app.domain import WorkflowType
+from app.adapters.object_storage import MinioObjectStorageAdapter
+from app.domain import ArtifactRef, WorkflowType
+from app.orchestration.apply_runtime import (
+    ACTION_PLAN_ARTIFACT_KIND,
+    ACTION_PLAN_ARTIFACT_SCHEMA_VERSION,
+    EXPORT_MANIFEST_KIND,
+    REMEDIATION_EXECUTION_REPORT_KIND,
+    build_final_apply_outputs,
+    ensure_model_impact_report,
+    execute_remediation_plan,
+    final_candidate_ref,
+    final_export_ref,
+    persist_action_plan_artifact,
+    synthetic_status,
+)
 from app.orchestration.job_event import JobStage
 from app.orchestration.run_context import ApplyRunContext, RunContextResource
 from app.orchestration.status_bridge import RunContext, RunStatusBridge
@@ -55,36 +45,27 @@ APPLY_ASSET_KEYS: tuple[AssetKey, ...] = (
     AssetKey("export_package"),
 )
 
-# Stable artifact-kind tokens for the placeholder artifacts each apply
-# asset registers. Schema versions are deliberately suffixed with
-# ``placeholder.v1`` so a future TASK-058+ replacement can lift the
-# suffix while keeping the same artifact_kind on the registry path.
 APPLY_ARTIFACT_KINDS: dict[str, str] = {
-    "action_plan": "action_plan_artifact",
-    "remediation_execution_report": "remediation_execution_report",
-    "prepared_dataset": "prepared_dataset_apply_placeholder",
-    "synthetic_dataset": "synthetic_dataset_report_apply_placeholder",
-    "model_impact_report": "model_impact_report_apply_placeholder",
-    "export_package": "export_package_apply_placeholder",
+    "action_plan": ACTION_PLAN_ARTIFACT_KIND,
+    "remediation_execution_report": REMEDIATION_EXECUTION_REPORT_KIND,
+    "prepared_dataset": "candidate_tabular_dataset",
+    "synthetic_dataset": "synthetic_dataset_report",
+    "model_impact_report": "model_impact_report",
+    "export_package": "export_package",
 }
 
 APPLY_ARTIFACT_SCHEMA_VERSIONS: dict[str, str] = {
-    "action_plan": "action_plan_artifact.v1",
-    "remediation_execution_report": "remediation_execution_report.placeholder.v1",
-    "prepared_dataset": "prepared_dataset.placeholder.v1",
-    "synthetic_dataset": "synthetic_dataset.placeholder.v1",
-    "model_impact_report": "model_impact_report.placeholder.v1",
-    "export_package": "export_package.placeholder.v1",
+    "action_plan": ACTION_PLAN_ARTIFACT_SCHEMA_VERSION,
+    "remediation_execution_report": "remediation_execution_report.v1",
+    "prepared_dataset": "tabular_dataset.v1",
+    "synthetic_dataset": "synthetic_dataset_report.v1",
+    "model_impact_report": "model_impact_report.v1",
+    "export_package": "export_package.v1",
 }
 
 APPLY_ARTIFACT_FORMAT = "json"
 APPLY_ARTIFACT_MEDIA_TYPE = "application/json"
 
-
-# Apply stages monotonically advance through canonical platform lifecycle
-# stages. The skeleton keeps everything in RUNNING_DECISION_CORE and
-# transitions to COMPLETED only at the export stage so the platform UI
-# renders a stable timeline without revealing Dagster internals.
 _APPLY_STAGE_BY_ASSET: dict[str, tuple[JobStage, float]] = {
     "action_plan": (JobStage.RUNNING_DECISION_CORE, 0.30),
     "remediation_execution_report": (JobStage.RUNNING_DECISION_CORE, 0.50),
@@ -94,7 +75,12 @@ _APPLY_STAGE_BY_ASSET: dict[str, tuple[JobStage, float]] = {
     "export_package": (JobStage.COMPLETED, 1.0),
 }
 
-_APPLY_RESOURCE_KEYS = {"run_context", "fake_platform", "artifact_registry"}
+_APPLY_RESOURCE_KEYS = {
+    "run_context",
+    "fake_platform",
+    "artifact_registry",
+    "object_storage",
+}
 
 
 def _require_apply(
@@ -120,80 +106,41 @@ def _require_apply(
     return apply_context
 
 
-def _placeholder_payload(
-    *,
-    asset_name: str,
-    run_context: RunContext,
-    apply_context: ApplyRunContext,
-    extras: dict[str, object] | None = None,
-) -> bytes:
-    payload: dict[str, object] = {
-        "asset_name": asset_name,
-        "schema_version": APPLY_ARTIFACT_SCHEMA_VERSIONS[asset_name],
-        "compute_run_id": run_context.compute_run_id,
-        "platform_job_id": run_context.platform_job_id,
-        "organization_id": run_context.organization_id,
-        "project_id": run_context.project_id,
-        "dataset_id": run_context.dataset_id,
-        "source_dataset_version_id": apply_context.source_dataset_version_id,
-        "proposed_version_name": apply_context.proposed_version_name,
-        "action_plan_id": apply_context.action_plan_id,
-        "decision_report_id": apply_context.decision_report_id,
-        "config_hash": apply_context.config_hash,
-        "policy_versions": {
-            "profile": apply_context.policy_versions.profile_policy_version,
-            "decision": apply_context.policy_versions.decision_policy_version,
-            "score": apply_context.policy_versions.score_policy_version,
-            "method": apply_context.policy_versions.method_policy_version,
-            "validation_gates": (
-                apply_context.policy_versions.validation_gates_policy_version
-            ),
-        },
-        "synthetic_step_ids": list(apply_context.synthetic_step_ids),
-        "input_artifact_uris": [ref.uri for ref in apply_context.input_artifacts],
-    }
-    if extras:
-        payload.update(extras)
-    return json.dumps(payload, sort_keys=True, indent=2).encode("utf-8")
-
-
-def _register_artifact(
-    *,
-    registry: ArtifactRegistry,
-    asset_name: str,
-    payload: bytes,
-    run_context: RunContext,
-    apply_context: ApplyRunContext,
-) -> RegisteredArtifact:
-    kind = APPLY_ARTIFACT_KINDS[asset_name]
-    schema_version = APPLY_ARTIFACT_SCHEMA_VERSIONS[asset_name]
-    return registry.save_artifact(
-        artifact_kind=kind,
-        data=payload,
-        artifact_format=APPLY_ARTIFACT_FORMAT,
-        media_type=APPLY_ARTIFACT_MEDIA_TYPE,
-        schema_version=schema_version,
-        dataset_version_id=apply_context.proposed_version_name,
-        created_by_job_id=run_context.compute_run_id,
-        config_hash=apply_context.config_hash,
-        metadata={
-            "apply-asset-name": asset_name,
-            "apply-action-plan-id": apply_context.action_plan_id,
-            "apply-source-version-id": apply_context.source_dataset_version_id,
-            "apply-proposed-version-name": apply_context.proposed_version_name,
-        },
+def _resources(
+    context: AssetExecutionContext,
+) -> tuple[
+    RunContext,
+    ApplyRunContext,
+    FakePlatformMetadataClient,
+    ArtifactRegistry,
+    MinioObjectStorageAdapter,
+]:
+    run_context_resource: RunContextResource = context.resources.run_context
+    run_context = run_context_resource.run_context
+    apply_context = _require_apply(
+        run_context,
+        run_context_resource.workflow_type,
+        run_context_resource.apply_context,
+    )
+    return (
+        run_context,
+        apply_context,
+        context.resources.fake_platform,
+        context.resources.artifact_registry,
+        context.resources.object_storage,
     )
 
 
-def _apply_metadata(
+def _metadata(
     *,
     asset_name: str,
     run_context: RunContext,
     apply_context: ApplyRunContext,
     stage: JobStage,
     progress: float,
-    artifact: RegisteredArtifact,
     status: str,
+    artifact: RegisteredArtifact | None = None,
+    artifact_refs: tuple[ArtifactRef, ...] = (),
     extras: dict[str, object] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
@@ -213,184 +160,80 @@ def _apply_metadata(
         "asset_name": asset_name,
         "asset_status": status,
         "artifact_kind": APPLY_ARTIFACT_KINDS[asset_name],
-        "artifact_uri": artifact.uri,
-        "artifact_hash": artifact.hash,
         "schema_version": APPLY_ARTIFACT_SCHEMA_VERSIONS[asset_name],
+        "artifact_uris": [ref.uri for ref in artifact_refs],
     }
+    if artifact is not None:
+        payload["artifact_uri"] = artifact.uri
+        payload["artifact_hash"] = artifact.hash
     if extras:
         payload.update(extras)
     return payload
 
 
-def _materialize_apply_asset(
-    context: AssetExecutionContext,
+def _emit_and_result(
     *,
     asset_name: str,
+    run_context: RunContext,
+    apply_context: ApplyRunContext,
+    fake_platform: FakePlatformMetadataClient,
+    status: str,
+    artifact: RegisteredArtifact | None = None,
+    artifact_refs: tuple[ArtifactRef, ...] = (),
     extras: dict[str, object] | None = None,
-    artifact_status: str = "registered",
 ) -> MaterializeResult[None]:
-    run_context_resource: RunContextResource = context.resources.run_context
-    fake_platform: FakePlatformMetadataClient = context.resources.fake_platform
-    artifact_registry: ArtifactRegistry = context.resources.artifact_registry
-
-    run_context = run_context_resource.run_context
-    workflow_type = run_context_resource.workflow_type
-    apply_context = _require_apply(
-        run_context, workflow_type, run_context_resource.apply_context
-    )
-
-    payload = _placeholder_payload(
-        asset_name=asset_name,
-        run_context=run_context,
-        apply_context=apply_context,
-        extras=extras,
-    )
-    artifact = _register_artifact(
-        registry=artifact_registry,
-        asset_name=asset_name,
-        payload=payload,
-        run_context=run_context,
-        apply_context=apply_context,
-    )
-
     stage, progress = _APPLY_STAGE_BY_ASSET[asset_name]
     bridge = RunStatusBridge(fake_platform=fake_platform)
     if stage is JobStage.COMPLETED:
-        bridge.emit_completed(
-            run_context=run_context,
-            artifact_refs=(artifact.artifact_ref,),
-        )
+        bridge.emit_completed(run_context=run_context, artifact_refs=artifact_refs)
     else:
         bridge.emit_stage(
             run_context=run_context,
             stage=stage,
             progress=progress,
-            artifact_refs=(artifact.artifact_ref,),
+            artifact_refs=artifact_refs,
         )
-
     return MaterializeResult(
-        metadata=_apply_metadata(
+        metadata=_metadata(
             asset_name=asset_name,
             run_context=run_context,
             apply_context=apply_context,
             stage=stage,
             progress=progress,
+            status=status,
             artifact=artifact,
-            status=artifact_status,
+            artifact_refs=artifact_refs,
             extras=extras,
         )
     )
-
-
-def _action_plan_extras(apply_context: ApplyRunContext) -> dict[str, object]:
-    plan = apply_context.action_plan
-    if plan is None:
-        return {
-            "approved_step_count": 0,
-            "approved_step_ids": [],
-            "approved_step_types": [],
-            "validation_gates": [],
-        }
-    return {
-        "approved_step_count": len(plan.steps),
-        "approved_step_ids": [step.step_id for step in plan.steps],
-        "approved_step_types": sorted({step.type for step in plan.steps}),
-        "validation_gates": list(plan.validation_gates),
-        "execution_mode": plan.execution_mode.value,
-    }
-
-
-def _remediation_extras(apply_context: ApplyRunContext) -> dict[str, object]:
-    plan = apply_context.action_plan
-    if plan is None:
-        return {
-            "executed_step_count": 0,
-            "executed_steps": [],
-            "synthetic_steps_present": apply_context.has_synthetic,
-        }
-    return {
-        "executed_step_count": len(plan.steps),
-        "executed_steps": [
-            {
-                "step_id": step.step_id,
-                "action_type": step.type,
-                "method_id": step.method_id,
-                "plugin_id": step.plugin_id,
-                "plugin_version": step.plugin_version,
-            }
-            for step in plan.steps
-        ],
-        "synthetic_steps_present": apply_context.has_synthetic,
-        "synthetic_step_ids": list(apply_context.synthetic_step_ids),
-    }
-
-
-def _prepared_dataset_extras(apply_context: ApplyRunContext) -> dict[str, object]:
-    non_synthetic_steps = (
-        []
-        if apply_context.action_plan is None
-        else [
-            step.step_id
-            for step in apply_context.action_plan.steps
-            if step.step_id not in apply_context.synthetic_step_ids
-        ]
-    )
-    return {
-        "prepared_step_ids": non_synthetic_steps,
-        "input_artifact_count": len(apply_context.input_artifacts),
-    }
-
-
-def _synthetic_dataset_extras(apply_context: ApplyRunContext) -> dict[str, object]:
-    if not apply_context.has_synthetic:
-        return {
-            "applicable": False,
-            "status": "not_applicable",
-            "reason_code": "no_synthetic_step_selected",
-            "synthetic_step_ids": [],
-        }
-    return {
-        "applicable": True,
-        "status": "registered",
-        "synthetic_step_ids": list(apply_context.synthetic_step_ids),
-    }
-
-
-def _model_impact_extras(apply_context: ApplyRunContext) -> dict[str, object]:
-    return {
-        "applicable": True,
-        "status": "registered",
-        "require_eligibility": apply_context.require_model_impact_eligibility,
-        "synthetic_aware": apply_context.has_synthetic,
-    }
-
-
-def _export_package_extras(apply_context: ApplyRunContext) -> dict[str, object]:
-    return {
-        "status": "READY",
-        "synthetic_aware": apply_context.has_synthetic,
-        "require_model_impact_eligibility": (
-            apply_context.require_model_impact_eligibility
-        ),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Asset definitions
-# ---------------------------------------------------------------------------
 
 
 @asset(
     name="action_plan",
     group_name=APPLY_GROUP,
     required_resource_keys=_APPLY_RESOURCE_KEYS,
-    description="Approved ActionPlan loaded from the platform and pinned to the run.",
+    description="Approved ActionPlan loaded from the platform and pinned to this run.",
 )
 def action_plan(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_asset(
-        context,
+    run_context, apply_context, fake_platform, registry, _storage = _resources(context)
+    artifact = persist_action_plan_artifact(
+        apply_context=apply_context,
+        run_context=run_context,
+        registry=registry,
+    )
+    return _emit_and_result(
         asset_name="action_plan",
-        extras=_action_plan_extras(context.resources.run_context.apply_context),
+        run_context=run_context,
+        apply_context=apply_context,
+        fake_platform=fake_platform,
+        status="registered",
+        artifact=artifact,
+        artifact_refs=(artifact.artifact_ref,),
+        extras={
+            "approved_step_count": len(apply_context.action_plan.steps)
+            if apply_context.action_plan is not None
+            else 0,
+        },
     )
 
 
@@ -399,13 +242,41 @@ def action_plan(context: AssetExecutionContext) -> MaterializeResult[None]:
     group_name=APPLY_GROUP,
     required_resource_keys=_APPLY_RESOURCE_KEYS,
     deps=[AssetKey("action_plan")],
-    description="Report produced by ActionPlan step execution (placeholder for TASK-058).",
+    description="Execution report for approved ActionPlan remediation steps.",
 )
 def remediation_execution_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_asset(
-        context,
+    run_context, apply_context, fake_platform, registry, storage = _resources(context)
+    artifact = execute_remediation_plan(
+        apply_context=apply_context,
+        run_context=run_context,
+        storage=storage,
+        registry=registry,
+    )
+    state = apply_context.execution_state
+    refs = tuple(
+        artifact.artifact_ref
+        for artifact in (
+            state.remediation_report_artifact,
+            state.validation_gates_report_artifact,
+        )
+        if artifact is not None
+    )
+    return _emit_and_result(
         asset_name="remediation_execution_report",
-        extras=_remediation_extras(context.resources.run_context.apply_context),
+        run_context=run_context,
+        apply_context=apply_context,
+        fake_platform=fake_platform,
+        status="executed",
+        artifact=artifact,
+        artifact_refs=refs,
+        extras={
+            "validation_status": state.validation_gates_report.candidate_status.value
+            if state.validation_gates_report is not None
+            else "not_available",
+            "block_export": state.validation_gates_report.block_export
+            if state.validation_gates_report is not None
+            else True,
+        },
     )
 
 
@@ -414,16 +285,26 @@ def remediation_execution_report(context: AssetExecutionContext) -> MaterializeR
     group_name=APPLY_GROUP,
     required_resource_keys=_APPLY_RESOURCE_KEYS,
     deps=[AssetKey("remediation_execution_report")],
-    description=(
-        "Prepared candidate dataset artifact (placeholder; real Parquet "
-        "writes land in TASK-054 export writers)."
-    ),
+    description="Prepared candidate dataset artifact produced by approved steps.",
 )
 def prepared_dataset(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_asset(
-        context,
+    run_context, apply_context, fake_platform, registry, storage = _resources(context)
+    execute_remediation_plan(
+        apply_context=apply_context,
+        run_context=run_context,
+        storage=storage,
+        registry=registry,
+    )
+    artifact = apply_context.execution_state.primary_candidate_artifact
+    refs = (artifact.artifact_ref,) if artifact is not None else ()
+    return _emit_and_result(
         asset_name="prepared_dataset",
-        extras=_prepared_dataset_extras(context.resources.run_context.apply_context),
+        run_context=run_context,
+        apply_context=apply_context,
+        fake_platform=fake_platform,
+        status="materialized" if artifact is not None else "missing",
+        artifact=artifact,
+        artifact_refs=refs,
     )
 
 
@@ -432,22 +313,27 @@ def prepared_dataset(context: AssetExecutionContext) -> MaterializeResult[None]:
     group_name=APPLY_GROUP,
     required_resource_keys=_APPLY_RESOURCE_KEYS,
     deps=[AssetKey("prepared_dataset")],
-    description=(
-        "Synthetic candidate dataset artifact (skipped with status "
-        "not_applicable if no synthetic step is selected)."
-    ),
+    description="Synthetic dataset report and candidate rows when a synthetic step is selected.",
 )
 def synthetic_dataset(context: AssetExecutionContext) -> MaterializeResult[None]:
-    apply_context = context.resources.run_context.apply_context
-    extras = _synthetic_dataset_extras(apply_context)
-    artifact_status = (
-        "not_applicable" if not (apply_context and apply_context.has_synthetic) else "registered"
+    run_context, apply_context, fake_platform, registry, storage = _resources(context)
+    execute_remediation_plan(
+        apply_context=apply_context,
+        run_context=run_context,
+        storage=storage,
+        registry=registry,
     )
-    return _materialize_apply_asset(
-        context,
+    state = apply_context.execution_state
+    artifact = state.synthetic_dataset_report_artifact
+    refs = (artifact.artifact_ref,) if artifact is not None else ()
+    return _emit_and_result(
         asset_name="synthetic_dataset",
-        extras=extras,
-        artifact_status=artifact_status,
+        run_context=run_context,
+        apply_context=apply_context,
+        fake_platform=fake_platform,
+        status=synthetic_status(state, apply_context),
+        artifact=artifact,
+        artifact_refs=refs,
     )
 
 
@@ -456,13 +342,25 @@ def synthetic_dataset(context: AssetExecutionContext) -> MaterializeResult[None]
     group_name=APPLY_GROUP,
     required_resource_keys=_APPLY_RESOURCE_KEYS,
     deps=[AssetKey("prepared_dataset"), AssetKey("synthetic_dataset")],
-    description="Baseline vs candidate model impact report (placeholder for TASK-051).",
+    description="Baseline vs candidate model impact report when eligible.",
 )
 def model_impact_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_asset(
-        context,
+    run_context, apply_context, fake_platform, registry, storage = _resources(context)
+    artifact = ensure_model_impact_report(
+        apply_context=apply_context,
+        run_context=run_context,
+        storage=storage,
+        registry=registry,
+    )
+    refs = (artifact.artifact_ref,) if artifact is not None else ()
+    return _emit_and_result(
         asset_name="model_impact_report",
-        extras=_model_impact_extras(context.resources.run_context.apply_context),
+        run_context=run_context,
+        apply_context=apply_context,
+        fake_platform=fake_platform,
+        status="materialized" if artifact is not None else "not_applicable",
+        artifact=artifact,
+        artifact_refs=refs,
     )
 
 
@@ -471,13 +369,67 @@ def model_impact_report(context: AssetExecutionContext) -> MaterializeResult[Non
     group_name=APPLY_GROUP,
     required_resource_keys=_APPLY_RESOURCE_KEYS,
     deps=[AssetKey("model_impact_report")],
-    description="Export package after readiness gates (placeholder for TASK-053).",
+    description="Gated ExportPackage built only from immutable candidate artifacts.",
 )
 def export_package(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_apply_asset(
-        context,
+    run_context, apply_context, fake_platform, registry, storage = _resources(context)
+    artifact = build_final_apply_outputs(
+        apply_context=apply_context,
+        run_context=run_context,
+        storage=storage,
+        registry=registry,
+        platform_client=fake_platform,
+    )
+    state = apply_context.execution_state
+    final_candidate = final_candidate_ref(state)
+    final_export = final_export_ref(state)
+    refs = tuple(
+        ref
+        for ref in (
+            final_candidate.artifact_ref if final_candidate is not None else None,
+            final_export.artifact_ref if final_export is not None else None,
+            state.validation_gates_report_artifact.artifact_ref
+            if state.validation_gates_report_artifact is not None
+            else None,
+        )
+        if ref is not None
+    )
+    candidate = state.candidate_dataset_version
+    package = state.export_package
+    return _emit_and_result(
         asset_name="export_package",
-        extras=_export_package_extras(context.resources.run_context.apply_context),
+        run_context=run_context,
+        apply_context=apply_context,
+        fake_platform=fake_platform,
+        status=package.status.value if package is not None else "missing",
+        artifact=artifact,
+        artifact_refs=refs,
+        extras={
+            "candidate_status": candidate.status.value if candidate is not None else None,
+            "candidate_artifact_uri": (
+                state.candidate_version_artifact.uri
+                if state.candidate_version_artifact is not None
+                else None
+            ),
+            "candidate_artifact_hash": (
+                state.candidate_version_artifact.hash
+                if state.candidate_version_artifact is not None
+                else None
+            ),
+            "final_candidate_artifact_uri": (
+                final_candidate.uri if final_candidate is not None else None
+            ),
+            "final_candidate_artifact_hash": (
+                final_candidate.hash if final_candidate is not None else None
+            ),
+            "final_export_package_uri": (
+                final_export.uri if final_export is not None else None
+            ),
+            "final_export_package_hash": (
+                final_export.hash if final_export is not None else None
+            ),
+            "export_package_status": package.status.value if package is not None else None,
+        },
     )
 
 
@@ -497,7 +449,7 @@ def asset_kind_for(asset_name: str) -> str:
 
 
 def schema_version_for(asset_name: str) -> str:
-    """Return the schema_version emitted by an APPLY asset placeholder."""
+    """Return the schema_version emitted by an APPLY asset."""
     return APPLY_ARTIFACT_SCHEMA_VERSIONS[asset_name]
 
 
@@ -509,6 +461,7 @@ __all__ = [
     "APPLY_ASSETS",
     "APPLY_ASSET_KEYS",
     "APPLY_GROUP",
+    "EXPORT_MANIFEST_KIND",
     "action_plan",
     "asset_kind_for",
     "export_package",

@@ -221,6 +221,7 @@ def build_lineage_report(
         "algorithm-version": report.algorithm_version,
         "input-artifact-count": str(len(report.input_artifact_hashes)),
         "output-artifact-count": str(len(report.output_artifact_hashes)),
+        "created-at": report.created_at.isoformat(),
     }
     artifact = registry.save_artifact(
         artifact_kind=LINEAGE_REPORT_KIND,
