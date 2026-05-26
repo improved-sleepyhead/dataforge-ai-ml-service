@@ -1,0 +1,55 @@
+# Keep the runtime image minimal and prevent secrets / test fixtures
+# / agent tooling / local dev state from being baked in.
+
+# Version control + IDE state
+.git
+.gitignore
+.gitattributes
+.idea
+.vscode
+
+# Python build / cache
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+.coverage.*
+htmlcov
+
+# Local virtualenvs
+.venv
+venv
+env
+
+# Tests, fixtures, demo archives — must never ship in the runtime image
+tests
+docs
+scripts
+progress.md
+tasks.json
+AGENTS.md
+
+# Agent / Kiro / Codex tooling
+.kiro
+.agents
+.codex
+
+# Secrets and local env files — defense in depth even if .gitignore catches them
+.env
+.env.*
+*.pem
+*.key
+*.crt
+*.p12
+secrets
+
+# Container build artefacts produced by previous builds
+Dockerfile.*
+docker-compose*.yml
+docker-compose*.yaml
+.docker

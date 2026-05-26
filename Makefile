@@ -1,6 +1,8 @@
 PYTHON ?= python
+DOCKER ?= docker
+IMAGE ?= dataforgeai-ml-service:local
 
-.PHONY: install-dev lint typecheck test test-contracts test-plugins test-security test-e2e-compute-demo test-performance
+.PHONY: install-dev lint typecheck test test-contracts test-plugins test-security test-e2e-compute-demo test-performance docker-build
 
 install-dev:
 	$(PYTHON) -m pip install -e ".[dev]"
@@ -28,3 +30,6 @@ test-e2e-compute-demo:
 
 test-performance:
 	$(PYTHON) -m pytest tests/performance
+
+docker-build:
+	$(DOCKER) build --tag $(IMAGE) .
