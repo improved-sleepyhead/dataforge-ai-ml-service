@@ -68,16 +68,15 @@ def test_launch_apply_workflow_materializes_full_asset_graph_and_records_progres
     # All apply assets must be reported as materialized
     assert sorted(result.materialized_assets) == sorted(result.expected_outputs)
 
-    # Step 3: candidate/synthetic/model_impact/export refs are surfaced
-    assert result.candidate_artifact_uri is not None
-    assert result.candidate_artifact_uri.startswith("s3://")
-    assert result.candidate_artifact_hash is not None
-    assert result.candidate_artifact_hash.startswith("sha256:")
-    assert result.synthetic_artifact_uri is not None
+    # Step 3: placeholder artifacts are materialized for observability,
+    # but they are not exposed as final candidate/model-impact/export refs.
+    assert result.candidate_artifact_uri is None
+    assert result.candidate_artifact_hash is None
+    assert result.synthetic_artifact_uri is None
     # imputation-only plan -> synthetic stage is emitted but flagged not_applicable
     assert result.synthetic_status == "not_applicable"
-    assert result.model_impact_artifact_uri is not None
-    assert result.export_package_artifact_uri is not None
+    assert result.model_impact_artifact_uri is None
+    assert result.export_package_artifact_uri is None
 
     # Fake platform receives execution progress + final completed state
     snapshot = fake_platform.snapshot()
@@ -90,8 +89,8 @@ def test_launch_apply_workflow_materializes_full_asset_graph_and_records_progres
     assert last_event.platform_job_id == request.platform_job_id
 
 
-def test_synthetic_dataset_marked_registered_when_synthetic_step_is_present() -> None:
-    """ActionPlan with a synthetic step must surface synthetic_status=registered."""
+def test_synthetic_dataset_marked_provisional_when_synthetic_step_is_present() -> None:
+    """Synthetic placeholder is observable but not exposed as a final artifact."""
     fake_platform = FakePlatformMetadataClient()
     config = _test_config()
     request, plan_hash = _execute_request()
@@ -119,9 +118,8 @@ def test_synthetic_dataset_marked_registered_when_synthetic_step_is_present() ->
         fake_platform=fake_platform,
     )
 
-    assert result.synthetic_status == "registered"
-    assert result.synthetic_artifact_uri is not None
-    assert result.synthetic_artifact_uri.startswith("s3://")
+    assert result.synthetic_status == "provisional_placeholder"
+    assert result.synthetic_artifact_uri is None
     assert "synthetic_dataset" in result.materialized_assets
 
 
@@ -146,8 +144,8 @@ def test_launch_apply_workflow_refuses_request_without_approval_metadata() -> No
     assert snapshot.job_events == ()
 
 
-def test_apply_artifacts_are_idempotent_on_repeated_launches() -> None:
-    """Re-running APPLY with the same approval payload yields identical artifact URIs."""
+def test_apply_placeholder_run_is_idempotent_without_final_artifact_refs() -> None:
+    """Re-running placeholder APPLY shares a key but exposes no final refs."""
     fake_platform = FakePlatformMetadataClient()
     config = _test_config()
     request, plan_hash = _execute_request()
@@ -167,29 +165,11 @@ def test_apply_artifacts_are_idempotent_on_repeated_launches() -> None:
         fake_platform=fake_platform_two,
     )
 
-    # Each launcher rebuilds its own in-memory storage so URIs include
-    # different bucket scope; the IMMUTABLE part (artifact path layout
-    # + content hash) must be identical.
-    assert _artifact_path(first.candidate_artifact_uri) == _artifact_path(
-        second.candidate_artifact_uri
-    )
-    assert first.candidate_artifact_hash == second.candidate_artifact_hash
-    assert _artifact_path(first.export_package_artifact_uri) == _artifact_path(
-        second.export_package_artifact_uri
-    )
-
-
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
-
-
-def _artifact_path(uri: str | None) -> str:
-    if uri is None:
-        return ""
-    # Drop the s3://bucket/ prefix and keep the deterministic suffix that
-    # the registry uses to address the artifact.
-    return uri.split("/dataforge/", 1)[-1]
+    assert first.idempotency_key == second.idempotency_key
+    assert first.candidate_artifact_uri is None
+    assert second.candidate_artifact_uri is None
+    assert first.export_package_artifact_uri is None
+    assert second.export_package_artifact_uri is None
 
 
 def _test_config() -> ServiceConfig:

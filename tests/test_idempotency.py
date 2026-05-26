@@ -255,9 +255,9 @@ def test_apply_launcher_returns_stable_idempotency_key() -> None:
     )
 
     assert first.idempotency_key == second.idempotency_key
-    # Step 3: candidate/synthetic/model_impact/export hashes are
-    # identical across reruns because ArtifactRegistry is content-addressed.
-    assert first.candidate_artifact_hash == second.candidate_artifact_hash
+    # Placeholder APPLY currently exposes no final candidate hash.
+    assert first.candidate_artifact_hash is None
+    assert second.candidate_artifact_hash is None
 
 
 def test_apply_launcher_key_changes_when_step_plugin_version_changes() -> None:

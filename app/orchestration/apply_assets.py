@@ -19,14 +19,18 @@ candidate version assembly, model impact, export package) live in
 * skip synthetic-only material when no synthetic step is selected, but
   still emit the ``synthetic_dataset`` asset with status
   ``not_applicable`` so the asset graph stays stable;
-* mark the final ``export_package`` materialization with status
-  ``COMPLETED``.
+* mark the job timeline as ``COMPLETED`` once the placeholder graph is
+  observable, while keeping placeholder artifacts explicitly non-final.
 
 The placeholder JSON payloads make the assets observable from tests and
 from the platform UI: each artifact ref carries a content hash, the
 schema_version (``apply_*.placeholder.v1``), and a lineage block. This
 gives the candidate-version, model-impact and export builders something
 real to consume in TASK-058+ once they are wired in.
+
+These placeholders are audit/progress artifacts only. They must not be
+surfaced as final candidate dataset, model-impact, or export package refs
+until real builders and validation gates replace the placeholder payloads.
 
 This module intentionally does not use ``from __future__ import annotations``
 because Dagster validates the ``context`` parameter type via runtime
@@ -227,7 +231,7 @@ def _materialize_apply_asset(
     *,
     asset_name: str,
     extras: dict[str, object] | None = None,
-    artifact_status: str = "registered",
+    artifact_status: str = "provisional_placeholder",
 ) -> MaterializeResult[None]:
     run_context_resource: RunContextResource = context.resources.run_context
     fake_platform: FakePlatformMetadataClient = context.resources.fake_platform
@@ -351,7 +355,7 @@ def _synthetic_dataset_extras(apply_context: ApplyRunContext) -> dict[str, objec
         }
     return {
         "applicable": True,
-        "status": "registered",
+        "status": "provisional_placeholder",
         "synthetic_step_ids": list(apply_context.synthetic_step_ids),
     }
 
@@ -359,7 +363,7 @@ def _synthetic_dataset_extras(apply_context: ApplyRunContext) -> dict[str, objec
 def _model_impact_extras(apply_context: ApplyRunContext) -> dict[str, object]:
     return {
         "applicable": True,
-        "status": "registered",
+        "status": "provisional_placeholder",
         "require_eligibility": apply_context.require_model_impact_eligibility,
         "synthetic_aware": apply_context.has_synthetic,
     }
@@ -367,7 +371,9 @@ def _model_impact_extras(apply_context: ApplyRunContext) -> dict[str, object]:
 
 def _export_package_extras(apply_context: ApplyRunContext) -> dict[str, object]:
     return {
-        "status": "READY",
+        "status": "PROVISIONAL_PLACEHOLDER",
+        "export_gates_status": "not_evaluated",
+        "reason_code": "real_export_package_not_materialized",
         "synthetic_aware": apply_context.has_synthetic,
         "require_model_impact_eligibility": (
             apply_context.require_model_impact_eligibility
@@ -391,6 +397,7 @@ def action_plan(context: AssetExecutionContext) -> MaterializeResult[None]:
         context,
         asset_name="action_plan",
         extras=_action_plan_extras(context.resources.run_context.apply_context),
+        artifact_status="registered",
     )
 
 
@@ -441,7 +448,9 @@ def synthetic_dataset(context: AssetExecutionContext) -> MaterializeResult[None]
     apply_context = context.resources.run_context.apply_context
     extras = _synthetic_dataset_extras(apply_context)
     artifact_status = (
-        "not_applicable" if not (apply_context and apply_context.has_synthetic) else "registered"
+        "not_applicable"
+        if not (apply_context and apply_context.has_synthetic)
+        else "provisional_placeholder"
     )
     return _materialize_apply_asset(
         context,

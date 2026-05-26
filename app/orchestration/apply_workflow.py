@@ -9,15 +9,16 @@ asset graph and returns a safe summary of:
 * the platform job id that the request carried;
 * the Dagster status URL stub the platform UI can poll;
 * the asset names that were materialized;
-* the artifact references each apply stage registered (so the platform
-  can pin the candidate / synthetic / model_impact / export artifacts to
-  the platform job record without learning Dagster internals).
+* the asset names that ran. Placeholder artifacts stay internal to the
+  compute timeline and are not exposed as final candidate / synthetic /
+  model_impact / export refs.
 
 The launcher never overwrites raw artifacts: it always materializes new
 immutable JSON placeholder records via :class:`ArtifactRegistry`. Real
 algorithm wiring (full SMOTE / Gaussian Copula / model impact) lands in
-TASK-058 and onwards; this launcher provides the pipeline shape so those
-tasks can plug their builders into the corresponding apply assets.
+follow-up APPLY builder work; until then this launcher deliberately returns
+``None`` for final artifact refs so callers cannot mistake placeholders for
+validated candidate/export outputs.
 
 The launcher is also the single place that builds an
 :class:`ApplyRunContext` from an :class:`ActionPlanExecuteApprovedRequest`,
@@ -257,7 +258,9 @@ def launch_apply_actions_workflow(
 
     materialized_assets: list[str] = []
     artifact_uris: dict[str, tuple[str, str]] = {}
-    synthetic_status = "registered" if apply_context.has_synthetic else "not_applicable"
+    synthetic_status = (
+        "provisional_placeholder" if apply_context.has_synthetic else "not_applicable"
+    )
     for event in result.get_asset_materialization_events():
         asset_name = _asset_name(event.asset_key)
         materialized_assets.append(asset_name)
@@ -271,14 +274,12 @@ def launch_apply_actions_workflow(
             if isinstance(status_value, str):
                 synthetic_status = status_value
 
-    candidate_uri, candidate_hash = artifact_uris.get(
-        "prepared_dataset", (None, None)
-    )
-    synthetic_uri = artifact_uris.get("synthetic_dataset", (None, None))[0]
-    model_impact_uri = artifact_uris.get(
-        "model_impact_report", (None, None)
-    )[0]
-    export_uri = artifact_uris.get("export_package", (None, None))[0]
+    # Placeholder artifacts are useful for Dagster/fake-platform
+    # observability but are not contract-grade candidate, synthetic,
+    # model-impact, or export package artifacts. Keep these final refs
+    # unset until real builders and validation gates replace the
+    # placeholder payloads.
+    del artifact_uris
 
     return ApplyWorkflowResult(
         job_id=request.platform_job_id,
@@ -290,12 +291,12 @@ def launch_apply_actions_workflow(
         action_plan_hash=action_plan_hash,
         idempotency_key=idempotency_key,
         retry_metadata=RetryMetadata(attempt_number=attempt_number),
-        candidate_artifact_uri=candidate_uri,
-        candidate_artifact_hash=candidate_hash,
-        synthetic_artifact_uri=synthetic_uri,
+        candidate_artifact_uri=None,
+        candidate_artifact_hash=None,
+        synthetic_artifact_uri=None,
         synthetic_status=synthetic_status,
-        model_impact_artifact_uri=model_impact_uri,
-        export_package_artifact_uri=export_uri,
+        model_impact_artifact_uri=None,
+        export_package_artifact_uri=None,
         mutates_dataset=True,
     )
 

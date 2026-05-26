@@ -118,7 +118,8 @@ def test_read_endpoints_return_recorded_analyze_apply_state() -> None:
     # raw payloads/PII never present.
     _assert_safe_response_text(job_resp.text)
 
-    # Step 2: GET /jobs/{job_id} returns apply run summary with apply-only refs.
+    # Step 2: GET /jobs/{job_id} returns apply run summary. Placeholder
+    # APPLY materializations must not be exposed as final candidate/export refs.
     apply_job_resp = client.get(f"/api/v1/jobs/{execute_job_id}", headers=headers)
     assert apply_job_resp.status_code == 200
     apply_job_body = apply_job_resp.json()
@@ -126,8 +127,8 @@ def test_read_endpoints_return_recorded_analyze_apply_state() -> None:
     assert apply_job_body["mutates_dataset"] is True
     assert apply_job_body["action_plan_id"] == execute_action_plan_id
     assert apply_job_body["action_plan_hash"] == expected_action_plan_hash
-    assert apply_job_body["candidate_artifact_uri"]
-    assert apply_job_body["export_package_artifact_uri"]
+    assert apply_job_body["candidate_artifact_uri"] is None
+    assert apply_job_body["export_package_artifact_uri"] is None
     _assert_safe_response_text(apply_job_resp.text)
 
     # Step 2: GET /action-plans/{id} returns preview-only metadata for previewed plan

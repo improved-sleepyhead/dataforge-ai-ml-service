@@ -260,17 +260,17 @@ def test_execute_approved_accepts_valid_approval_metadata() -> None:
         ]
     )
     assert sorted(materialized) == sorted(expected)
-    assert data["candidate_artifact_uri"] is not None
-    assert data["candidate_artifact_uri"].startswith("s3://")
-    assert data["candidate_artifact_hash"] is not None
-    assert data["candidate_artifact_hash"].startswith("sha256:")
-    assert data["model_impact_artifact_uri"] is not None
-    assert data["export_package_artifact_uri"] is not None
+    # The current APPLY graph materializes placeholder audit/progress
+    # artifacts only. They must not be exposed as final candidate,
+    # model-impact, or export refs until real builders/gates replace them.
+    assert data["candidate_artifact_uri"] is None
+    assert data["candidate_artifact_hash"] is None
+    assert data["model_impact_artifact_uri"] is None
+    assert data["export_package_artifact_uri"] is None
     # The fixture uses an imputation-only ActionPlan so synthetic_status
-    # must be not_applicable and the synthetic URI is still emitted as
-    # a placeholder marker.
+    # must be not_applicable and no final synthetic artifact is surfaced.
     assert data["synthetic_status"] == "not_applicable"
-    assert data["synthetic_artifact_uri"] is not None
+    assert data["synthetic_artifact_uri"] is None
 
 
 def test_execute_approved_rejects_approval_hash_mismatch() -> None:
