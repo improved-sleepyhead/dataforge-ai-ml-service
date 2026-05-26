@@ -25,7 +25,6 @@ from app.kernel.idempotency import (
     collect_artifact_hashes,
     compute_analyze_idempotency_key,
 )
-from app.plugins.registry import build_static_plugin_registry
 from app.orchestration.assets import (
     ANALYZE_ASSETS,
     BASE_ANALYZE_ASSET_KEYS,
@@ -42,6 +41,7 @@ from app.orchestration.definitions import build_definitions
 from app.orchestration.resources import ComputeResources
 from app.orchestration.run_context import RunContextResource
 from app.orchestration.status_bridge import RunContext, RunStatusBridge
+from app.plugins.registry import build_static_plugin_registry
 
 
 @dataclass(frozen=True)
