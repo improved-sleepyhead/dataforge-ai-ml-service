@@ -177,11 +177,30 @@ def test_jenkinsfile_image_scan_stage_is_present_but_optional() -> None:
 
     assert "stage('Scan image')" in text
     assert "trivy image" in text
+    masked_scan = (
+        "trivy image --exit-code 1 --severity CRITICAL,HIGH "
+        "${env.RESOLVED_IMAGE} || true"
+    )
+    assert masked_scan not in text
     # The when-clause must guard on trivy availability so the
     # pipeline does not break on agents without the scanner installed.
     scan_index = text.index("stage('Scan image')")
     when_index = text.index("when {", scan_index)
     assert when_index > scan_index
+
+
+def test_jenkinsfile_publishes_non_empty_junit_reports() -> None:
+    """Critical pytest stages must write real JUnit XML and publish it."""
+    text = _jenkinsfile_text()
+
+    assert "PYTEST_ADDOPTS=\"--junitxml=build/junit/unit.xml\"" in text
+    assert "PYTEST_ADDOPTS=\"--junitxml=build/junit/contracts.xml\"" in text
+    assert "PYTEST_ADDOPTS=\"--junitxml=build/junit/plugins.xml\"" in text
+    assert "PYTEST_ADDOPTS=\"--junitxml=build/junit/security.xml\"" in text
+    assert "PYTEST_ADDOPTS=\"--junitxml=build/junit/e2e-compute.xml\"" in text
+    assert "PYTEST_ADDOPTS=\"--junitxml=build/junit/performance.xml\"" in text
+    assert "junit allowEmptyResults: false" in text
+    assert "junit allowEmptyResults: true" not in text
 
 
 def test_jenkinsfile_uses_timestamps_and_buildlog_options() -> None:

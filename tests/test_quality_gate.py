@@ -31,7 +31,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def test_build_suites_covers_every_documented_quality_suite() -> None:
     """Build must enumerate every suite required by the PRD/INFRA pipeline."""
-    suites = build_suites("python")
+    suites = build_suites("python", timeout_seconds=123)
     names = tuple(suite.name for suite in suites)
 
     assert names == (
@@ -48,6 +48,7 @@ def test_build_suites_covers_every_documented_quality_suite() -> None:
     # callers can pin the venv.
     for suite in suites:
         assert suite.command[0] == "python"
+        assert suite.timeout_seconds == 123
 
     # Documented commands match the make targets the runbook publishes.
     by_name = {suite.name: suite for suite in suites}
@@ -126,6 +127,26 @@ def test_run_gate_skips_named_suites(tmp_path: Path) -> None:
     assert report.passed is True
 
 
+def test_run_gate_records_timeout_as_failed_suite(tmp_path: Path) -> None:
+    """A hung suite must become a structured failed timeout result."""
+    suite = Suite(
+        name="unit",
+        description="fake hung unit suite",
+        command=("/bin/sleep", "2"),
+        timeout_seconds=1,
+    )
+
+    report = run_gate(suites=[suite], cwd=tmp_path, stream=False)
+
+    assert report.passed is False
+    assert len(report.failed_results()) == 1
+    result = report.failed_results()[0]
+    assert result.suite.name == "unit"
+    assert result.returncode == 124
+    assert result.timed_out is True
+    assert result.passed is False
+
+
 # ---------------------------------------------------------------------------
 # Acceptance criterion 3 — output summary lists passed/failed suites + paths.
 # ---------------------------------------------------------------------------
@@ -190,6 +211,8 @@ def test_main_writes_json_report_when_report_path_supplied(tmp_path: Path) -> No
     names = [r["name"] for r in payload["results"]]
     assert names == list(_DEFAULT_SUITE_NAMES)
     assert all(r["skipped"] for r in payload["results"])
+    assert all(r["timed_out"] is False for r in payload["results"])
+    assert all("timeout_seconds" in r for r in payload["results"])
 
 
 def test_main_returns_non_zero_when_any_suite_fails(tmp_path: Path) -> None:
@@ -220,6 +243,7 @@ def test_parse_args_defaults_match_documented_runbook() -> None:
     assert args.python == sys.executable
     assert args.skip == []
     assert args.report is None
+    assert args.suite_timeout_seconds == 600
 
 
 # ---------------------------------------------------------------------------
@@ -267,6 +291,7 @@ def _fake_suite(name: str, returncode: int) -> Suite:
         name=name,
         description=f"fake {name}",
         command=(binary,),
+        timeout_seconds=30,
     )
 
 

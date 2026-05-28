@@ -117,9 +117,11 @@ Implemented:
   re-writes.
 - `FakePlatformMetadataClient` for tests, fake callback HTTP server,
   privacy-redacting in-memory event store.
-- Dagster definitions: ANALYZE_ONLY skeleton + APPLY_SELECTED_ACTIONS
-  graph, run-status bridge, idempotency keys, cancellation tokens,
-  retry classification, and recoverable-failure reasons.
+- Dagster definitions: ANALYZE_ONLY asset graph that materializes
+  contract-compatible artifacts from the deterministic demo archive and
+  optional `PredictionManifest`, plus APPLY_SELECTED_ACTIONS graph,
+  run-status bridge, idempotency keys, cancellation tokens, retry
+  classification, and recoverable-failure reasons.
 - Multi-stage Dockerfile with a non-root `dataforge` user, `tini`
   PID 1, `/api/v1/health` probe; `.dockerignore` blocks tests/secrets.
 - Declarative `Jenkinsfile` with Kubernetes agents for the full
@@ -138,9 +140,10 @@ Not implemented (out of scope for this repo):
   provisioning side is platform-level.
 - Public ingress for the ML service. Per PRD §3.1 the FastAPI app is
   internal-only; only the platform backend may call it.
-- Real OpenLineage / MLflow / OpenTelemetry exporters. The
-  `MetricsRegistry` and `TracingRegistry` are in-process only;
-  shipping them to a backend is pilot work.
+- Real OpenLineage / MLflow / OpenTelemetry exporters. Local
+  ANALYZE/APPLY runs record in-process metrics and tracing spans
+  through `MetricsRegistry` and `TracingRegistry`; shipping them to a
+  backend is pilot work.
 - Real Qdrant / Milvus integration. The MVP uses no vector store; the
   text/OCR plugin computes only lightweight similarity locally.
 - Production CTGAN / TVAE / TabDDPM compute workers and GPU pools.

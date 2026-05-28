@@ -39,7 +39,7 @@ from app.orchestration.cancellation import (
 )
 from app.orchestration.definitions import build_definitions
 from app.orchestration.resources import ComputeResources
-from app.orchestration.run_context import RunContextResource
+from app.orchestration.run_context import AnalyzeRunContext, RunContextResource
 from app.orchestration.status_bridge import RunContext, RunStatusBridge
 from app.plugins.registry import build_static_plugin_registry
 
@@ -53,6 +53,7 @@ class AnalyzeWorkflowResult:
     status_url: str
     expected_outputs: tuple[str, ...]
     materialized_assets: tuple[str, ...]
+    artifact_uris: dict[str, str]
     idempotency_key: str
     retry_metadata: RetryMetadata
     mutates_dataset: bool = False
@@ -63,6 +64,7 @@ def launch_analyze_dataset_workflow(
     request: AnalyzeDatasetRequest,
     config: ServiceConfig,
     fake_platform: FakePlatformMetadataClient,
+    compute_resources: ComputeResources | None = None,
     cancellation_token: CancellationToken | None = None,
     attempt_number: int = 1,
 ) -> AnalyzeWorkflowResult:
@@ -111,6 +113,12 @@ def launch_analyze_dataset_workflow(
         dataset_id=request.dataset_id,
         dataset_version_id=request.dataset_version_id,
     )
+    analyze_context = AnalyzeRunContext(
+        dataset_object_refs=request.dataset_object_refs,
+        prediction_artifact_refs=request.prediction_artifact_refs,
+        parent_version_id=request.dataset_version_id,
+        config_hash=config.config_hash,
+    )
     bridge = RunStatusBridge(fake_platform=fake_platform)
 
     if cancellation_token is not None and cancellation_token.is_cancelled:
@@ -124,7 +132,8 @@ def launch_analyze_dataset_workflow(
         )
 
     definitions = build_definitions(
-        compute_resources=_build_in_memory_resources(
+        compute_resources=compute_resources
+        or _build_in_memory_resources(
             config=config,
             request=request,
             fake_platform=fake_platform,
@@ -132,6 +141,7 @@ def launch_analyze_dataset_workflow(
         run_context_resource=RunContextResource(
             run_context=run_context,
             workflow_type=WorkflowType.ANALYZE_ONLY,
+            analyze_context=analyze_context,
         ),
     )
 
@@ -172,16 +182,30 @@ def launch_analyze_dataset_workflow(
         )
         raise RuntimeError("ANALYZE_ONLY workflow materialization failed")
 
-    bridge.emit_completed(run_context=run_context)
-    materialized_assets = tuple(
-        _asset_name(event.asset_key) for event in result.get_asset_materialization_events()
+    materialized_assets: list[str] = []
+    artifact_uris: dict[str, str] = {}
+    for event in result.get_asset_materialization_events():
+        asset_name = _asset_name(event.asset_key)
+        materialized_assets.append(asset_name)
+        metadata = _materialization_metadata(event)
+        uri_value = metadata.get("artifact_uri")
+        if isinstance(uri_value, str):
+            artifact_uris[asset_name] = uri_value
+    bridge.emit_completed(
+        run_context=run_context,
+        artifact_refs=tuple(
+            artifact.artifact_ref
+            for asset_name, artifact in analyze_context.execution_state.artifacts.items()
+            if asset_name in materialized_assets
+        ),
     )
     return AnalyzeWorkflowResult(
         job_id=request.platform_job_id,
         status=ComputeRunStatus.ACCEPTED,
         status_url=f"/api/v1/jobs/{request.platform_job_id}/status",
         expected_outputs=expected_outputs,
-        materialized_assets=materialized_assets,
+        materialized_assets=tuple(materialized_assets),
+        artifact_uris=artifact_uris,
         idempotency_key=idempotency_key,
         retry_metadata=RetryMetadata(attempt_number=attempt_number),
         mutates_dataset=False,
@@ -224,6 +248,26 @@ def _asset_name(asset_key: object) -> str:
     if not isinstance(path, list | tuple) or not path:
         raise RuntimeError("Dagster materialization event included an invalid asset key")
     return str(path[-1])
+
+
+def _materialization_metadata(event: object) -> Mapping[str, Any]:
+    materialization = getattr(
+        getattr(event, "event_specific_data", None), "materialization", None
+    )
+    raw_metadata = getattr(materialization, "metadata", None)
+    if not isinstance(raw_metadata, Mapping):
+        return {}
+    out: dict[str, Any] = {}
+    for key, value in raw_metadata.items():
+        if hasattr(value, "text"):
+            out[key] = value.text
+        elif hasattr(value, "value"):
+            out[key] = value.value
+        elif hasattr(value, "data"):
+            out[key] = value.data
+        else:
+            out[key] = value
+    return out
 
 
 def _build_in_memory_resources(

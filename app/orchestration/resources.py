@@ -11,7 +11,7 @@ keeps Dagster startup deterministic and free of secret/env coupling.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dagster import ResourceDefinition
 
@@ -21,11 +21,14 @@ from app.adapters import (
     MinioObjectStorageAdapter,
 )
 from app.kernel.config import ServiceConfig
+from app.telemetry import MetricsRegistry, TracingRegistry
 
 OBJECT_STORAGE_RESOURCE_KEY = "object_storage"
 ARTIFACT_REGISTRY_RESOURCE_KEY = "artifact_registry"
 FAKE_PLATFORM_RESOURCE_KEY = "fake_platform"
 SERVICE_CONFIG_RESOURCE_KEY = "service_config"
+METRICS_RESOURCE_KEY = "metrics"
+TRACING_RESOURCE_KEY = "tracing"
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,8 @@ class ComputeResources:
     object_storage: MinioObjectStorageAdapter
     artifact_registry: ArtifactRegistry
     fake_platform: FakePlatformMetadataClient
+    metrics: MetricsRegistry = field(default_factory=MetricsRegistry)
+    tracing: TracingRegistry = field(default_factory=TracingRegistry)
 
     def to_dagster_mapping(self) -> dict[str, ResourceDefinition]:
         """Return a Dagster resource mapping wrapping already-built adapters.
@@ -58,6 +63,8 @@ class ComputeResources:
             FAKE_PLATFORM_RESOURCE_KEY: ResourceDefinition.hardcoded_resource(
                 self.fake_platform
             ),
+            METRICS_RESOURCE_KEY: ResourceDefinition.hardcoded_resource(self.metrics),
+            TRACING_RESOURCE_KEY: ResourceDefinition.hardcoded_resource(self.tracing),
         }
 
 
@@ -65,6 +72,8 @@ __all__ = [
     "ARTIFACT_REGISTRY_RESOURCE_KEY",
     "ComputeResources",
     "FAKE_PLATFORM_RESOURCE_KEY",
+    "METRICS_RESOURCE_KEY",
     "OBJECT_STORAGE_RESOURCE_KEY",
     "SERVICE_CONFIG_RESOURCE_KEY",
+    "TRACING_RESOURCE_KEY",
 ]

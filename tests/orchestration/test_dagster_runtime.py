@@ -3,7 +3,7 @@
 Covers TASK-015 acceptance criteria:
 
 * Dagster definitions load without errors;
-* skeleton analyze job materializes against in-memory adapters;
+* analyze job materializes safe artifact refs against in-memory adapters;
 * the fake platform client receives stage events through the status bridge;
 * APPLY assets refuse to run without an approved ApplyRunContext;
 * ANALYZE assets refuse to run under APPLY workflow type.
@@ -49,6 +49,7 @@ from app.orchestration import (
     APPLY_ASSET_KEYS,
     APPLY_ASSETS,
     APPLY_JOB_NAME,
+    AnalyzeRunContext,
     ApplyRunContext,
     ComputeResources,
     RunContext,
@@ -76,7 +77,7 @@ def test_local_demo_definitions_load_without_errors() -> None:
     assert APPLY_JOB_NAME in job_names
 
 
-def test_skeleton_analyze_job_materializes_and_records_stage_events() -> None:
+def test_analyze_job_materializes_and_records_stage_events() -> None:
     definitions = build_local_demo_definitions()
 
     analyze_job = _job_by_name(definitions, ANALYZE_JOB_NAME)
@@ -101,9 +102,8 @@ def test_skeleton_analyze_job_materializes_and_records_stage_events() -> None:
     }
     actual_stages = {event.stage for event in snapshot.job_events}
     assert expected_stages.issubset(actual_stages)
-    assert snapshot.job_events[-1].status is ComputeRunStatus.COMPLETED
     assert all(
-        event.status in {ComputeRunStatus.RUNNING, ComputeRunStatus.COMPLETED}
+        event.status is ComputeRunStatus.RUNNING
         for event in snapshot.job_events
     )
     assert all(
@@ -111,7 +111,7 @@ def test_skeleton_analyze_job_materializes_and_records_stage_events() -> None:
     )
 
 
-def test_skeleton_analyze_materialization_metadata_has_no_raw_payloads() -> None:
+def test_analyze_materialization_metadata_has_no_raw_payloads() -> None:
     definitions = build_local_demo_definitions()
     analyze_job = _job_by_name(definitions, ANALYZE_JOB_NAME)
 
@@ -123,7 +123,11 @@ def test_skeleton_analyze_materialization_metadata_has_no_raw_payloads() -> None
         metadata = materialization.metadata
         assert metadata["mutates_dataset"].value is False
         assert metadata["workflow_type"].value == WorkflowType.ANALYZE_ONLY.value
-        assert metadata["skeleton"].value is True
+        assert metadata["analysis_mode"].value in {
+            "artifact_materialization",
+            "reference_only",
+        }
+        assert "artifact_uri" in metadata
         assert forbidden_keys.isdisjoint(metadata.keys())
 
 
@@ -133,6 +137,11 @@ def test_analyze_asset_refuses_to_run_under_apply_workflow_type() -> None:
     run_context_resource = RunContextResource(
         run_context=_run_context(),
         workflow_type=WorkflowType.APPLY_SELECTED_ACTIONS,
+        analyze_context=AnalyzeRunContext(
+            dataset_object_refs=(),
+            parent_version_id="dataset_version_test",
+            config_hash="sha256:" + "0" * 64,
+        ),
     )
     definitions = build_definitions(
         compute_resources=compute_resources,

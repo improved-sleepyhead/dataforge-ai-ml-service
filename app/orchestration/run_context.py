@@ -66,6 +66,32 @@ class ApplyExecutionState:
     tabular_export_artifacts: tuple[ArtifactRef, ...] = ()
 
 
+@dataclass
+class AnalyzeExecutionState:
+    """Mutable per-run ANALYZE_ONLY outputs shared between ordered Dagster assets."""
+
+    artifacts: dict[str, RegisteredArtifact] = field(default_factory=dict)
+    counts: dict[str, int] = field(default_factory=dict)
+    statuses: dict[str, str] = field(default_factory=dict)
+    built: bool = False
+
+
+@dataclass(frozen=True)
+class AnalyzeRunContext:
+    """Immutable inputs attached to ANALYZE_ONLY runs."""
+
+    dataset_object_refs: tuple[ArtifactRef, ...] = field(default_factory=tuple)
+    prediction_artifact_refs: tuple[ArtifactRef, ...] = field(default_factory=tuple)
+    parent_version_id: str | None = None
+    config_hash: Sha256Digest = "sha256:" + "0" * 64
+    execution_state: AnalyzeExecutionState = field(default_factory=AnalyzeExecutionState)
+
+    @property
+    def include_predictions(self) -> bool:
+        """Return ``True`` when prediction artifacts were supplied."""
+        return bool(self.prediction_artifact_refs)
+
+
 @dataclass(frozen=True)
 class ApplyRunContext:
     """Approved-action references attached to APPLY runs.
@@ -118,7 +144,14 @@ class RunContextResource:
 
     run_context: RunContext
     workflow_type: WorkflowType
+    analyze_context: AnalyzeRunContext | None = None
     apply_context: ApplyRunContext | None = None
 
 
-__all__ = ["ApplyExecutionState", "ApplyRunContext", "RunContextResource"]
+__all__ = [
+    "AnalyzeExecutionState",
+    "AnalyzeRunContext",
+    "ApplyExecutionState",
+    "ApplyRunContext",
+    "RunContextResource",
+]

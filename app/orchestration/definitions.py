@@ -19,6 +19,7 @@ local smoke runs do not need real credentials.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from dagster import Definitions, ResourceDefinition
@@ -33,7 +34,7 @@ from app.adapters import (
     ObjectStorageScope,
 )
 from app.adapters.object_storage import ObjectStorageError
-from app.domain import ErrorCode, WorkflowType
+from app.domain import ArtifactLineage, ArtifactRef, ErrorCode, WorkflowType
 from app.kernel.config import (
     DagsterSettings,
     ExternalAISettings,
@@ -50,7 +51,7 @@ from app.orchestration.jobs import build_analyze_job, build_apply_job
 from app.orchestration.resources import (
     ComputeResources,
 )
-from app.orchestration.run_context import RunContextResource
+from app.orchestration.run_context import AnalyzeRunContext, RunContextResource
 from app.orchestration.status_bridge import RunContext
 
 RUN_CONTEXT_RESOURCE_KEY = "run_context"
@@ -124,6 +125,50 @@ def build_local_demo_definitions() -> Definitions:
     run_context_resource = RunContextResource(
         run_context=run_context,
         workflow_type=WorkflowType.ANALYZE_ONLY,
+        analyze_context=AnalyzeRunContext(
+            dataset_object_refs=(
+                ArtifactRef(
+                    artifact_id="demo_archive_missing_bytes",
+                    kind="raw_dataset_archive",
+                    uri=(
+                        "s3://dataforge-local/dataforge/org_demo/project_demo/"
+                        "dataset_demo/demo_archive_missing_bytes.zip"
+                    ),
+                    hash="sha256:" + "0" * 64,
+                    media_type="application/zip",
+                    size_bytes=0,
+                    schema_version="demo_archive.v1",
+                    lineage=ArtifactLineage(
+                        parent_version_id="dataset_version_demo",
+                        job_id="platform_job_demo",
+                        config_hash=config.config_hash,
+                        created_at=datetime(2026, 5, 27, tzinfo=UTC),
+                    ),
+                ),
+            ),
+            prediction_artifact_refs=(
+                ArtifactRef(
+                    artifact_id="demo_predictions_missing_bytes",
+                    kind="raw_predictions",
+                    uri=(
+                        "s3://dataforge-local/dataforge/org_demo/project_demo/"
+                        "dataset_demo/demo_predictions_missing_bytes.jsonl"
+                    ),
+                    hash="sha256:" + "1" * 64,
+                    media_type="application/jsonl",
+                    size_bytes=0,
+                    schema_version="prediction_manifest_row.v1",
+                    lineage=ArtifactLineage(
+                        parent_version_id="dataset_version_demo",
+                        job_id="platform_job_demo",
+                        config_hash=config.config_hash,
+                        created_at=datetime(2026, 5, 27, tzinfo=UTC),
+                    ),
+                ),
+            ),
+            parent_version_id="dataset_version_demo",
+            config_hash=config.config_hash,
+        ),
     )
     return build_definitions(
         compute_resources=compute_resources,

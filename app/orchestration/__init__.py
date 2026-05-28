@@ -45,11 +45,13 @@ from app.orchestration.jobs import (
 from app.orchestration.resources import (
     ARTIFACT_REGISTRY_RESOURCE_KEY,
     FAKE_PLATFORM_RESOURCE_KEY,
+    METRICS_RESOURCE_KEY,
     OBJECT_STORAGE_RESOURCE_KEY,
     SERVICE_CONFIG_RESOURCE_KEY,
+    TRACING_RESOURCE_KEY,
     ComputeResources,
 )
-from app.orchestration.run_context import ApplyRunContext, RunContextResource
+from app.orchestration.run_context import AnalyzeRunContext, ApplyRunContext, RunContextResource
 from app.orchestration.status_bridge import (
     RunContext,
     RunStatusBridge,
@@ -71,6 +73,7 @@ __all__ = [
     "APPLY_GROUP",
     "APPLY_JOB_NAME",
     "ARTIFACT_REGISTRY_RESOURCE_KEY",
+    "AnalyzeRunContext",
     "ApplyRunContext",
     "BASE_ANALYZE_ASSET_KEYS",
     "CancellationRegistry",
@@ -79,6 +82,7 @@ __all__ = [
     "FAKE_PLATFORM_RESOURCE_KEY",
     "JobEvent",
     "JobStage",
+    "METRICS_RESOURCE_KEY",
     "OBJECT_STORAGE_RESOURCE_KEY",
     "PREDICTION_ANALYZE_ASSET_KEYS",
     "RUN_CONTEXT_RESOURCE_KEY",
@@ -89,6 +93,7 @@ __all__ = [
     "RunFailureReason",
     "RunStatusBridge",
     "SERVICE_CONFIG_RESOURCE_KEY",
+    "TRACING_RESOURCE_KEY",
     "asset_kind_for",
     "build_analyze_job",
     "build_apply_job",
