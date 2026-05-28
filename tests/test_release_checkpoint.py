@@ -3,9 +3,9 @@
 These tests lock the documentation contract delivered with the
 release: `KNOWN_LIMITATIONS.md` exists at the repo root, lists every
 plugin readiness level, names the disabled-by-policy synthesizers, and
-is linked from both `README.md` and `RUNBOOK.md`. They also assert
-that the unified quality gate command is documented as the mandatory
-pre-`status=done` step.
+is linked from `RUNBOOK.md`. They also assert that the README keeps the
+unified quality gate visible while linking only to the committed
+technical implementation note.
 """
 
 from __future__ import annotations
@@ -70,11 +70,18 @@ def test_known_limitations_documents_excluded_infrastructure() -> None:
     assert "OpenLineage" in text or "OpenTelemetry" in text
 
 
-def test_readme_links_to_known_limitations_and_quality_gate() -> None:
-    """README must surface the limitations doc and the unified quality gate."""
+def test_readme_links_only_to_technical_implementation_and_quality_gate() -> None:
+    """README must surface the quality gate and avoid ignored/secondary doc links."""
     text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "KNOWN_LIMITATIONS.md" in text
+    assert "TECHNICAL_IMPLEMENTATION.md" in text
     assert "make quality-gate" in text
+    assert "KNOWN_LIMITATIONS.md" not in text
+    assert "RUNBOOK.md" not in text
+    assert "docs/PRD.md" not in text
+    assert "docs/DOCS.md" not in text
+    assert "docs/DATASETS.md" not in text
+    assert "docs/INFRA.md" not in text
+    assert "docs/TESTING.md" not in text
 
 
 def test_runbook_links_to_known_limitations() -> None:
