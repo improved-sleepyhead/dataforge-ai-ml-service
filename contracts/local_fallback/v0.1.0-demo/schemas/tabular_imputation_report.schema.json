@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/tabular_imputation_report.schema.json",
+  "title": "TabularImputationReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_schema_version",
+    "action_plan_id",
+    "step_id",
+    "target_column",
+    "target_unchanged",
+    "before_row_count",
+    "after_row_count",
+    "before_missing_total",
+    "after_missing_total",
+    "columns",
+    "candidate_artifact",
+    "lineage",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id",
+        "kind",
+        "uri",
+        "hash",
+        "media_type",
+        "size_bytes",
+        "schema_version",
+        "lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        },
+        "hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "schema_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lineage": {
+          "type": "object",
+          "required": [
+            "parent_version_id",
+            "job_id",
+            "config_hash",
+            "created_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "job_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "config_hash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      }
+    },
+    "imputation_method": {
+      "type": "string",
+      "enum": [
+        "median",
+        "mode",
+        "group_median",
+        "missingness_indicator"
+      ]
+    },
+    "column_report": {
+      "type": "object",
+      "required": [
+        "column",
+        "method",
+        "indicator_column",
+        "group_key",
+        "before_missing_count",
+        "after_missing_count",
+        "imputed_count",
+        "total_count",
+        "fill_value",
+        "group_imputed_counts"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "$ref": "#/$defs/imputation_method"
+        },
+        "indicator_column": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "before_missing_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "after_missing_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "imputed_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fill_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "group_imputed_counts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "action_plan_id",
+        "step_id",
+        "source_dataset_version_id",
+        "candidate_dataset_version_id",
+        "created_by_job_id",
+        "config_hash",
+        "source_artifact",
+        "candidate_artifact"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action_plan_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "step_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_dataset_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "candidate_dataset_version_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "created_by_job_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "config_hash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "source_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        },
+        "candidate_artifact": {
+          "$ref": "#/$defs/artifact_ref"
+        }
+      }
+    }
+  },
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "report_schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action_plan_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_column": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target_unchanged": {
+      "type": "boolean"
+    },
+    "before_row_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "after_row_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "before_missing_total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "after_missing_total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "columns": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/column_report"
+      }
+    },
+    "candidate_artifact": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "lineage": {
+      "$ref": "#/$defs/lineage"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

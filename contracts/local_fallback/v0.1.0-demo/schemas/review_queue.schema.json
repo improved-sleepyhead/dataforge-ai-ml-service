@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/review_queue.schema.json",
+  "title": "ReviewQueue",
+  "type": "object",
+  "required": [
+    "review_queue_id",
+    "queue_schema_version",
+    "queue_type",
+    "target_tool",
+    "dataset_id",
+    "version_id",
+    "created_by_job_id",
+    "objects",
+    "export_policy",
+    "created_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "evidence_ref": {
+      "type": "object",
+      "required": ["kind", "uri"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "pattern": "^s3://[^\\s]+$"}
+      }
+    },
+    "review_object": {
+      "type": "object",
+      "required": [
+        "object_id",
+        "modality",
+        "object_type",
+        "reason_codes",
+        "priority",
+        "safe_preview_uri",
+        "evidence_refs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "object_id": {"type": "string", "minLength": 1},
+        "modality": {
+          "type": "string",
+          "enum": ["tabular", "text", "image", "video", "audio", "document_ocr", "multimodal"]
+        },
+        "object_type": {"type": "string", "minLength": 1},
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "priority": {"type": "number", "minimum": 0, "maximum": 1},
+        "safe_preview_uri": {"type": "string", "pattern": "^s3://[^\\s]+$"},
+        "evidence_refs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidence_ref"}
+        }
+      }
+    }
+  },
+  "properties": {
+    "review_queue_id": {"type": "string", "minLength": 1},
+    "queue_schema_version": {"type": "string", "minLength": 1},
+    "queue_type": {
+      "type": "string",
+      "enum": [
+        "LABEL_REVIEW",
+        "PRIVACY_REVIEW",
+        "DUPLICATE_REVIEW",
+        "ANNOTATION_REVIEW",
+        "ACTIVE_LEARNING"
+      ]
+    },
+    "target_tool": {"type": ["string", "null"]},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "version_id": {"type": "string", "minLength": 1},
+    "created_by_job_id": {"type": "string", "minLength": 1},
+    "objects": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/review_object"}
+    },
+    "export_policy": {
+      "type": "object",
+      "required": ["raw_pii_allowed", "redacted_only", "allow_external_tool"],
+      "additionalProperties": false,
+      "properties": {
+        "raw_pii_allowed": {"type": "boolean"},
+        "redacted_only": {"type": "boolean"},
+        "allow_external_tool": {"type": "boolean"}
+      }
+    },
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

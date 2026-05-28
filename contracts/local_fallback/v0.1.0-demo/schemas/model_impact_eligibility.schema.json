@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/model_impact_eligibility.schema.json",
+  "title": "ModelImpactEligibilityReport",
+  "type": "object",
+  "required": [
+    "report_id","report_schema_version","status","eligible","primary_reason_code",
+    "reasons","required_inputs_present","required_inputs_missing",
+    "minimum_labeled_samples","minimum_rare_class_samples","lineage","generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "non_empty_string": { "type": "string", "minLength": 1 },
+    "score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "task_type": {
+      "type": "string",
+      "enum": ["supervised_tabular_classification", "supervised_tabular_regression"]
+    },
+    "input_name": {
+      "type": "string",
+      "enum": [
+        "target_label","enough_labeled_samples","valid_split_strategy",
+        "no_leakage_blockers","baseline_model_available"
+      ]
+    },
+    "not_eligible_reason_code": {
+      "type": "string",
+      "enum": [
+        "target_label_missing",
+        "target_column_has_missing_values",
+        "not_enough_labeled_samples",
+        "not_enough_rare_class_samples",
+        "split_manifest_missing",
+        "split_manifest_insufficient_splits",
+        "leakage_blocker_present",
+        "baseline_model_unavailable",
+        "unsupported_task_type"
+      ]
+    },
+    "status": { "type": "string", "enum": ["eligible", "not_eligible"] },
+    "artifact_ref": {
+      "type": "object",
+      "required": [
+        "artifact_id","kind","uri","hash","media_type","size_bytes","schema_version","lineage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/non_empty_string" },
+        "kind": { "$ref": "#/$defs/non_empty_string" },
+        "uri": { "type": "string", "pattern": "^s3://[^\\s]+$" },
+        "hash": { "$ref": "#/$defs/sha256" },
+        "media_type": { "$ref": "#/$defs/non_empty_string" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "schema_version": { "$ref": "#/$defs/non_empty_string" },
+        "lineage": {
+          "type": "object",
+          "required": ["parent_version_id","job_id","config_hash","created_at"],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": { "$ref": "#/$defs/non_empty_string" },
+            "job_id": { "$ref": "#/$defs/non_empty_string" },
+            "config_hash": { "$ref": "#/$defs/sha256" },
+            "created_at": { "type": "string", "format": "date-time" }
+          }
+        }
+      }
+    },
+    "cohort_stats": {
+      "type": "object",
+      "required": ["label", "count", "ratio"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "$ref": "#/$defs/non_empty_string" },
+        "count": { "type": "integer", "minimum": 0 },
+        "ratio": { "$ref": "#/$defs/score" },
+        "is_rare_class": { "type": "boolean" }
+      }
+    },
+    "split_stats": {
+      "type": "object",
+      "required": ["split", "total_count", "rare_class_count"],
+      "additionalProperties": false,
+      "properties": {
+        "split": { "$ref": "#/$defs/non_empty_string" },
+        "total_count": { "type": "integer", "minimum": 0 },
+        "rare_class_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "fallback_report": {
+      "type": "object",
+      "required": ["fallback_kind", "fallback_artifact", "reasons"],
+      "additionalProperties": false,
+      "properties": {
+        "fallback_kind": { "$ref": "#/$defs/non_empty_string" },
+        "fallback_artifact": { "$ref": "#/$defs/artifact_ref" },
+        "reasons": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/non_empty_string" }
+        }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "dataset_id","parent_version_id","candidate_dataset_version_id",
+        "created_by_job_id","config_hash"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "organization_id": { "anyOf": [ { "$ref": "#/$defs/non_empty_string" }, { "type": "null" } ] },
+        "project_id": { "anyOf": [ { "$ref": "#/$defs/non_empty_string" }, { "type": "null" } ] },
+        "dataset_id": { "$ref": "#/$defs/non_empty_string" },
+        "parent_version_id": { "$ref": "#/$defs/non_empty_string" },
+        "candidate_dataset_version_id": { "$ref": "#/$defs/non_empty_string" },
+        "candidate_version_artifact": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "tabular_profile_artifact": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "split_manifest_artifact": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "split_leakage_report_artifact": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "created_by_job_id": { "$ref": "#/$defs/non_empty_string" },
+        "config_hash": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "properties": {
+    "report_id": { "$ref": "#/$defs/non_empty_string" },
+    "report_schema_version": { "$ref": "#/$defs/non_empty_string" },
+    "status": { "$ref": "#/$defs/status" },
+    "eligible": { "type": "boolean" },
+    "task_type": { "anyOf": [ { "$ref": "#/$defs/task_type" }, { "type": "null" } ] },
+    "target_column": { "type": ["string","null"] },
+    "rare_class_label": { "type": ["string","null"] },
+    "primary_reason_code": { "$ref": "#/$defs/non_empty_string" },
+    "reasons": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/non_empty_string" }
+    },
+    "required_inputs_present": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/input_name" }
+    },
+    "required_inputs_missing": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/input_name" }
+    },
+    "not_eligible_reason_codes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/not_eligible_reason_code" }
+    },
+    "cohort_stats": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/cohort_stats" }
+    },
+    "split_stats": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/split_stats" }
+    },
+    "minimum_labeled_samples": { "type": "integer", "minimum": 0 },
+    "minimum_rare_class_samples": { "type": "integer", "minimum": 0 },
+    "fallback_report": {
+      "anyOf": [ { "$ref": "#/$defs/fallback_report" }, { "type": "null" } ]
+    },
+    "lineage": { "$ref": "#/$defs/lineage" },
+    "generated_at": { "type": "string", "format": "date-time" }
+  }
+}

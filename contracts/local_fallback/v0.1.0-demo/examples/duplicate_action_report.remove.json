@@ -1,0 +1,79 @@
+{
+  "report_id": "duplicate_action_report_001",
+  "report_schema_version": "duplicate_action_report.v1",
+  "mode": "REMOVE_DUPLICATES",
+  "id_column": "object_id",
+  "signature_columns": [
+    "amount",
+    "case_id",
+    "customer_id_hash",
+    "customer_segment",
+    "is_fraud",
+    "manual_review_flag",
+    "monthly_income"
+  ],
+  "before_row_count": 200,
+  "after_row_count": 196,
+  "before_duplicate_pair_count": 4,
+  "before_duplicate_group_count": 4,
+  "after_duplicate_pair_count": 0,
+  "after_duplicate_group_count": 0,
+  "marked_count": 0,
+  "removed_count": 4,
+  "groups": [
+    {
+      "group_id": "duplicate_group_0000",
+      "signature_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "affected_object_ids": [
+        "txn_00001",
+        "txn_00198"
+      ],
+      "kept_object_id": "txn_00001",
+      "removed_object_ids": [
+        "txn_00198"
+      ],
+      "marked_object_ids": []
+    }
+  ],
+  "raw_artifact_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "raw_artifact_unchanged": true,
+  "lineage": {
+    "action_plan_id": "action_plan_dedup_001",
+    "step_id": "remove_duplicates_tabular",
+    "source_dataset_version_id": "dataset_version_v1",
+    "candidate_dataset_version_id": "dataset_version_v2_candidate",
+    "created_by_job_id": "compute_run_apply_001",
+    "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "source_artifact": {
+      "artifact_id": "raw_transactions:aaaaaaaaaaaaaaaa",
+      "kind": "raw_transactions",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v1/transactions.csv",
+      "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "text/csv",
+      "size_bytes": 4096,
+      "schema_version": "tabular_dataset.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-24T12:00:00Z"
+      }
+    },
+    "candidate_artifact": {
+      "artifact_id": "candidate_tabular_dataset:dddddddddddddddd",
+      "kind": "candidate_tabular_dataset",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/candidate_dedup.csv",
+      "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "media_type": "text/csv",
+      "size_bytes": 4096,
+      "schema_version": "tabular_dataset.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-24T12:00:00Z"
+      }
+    }
+  },
+  "generated_at": "2026-05-24T12:15:00Z"
+}

@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/object_analytical_passport.schema.json",
+  "title": "ObjectAnalyticalPassport",
+  "type": "object",
+  "required": [
+    "object_id",
+    "analytics_schema_version",
+    "identity",
+    "technical_quality",
+    "privacy",
+    "duplicate_signals",
+    "learning_value",
+    "prediction",
+    "decision",
+    "evidence_refs",
+    "computed_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "score_or_null": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["kind", "uri"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uri": {
+          "type": "string",
+          "pattern": "^s3://[^\\s]+$"
+        }
+      }
+    }
+  },
+  "properties": {
+    "object_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "analytics_schema_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "object_id",
+        "dataset_id",
+        "version_id",
+        "modality",
+        "hash",
+        "created_by_job_id",
+        "config_hash",
+        "metadata"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "object_id": {"type": "string", "minLength": 1},
+        "dataset_id": {"type": "string", "minLength": 1},
+        "version_id": {"type": "string", "minLength": 1},
+        "modality": {
+          "type": "string",
+          "enum": ["tabular", "text", "image", "video", "audio", "document_ocr", "multimodal"]
+        },
+        "hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "parent_object_id": {"type": ["string", "null"]},
+        "created_by_job_id": {"type": "string", "minLength": 1},
+        "config_hash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+        "metadata": {"type": "object"}
+      }
+    },
+    "technical_quality": {
+      "type": "object",
+      "required": ["score", "status", "metrics"],
+      "additionalProperties": false,
+      "properties": {
+        "score": {"$ref": "#/$defs/score_or_null"},
+        "status": {"type": "string", "enum": ["available", "not_applicable", "unavailable"]},
+        "metrics": {"type": "object"}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "required": ["risk_score", "status", "pii_detected", "pii_types", "export_eligibility"],
+      "additionalProperties": false,
+      "properties": {
+        "risk_score": {"$ref": "#/$defs/score_or_null"},
+        "status": {"type": "string", "enum": ["available", "not_applicable", "unavailable"]},
+        "pii_detected": {"type": "boolean"},
+        "pii_types": {"type": "array", "items": {"type": "string"}},
+        "export_eligibility": {"type": "string", "minLength": 1}
+      }
+    },
+    "duplicate_signals": {
+      "type": "object",
+      "required": ["duplicate_score", "status", "duplicate_cluster_id"],
+      "additionalProperties": false,
+      "properties": {
+        "duplicate_score": {"$ref": "#/$defs/score_or_null"},
+        "status": {"type": "string", "enum": ["available", "not_applicable", "unavailable"]},
+        "duplicate_cluster_id": {"type": ["string", "null"]}
+      }
+    },
+    "learning_value": {
+      "type": "object",
+      "required": [
+        "rare_segment_score",
+        "diversity_score",
+        "model_uncertainty",
+        "label_issue_score",
+        "ambiguous_object_score",
+        "probable_label_error_score",
+        "decision_value_score",
+        "missing_reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rare_segment_score": {"$ref": "#/$defs/score_or_null"},
+        "diversity_score": {"$ref": "#/$defs/score_or_null"},
+        "model_uncertainty": {"$ref": "#/$defs/score_or_null"},
+        "label_issue_score": {"$ref": "#/$defs/score_or_null"},
+        "ambiguous_object_score": {"$ref": "#/$defs/score_or_null"},
+        "probable_label_error_score": {"$ref": "#/$defs/score_or_null"},
+        "decision_value_score": {"$ref": "#/$defs/score_or_null"},
+        "missing_reason": {"type": ["string", "null"]}
+      }
+    },
+    "prediction": {
+      "type": ["object", "null"],
+      "required": [
+        "model_id",
+        "model_version",
+        "true_label",
+        "predicted_label",
+        "confidence",
+        "margin",
+        "normalized_entropy"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "model_id": {"type": "string", "minLength": 1},
+        "model_version": {"type": "string", "minLength": 1},
+        "true_label": {"type": "string", "minLength": 1},
+        "predicted_label": {"type": "string", "minLength": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "margin": {"$ref": "#/$defs/score_or_null"},
+        "normalized_entropy": {"$ref": "#/$defs/score_or_null"}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "required": ["action", "reason_codes"],
+      "additionalProperties": false,
+      "properties": {
+        "action": {"type": "string", "minLength": 1},
+        "reason_codes": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/evidence_ref"}
+    },
+    "computed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

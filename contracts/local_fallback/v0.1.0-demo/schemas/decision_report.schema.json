@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/decision_report.schema.json",
+  "title": "DecisionReport",
+  "type": "object",
+  "required": [
+    "decision_report_id",
+    "dataset_id",
+    "version_id",
+    "decision_schema_version",
+    "dataset_decision",
+    "readiness",
+    "critical_blockers",
+    "safe_actions_available",
+    "recommended_next_job",
+    "object_decisions",
+    "recommended_actions",
+    "policy_versions",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "decision_action": {
+      "type": "string",
+      "enum": [
+        "KEEP",
+        "REMOVE_DUPLICATE",
+        "SEND_TO_LABEL_REVIEW",
+        "SEND_TO_PRIVACY_REVIEW",
+        "IMPUTE_MISSING_VALUES",
+        "AUGMENT_RARE_CLASS",
+        "GENERATE_SYNTHETIC_CANDIDATE",
+        "BLOCK_EXPORT",
+        "EXPORT_READY"
+      ]
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["kind", "uri"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"type": "string", "minLength": 1},
+        "uri": {"type": "string", "pattern": "^s3://[^\\s]+$"}
+      }
+    },
+    "critical_blocker": {
+      "type": "object",
+      "required": ["code", "severity", "message", "evidence_refs"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "severity": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1},
+        "evidence_refs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidence_ref"}
+        }
+      }
+    },
+    "blocked_decision_action": {
+      "type": "object",
+      "required": ["action", "reason", "reason_codes"],
+      "additionalProperties": false,
+      "properties": {
+        "action": {"$ref": "#/$defs/decision_action"},
+        "reason": {"type": "string", "minLength": 1},
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "object_level_decision": {
+      "type": "object",
+      "required": [
+        "object_id",
+        "modality",
+        "action",
+        "reasons",
+        "blocked_actions",
+        "object_value_score"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "object_id": {"type": "string", "minLength": 1},
+        "modality": {
+          "type": "string",
+          "enum": ["tabular", "text", "image", "video", "audio", "document_ocr", "multimodal"]
+        },
+        "action": {"$ref": "#/$defs/decision_action"},
+        "reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "blocked_actions": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/blocked_decision_action"}
+        },
+        "object_value_score": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "recommended_action": {
+      "type": "object",
+      "required": [
+        "recommendation_id",
+        "action",
+        "modality",
+        "count",
+        "reason_codes",
+        "reason",
+        "segment",
+        "method_recommendation_id",
+        "requires_approval"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "recommendation_id": {"type": "string", "minLength": 1},
+        "action": {"$ref": "#/$defs/decision_action"},
+        "modality": {
+          "type": "string",
+          "enum": ["tabular", "text", "image", "video", "audio", "document_ocr", "multimodal"]
+        },
+        "count": {"type": "integer", "minimum": 0},
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "reason": {"type": "string", "minLength": 1},
+        "segment": {"type": ["string", "null"]},
+        "method_recommendation_id": {"type": ["string", "null"]},
+        "requires_approval": {"type": "boolean"}
+      }
+    }
+  },
+  "properties": {
+    "decision_report_id": {"type": "string", "minLength": 1},
+    "dataset_id": {"type": "string", "minLength": 1},
+    "version_id": {"type": "string", "minLength": 1},
+    "decision_schema_version": {"type": "string", "minLength": 1},
+    "dataset_decision": {
+      "type": "string",
+      "enum": [
+        "READY_FOR_TRAINING",
+        "READY_FOR_TRAINING_WITH_REVIEW_NOTES",
+        "NEEDS_REVIEW",
+        "BLOCKED"
+      ]
+    },
+    "readiness": {
+      "type": "object",
+      "required": ["status", "score", "reason_codes"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["READY_FOR_EXPORT", "READY_WITH_WARNINGS", "NOT_READY_FOR_EXPORT", "BLOCKED"]
+        },
+        "score": {"type": "number", "minimum": 0, "maximum": 1},
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "critical_blockers": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/critical_blocker"}
+    },
+    "safe_actions_available": {"type": "boolean"},
+    "recommended_next_job": {
+      "type": ["string", "null"],
+      "enum": [
+        "ANALYZE_ONLY",
+        "PREVIEW_ACTION_PLAN",
+        "APPLY_SELECTED_ACTIONS",
+        "EXPORT",
+        null
+      ]
+    },
+    "recommended_actions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/recommended_action"}
+    },
+    "object_decisions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/object_level_decision"}
+    },
+    "policy_versions": {
+      "type": "object",
+      "required": ["decision_policy", "score_policy", "privacy_policy", "method_policy"],
+      "additionalProperties": false,
+      "properties": {
+        "decision_policy": {"type": "string", "minLength": 1},
+        "score_policy": {"type": "string", "minLength": 1},
+        "privacy_policy": {"type": "string", "minLength": 1},
+        "method_policy": {"type": "string", "minLength": 1}
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"}
+  }
+}

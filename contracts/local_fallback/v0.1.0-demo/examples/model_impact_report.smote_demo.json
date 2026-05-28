@@ -1,0 +1,145 @@
+{
+  "report_id": "model_impact_report_001",
+  "report_schema_version": "model_impact_report.v1",
+  "metric_library": "scikit-learn",
+  "metric_library_version": "1.8.0",
+  "verdict": "improved",
+  "verdict_reason_codes": ["rare_class_recall_improved", "macro_f1_improved"],
+  "notes": null,
+  "baseline_metrics": {
+    "rare_class_label": "1",
+    "rare_class_recall": 0.30,
+    "rare_class_precision": 0.40,
+    "macro_f1": 0.60,
+    "weighted_f1": 0.85,
+    "pr_auc": 0.45,
+    "pr_auc_status": "available",
+    "pr_auc_reason": null,
+    "confusion_matrix": [
+      { "true_label": "0", "predicted_label": "0", "count": 28 },
+      { "true_label": "0", "predicted_label": "1", "count": 1 },
+      { "true_label": "1", "predicted_label": "0", "count": 1 },
+      { "true_label": "1", "predicted_label": "1", "count": 0 }
+    ],
+    "sample_count": 30
+  },
+  "candidate_metrics": {
+    "rare_class_label": "1",
+    "rare_class_recall": 0.55,
+    "rare_class_precision": 0.50,
+    "macro_f1": 0.70,
+    "weighted_f1": 0.88,
+    "pr_auc": 0.55,
+    "pr_auc_status": "available",
+    "pr_auc_reason": null,
+    "confusion_matrix": [
+      { "true_label": "0", "predicted_label": "0", "count": 27 },
+      { "true_label": "0", "predicted_label": "1", "count": 2 },
+      { "true_label": "1", "predicted_label": "0", "count": 0 },
+      { "true_label": "1", "predicted_label": "1", "count": 1 }
+    ],
+    "sample_count": 30
+  },
+  "rare_class_recall_before": 0.30,
+  "rare_class_recall_after": 0.55,
+  "rare_class_recall_delta": 0.25,
+  "macro_f1_before": 0.60,
+  "macro_f1_after": 0.70,
+  "macro_f1_delta": 0.10,
+  "weighted_f1_before": 0.85,
+  "weighted_f1_after": 0.88,
+  "weighted_f1_delta": 0.03,
+  "pr_auc_before": 0.45,
+  "pr_auc_after": 0.55,
+  "pr_auc_delta": 0.10,
+  "pr_auc_status": "available",
+  "pr_auc_reason": null,
+  "tstr_trts": {
+    "status": "available",
+    "reason": null,
+    "tstr_metrics": {
+      "rare_class_label": "1",
+      "rare_class_recall": 0.50,
+      "rare_class_precision": 0.45,
+      "macro_f1": 0.62,
+      "weighted_f1": 0.83,
+      "pr_auc": 0.42,
+      "pr_auc_status": "available",
+      "pr_auc_reason": null,
+      "confusion_matrix": [
+        { "true_label": "0", "predicted_label": "0", "count": 26 },
+        { "true_label": "0", "predicted_label": "1", "count": 3 },
+        { "true_label": "1", "predicted_label": "0", "count": 1 },
+        { "true_label": "1", "predicted_label": "1", "count": 0 }
+      ],
+      "sample_count": 30
+    },
+    "trts_metrics": {
+      "rare_class_label": "1",
+      "rare_class_recall": 0.50,
+      "rare_class_precision": 0.50,
+      "macro_f1": 0.65,
+      "weighted_f1": 0.80,
+      "pr_auc": 0.50,
+      "pr_auc_status": "available",
+      "pr_auc_reason": null,
+      "confusion_matrix": [
+        { "true_label": "0", "predicted_label": "0", "count": 4 },
+        { "true_label": "0", "predicted_label": "1", "count": 0 },
+        { "true_label": "1", "predicted_label": "0", "count": 1 },
+        { "true_label": "1", "predicted_label": "1", "count": 1 }
+      ],
+      "sample_count": 6
+    },
+    "tstr_macro_f1_drop": -0.02,
+    "tstr_macro_f1_threshold": 0.10,
+    "trts_macro_f1_delta": 0.05,
+    "trts_unstable_threshold": 0.20
+  },
+  "synthetic_utility_status": "recommended",
+  "synthetic_utility_reason_codes": ["tstr_within_threshold", "rare_class_recall_improved"],
+  "baseline_model_config": {
+    "algorithm": "LogisticRegression",
+    "library": "scikit-learn",
+    "library_version": "1.8.0",
+    "hyperparameters": {
+      "max_iter": 500,
+      "class_weight": "balanced",
+      "solver": "lbfgs"
+    },
+    "feature_columns": ["amount", "monthly_income"],
+    "target_column": "is_fraud",
+    "excluded_columns": ["object_id", "customer_id_hash", "case_id"],
+    "random_seed": 42
+  },
+  "candidate_model_config": {
+    "algorithm": "LogisticRegression",
+    "library": "scikit-learn",
+    "library_version": "1.8.0",
+    "hyperparameters": {
+      "max_iter": 500,
+      "class_weight": "balanced",
+      "solver": "lbfgs"
+    },
+    "feature_columns": ["amount", "monthly_income"],
+    "target_column": "is_fraud",
+    "excluded_columns": ["object_id", "customer_id_hash", "case_id"],
+    "random_seed": 42
+  },
+  "lineage": {
+    "organization_id": "org_1",
+    "project_id": "project_1",
+    "dataset_id": "dataset_1",
+    "parent_version_id": "dataset_version_v1",
+    "candidate_dataset_version_id": "dataset_version_v2_candidate",
+    "candidate_version_artifact": null,
+    "eligibility_report_artifact": null,
+    "source_split_manifest": null,
+    "candidate_split_manifest": null,
+    "validation_gates_report_artifact": null,
+    "synthetic_dataset_report_artifact": null,
+    "created_by_job_id": "compute_run_apply_001",
+    "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "generated_at": "2026-05-27T13:00:00Z"
+}

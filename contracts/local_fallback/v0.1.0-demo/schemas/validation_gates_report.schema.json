@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/validation_gates_report.schema.json",
+  "title": "ValidationGatesReport",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_schema_version",
+    "dataset_id",
+    "source_dataset_version_id",
+    "candidate_dataset_version_id",
+    "candidate_artifact_kind",
+    "policy_version",
+    "overall_status",
+    "candidate_status",
+    "raw_artifact_unchanged",
+    "block_export",
+    "block_model_evaluation",
+    "block_training",
+    "blocker_present",
+    "gates",
+    "lineage",
+    "generated_at"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "non_empty_string": { "type": "string", "minLength": 1 },
+    "score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "artifact_ref": {
+      "type": "object",
+      "required": ["artifact_id","kind","uri","hash","media_type","size_bytes","schema_version","lineage"],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": { "$ref": "#/$defs/non_empty_string" },
+        "kind": { "$ref": "#/$defs/non_empty_string" },
+        "uri": { "type": "string", "pattern": "^s3://[^\\s]+$" },
+        "hash": { "$ref": "#/$defs/sha256" },
+        "media_type": { "$ref": "#/$defs/non_empty_string" },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "schema_version": { "$ref": "#/$defs/non_empty_string" },
+        "lineage": {
+          "type": "object",
+          "required": ["parent_version_id","job_id","config_hash","created_at"],
+          "additionalProperties": false,
+          "properties": {
+            "parent_version_id": { "$ref": "#/$defs/non_empty_string" },
+            "job_id": { "$ref": "#/$defs/non_empty_string" },
+            "config_hash": { "$ref": "#/$defs/sha256" },
+            "created_at": { "type": "string", "format": "date-time" }
+          }
+        }
+      }
+    },
+    "gate_status": { "type": "string", "enum": ["passed","failed","not_applicable"] },
+    "gate_severity": { "type": "string", "enum": ["info","warning","blocker"] },
+    "gate_type": {
+      "type": "string",
+      "enum": [
+        "schema_validation",
+        "business_rules",
+        "privacy_check",
+        "split_leakage_check",
+        "synthetic_dcr_check",
+        "synthetic_exact_duplicate_to_real",
+        "synthetic_nearest_neighbor_privacy",
+        "synthetic_distribution_similarity",
+        "synthetic_correlation_preservation",
+        "synthetic_missingness_comparison",
+        "synthetic_tstr",
+        "synthetic_trts",
+        "synthetic_shap_consistency",
+        "synthetic_tabsyndex",
+        "raw_artifact_immutability"
+      ]
+    },
+    "candidate_status": { "type": "string", "enum": ["ok","validation_failed","review_required"] },
+    "gate_finding": {
+      "type": "object",
+      "required": ["finding_id"],
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": { "$ref": "#/$defs/non_empty_string" },
+        "object_ids": { "type": "array", "items": { "$ref": "#/$defs/non_empty_string" } },
+        "columns": { "type": "array", "items": { "$ref": "#/$defs/non_empty_string" } },
+        "notes": { "type": ["string","null"] },
+        "metric_name": { "type": ["string","null"] },
+        "metric_value": { "type": ["number","null"] },
+        "metric_threshold": { "type": ["number","null"] }
+      }
+    },
+    "gate_metric": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/non_empty_string" },
+        "value": { "type": ["number","null"] },
+        "threshold": { "type": ["number","null"] },
+        "formula": { "type": ["string","null"] },
+        "notes": { "type": ["string","null"] }
+      }
+    },
+    "gate_result": {
+      "type": "object",
+      "required": ["gate_type","status","severity","reason_code","findings_count"],
+      "additionalProperties": false,
+      "properties": {
+        "gate_type": { "$ref": "#/$defs/gate_type" },
+        "status": { "$ref": "#/$defs/gate_status" },
+        "severity": { "$ref": "#/$defs/gate_severity" },
+        "reason_code": { "$ref": "#/$defs/non_empty_string" },
+        "block_action": { "anyOf": [ { "$ref": "#/$defs/non_empty_string" }, { "type": "null" } ] },
+        "findings_count": { "type": "integer", "minimum": 0 },
+        "pass_rate": { "anyOf": [ { "$ref": "#/$defs/score" }, { "type": "null" } ] },
+        "metrics": { "type": "array", "items": { "$ref": "#/$defs/gate_metric" } },
+        "findings": { "type": "array", "items": { "$ref": "#/$defs/gate_finding" } },
+        "notes": { "type": ["string","null"] },
+        "not_applicable_reason": { "type": ["string","null"] }
+      }
+    },
+    "lineage": {
+      "type": "object",
+      "required": [
+        "source_dataset_version_id",
+        "candidate_dataset_version_id",
+        "created_by_job_id",
+        "config_hash",
+        "source_artifact",
+        "candidate_artifact"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "action_plan_id": { "anyOf": [ { "$ref": "#/$defs/non_empty_string" }, { "type": "null" } ] },
+        "step_id": { "anyOf": [ { "$ref": "#/$defs/non_empty_string" }, { "type": "null" } ] },
+        "source_dataset_version_id": { "$ref": "#/$defs/non_empty_string" },
+        "candidate_dataset_version_id": { "$ref": "#/$defs/non_empty_string" },
+        "created_by_job_id": { "$ref": "#/$defs/non_empty_string" },
+        "config_hash": { "$ref": "#/$defs/sha256" },
+        "source_artifact": { "$ref": "#/$defs/artifact_ref" },
+        "candidate_artifact": { "$ref": "#/$defs/artifact_ref" },
+        "split_manifest": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "split_leakage_report": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] },
+        "synthetic_dataset_report": { "anyOf": [ { "$ref": "#/$defs/artifact_ref" }, { "type": "null" } ] }
+      }
+    }
+  },
+  "properties": {
+    "report_id": { "$ref": "#/$defs/non_empty_string" },
+    "report_schema_version": { "$ref": "#/$defs/non_empty_string" },
+    "dataset_id": { "$ref": "#/$defs/non_empty_string" },
+    "source_dataset_version_id": { "$ref": "#/$defs/non_empty_string" },
+    "candidate_dataset_version_id": { "$ref": "#/$defs/non_empty_string" },
+    "candidate_artifact_kind": { "$ref": "#/$defs/non_empty_string" },
+    "policy_version": { "$ref": "#/$defs/non_empty_string" },
+    "overall_status": { "$ref": "#/$defs/gate_status" },
+    "candidate_status": { "$ref": "#/$defs/candidate_status" },
+    "raw_artifact_unchanged": { "type": "boolean" },
+    "block_export": { "type": "boolean" },
+    "block_model_evaluation": { "type": "boolean" },
+    "block_training": { "type": "boolean" },
+    "blocker_present": { "type": "boolean" },
+    "blocker_gate_types": { "type": "array", "items": { "$ref": "#/$defs/gate_type" } },
+    "gates": { "type": "array", "items": { "$ref": "#/$defs/gate_result" } },
+    "lineage": { "$ref": "#/$defs/lineage" },
+    "generated_at": { "type": "string", "format": "date-time" }
+  }
+}

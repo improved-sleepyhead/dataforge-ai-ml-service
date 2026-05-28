@@ -1,0 +1,62 @@
+{
+  "report_id": "text_ocr_report_001",
+  "report_schema_version": "text_ocr_report.v1",
+  "dataset_id": "dataset_fraud_demo",
+  "version_id": "dataset_version_v1",
+  "parent_version_id": "dataset_version_raw_001",
+  "created_by_job_id": "job_text_ocr_001",
+  "config_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "sources": [
+    {
+      "source_kind": "support_messages",
+      "source_name": "support_messages.jsonl",
+      "record_count": 2,
+      "valid_record_count": 2,
+      "issue_count": 0,
+      "issues": [],
+      "duplicate_groups": [
+        {
+          "text_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "object_ids": ["support_0001", "support_0002"],
+          "count": 2
+        }
+      ],
+      "duplicate_record_count": 2,
+      "duplicate_object_ids": ["support_0001", "support_0002"],
+      "average_text_length": 42.5,
+      "min_text_length": 40,
+      "max_text_length": 45,
+      "average_ocr_confidence": null,
+      "pii_findings": [
+        {
+          "object_id": "support_0001",
+          "findings": [
+            {
+              "category": "email",
+              "occurrence_count": 1
+            }
+          ],
+          "pii_token_count": 1,
+          "pii_risk_score": 0.5,
+          "redacted_text_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        }
+      ],
+      "pii_token_count": 1,
+      "pii_record_count": 1,
+      "redacted_record_count": 1,
+      "redacted_artifact_uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/versions/dataset_version_v1/jobs/job_text_ocr_001/artifacts/text_ocr_redacted_jsonl/text_ocr_redacted_jsonl.v1/abc.jsonl",
+      "redacted_artifact_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "review_queue_object_ids": ["support_0001"]
+    }
+  ],
+  "total_record_count": 2,
+  "total_valid_record_count": 2,
+  "total_issue_count": 0,
+  "total_duplicate_group_count": 1,
+  "total_duplicate_record_count": 2,
+  "total_pii_record_count": 1,
+  "total_pii_token_count": 1,
+  "total_redacted_record_count": 1,
+  "review_queue_object_ids": ["support_0001"],
+  "generated_at": "2026-05-20T07:15:00Z"
+}

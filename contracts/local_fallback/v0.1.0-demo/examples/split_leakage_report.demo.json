@@ -1,0 +1,131 @@
+{
+  "report_id": "split_leakage_report_001",
+  "report_schema_version": "split_leakage_report.v1",
+  "dataset_id": "dataset_fraud_demo",
+  "source_dataset_version_id": "dataset_version_v1",
+  "candidate_dataset_version_id": "dataset_version_v2_candidate",
+  "split_manifest_id": "split_manifest_001",
+  "target_column": "is_fraud",
+  "policy_version": "split_policy_v0",
+  "leakage_detected": true,
+  "leakage_risk_score": 1.0,
+  "block_model_evaluation": true,
+  "block_training": true,
+  "checks": [
+    {
+      "check_type": "exact_hash",
+      "status": "passed",
+      "severity": "info",
+      "reason_code": "no_exact_hash_leakage",
+      "block_action": null,
+      "findings_count": 0,
+      "affected_object_ids": [],
+      "affected_groups": [],
+      "affected_columns": [],
+      "findings": [],
+      "notes": null
+    },
+    {
+      "check_type": "group_key",
+      "status": "failed",
+      "severity": "blocker",
+      "reason_code": "split_leakage",
+      "block_action": "BLOCK_MODEL_EVALUATION",
+      "findings_count": 1,
+      "affected_object_ids": [
+        "txn_00010",
+        "txn_00011"
+      ],
+      "affected_groups": [
+        "cust_hash_007"
+      ],
+      "affected_columns": [
+        "customer_id_hash"
+      ],
+      "findings": [
+        {
+          "finding_id": "group_leakage_cust_hash_007",
+          "splits": [
+            "train",
+            "test"
+          ],
+          "object_ids": [
+            "txn_00010",
+            "txn_00011"
+          ],
+          "group_value": "cust_hash_007",
+          "column": "customer_id_hash",
+          "notes": "group key appears in 2 splits"
+        }
+      ],
+      "notes": "1 group_key value spans multiple splits"
+    },
+    {
+      "check_type": "target_leakage_candidate",
+      "status": "failed",
+      "severity": "blocker",
+      "reason_code": "target_leakage_candidate",
+      "block_action": "BLOCK_TRAINING",
+      "findings_count": 1,
+      "affected_object_ids": [],
+      "affected_groups": [],
+      "affected_columns": [
+        "manual_review_flag"
+      ],
+      "findings": [
+        {
+          "finding_id": "target_leakage_manual_review_flag",
+          "splits": [
+            "train",
+            "validation",
+            "test"
+          ],
+          "object_ids": [],
+          "group_value": null,
+          "column": "manual_review_flag",
+          "notes": "high_target_match_rate"
+        }
+      ],
+      "notes": "1 column flagged as target leakage candidate"
+    }
+  ],
+  "lineage": {
+    "action_plan_id": "action_plan_split_001",
+    "step_id": "leakage_check_001",
+    "source_dataset_version_id": "dataset_version_v1",
+    "candidate_dataset_version_id": "dataset_version_v2_candidate",
+    "created_by_job_id": "compute_run_apply_001",
+    "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "source_artifact": {
+      "artifact_id": "raw_transactions:aaaaaaaaaaaaaaaa",
+      "kind": "raw_transactions",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v1/transactions.csv",
+      "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "media_type": "text/csv",
+      "size_bytes": 128,
+      "schema_version": "tabular_dataset.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-24T12:00:00Z"
+      }
+    },
+    "split_manifest": {
+      "artifact_id": "split_manifest:bbbbbbbbbbbbbbbb",
+      "kind": "split_manifest",
+      "uri": "s3://dataforge-local/dataforge/org_1/project_1/dataset_1/v2/split_manifest.json",
+      "hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "media_type": "application/json",
+      "size_bytes": 256,
+      "schema_version": "split_manifest.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v2_candidate",
+        "job_id": "compute_run_apply_001",
+        "config_hash": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "created_at": "2026-05-24T12:00:00Z"
+      }
+    }
+  },
+  "generated_at": "2026-05-24T12:05:00Z"
+}

@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/method_recommendation.schema.json",
+  "title": "MethodRecommendation",
+  "type": "object",
+  "required": [
+    "recommendation_id",
+    "issue_id",
+    "action_type",
+    "policy_version",
+    "target",
+    "recommended_method",
+    "candidate_methods",
+    "blocked_methods",
+    "explanation",
+    "expected_outputs",
+    "model_impact_required"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "score_or_null": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "number_map": {
+      "type": "object",
+      "additionalProperties": {"type": "number"}
+    },
+    "score_map": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/score"}
+    },
+    "method_score": {
+      "type": "object",
+      "required": [
+        "value",
+        "policy_version",
+        "formula",
+        "notation_formula",
+        "formula_weights",
+        "components",
+        "weighted_components",
+        "policy_component_weights",
+        "reason_codes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {"$ref": "#/$defs/score"},
+        "policy_version": {"type": "string", "minLength": 1},
+        "formula": {"type": "string", "minLength": 1},
+        "notation_formula": {"type": "string", "minLength": 1},
+        "formula_weights": {"$ref": "#/$defs/number_map"},
+        "components": {"$ref": "#/$defs/score_map"},
+        "weighted_components": {"$ref": "#/$defs/number_map"},
+        "policy_component_weights": {"$ref": "#/$defs/number_map"},
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "properties": {
+    "recommendation_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issue_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "action_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "policy_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "target": {
+      "type": "object"
+    },
+    "recommended_method": {
+      "type": "object",
+      "required": [
+        "method_id",
+        "plugin_id",
+        "readiness_level",
+        "requires_approval",
+        "reason_codes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "method_id": {"type": "string", "minLength": 1},
+        "plugin_id": {"type": "string", "minLength": 1},
+        "readiness_level": {"type": "integer", "minimum": 0},
+        "requires_approval": {"type": "boolean"},
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "candidate_methods": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "method_id",
+          "status",
+          "quality_score",
+          "risk_score",
+          "method_score",
+          "policy_status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "method_id": {"type": "string", "minLength": 1},
+          "status": {
+            "type": "string",
+            "enum": [
+              "recommended",
+              "available",
+              "disabled_by_policy",
+              "disabled_by_readiness",
+              "blocked"
+            ]
+          },
+          "quality_score": {"$ref": "#/$defs/score_or_null"},
+          "risk_score": {"$ref": "#/$defs/score_or_null"},
+          "method_score": {"$ref": "#/$defs/method_score"},
+          "policy_status": {
+            "type": "string",
+            "enum": ["enabled", "disabled_by_policy", "disabled_by_readiness", "blocked"]
+          },
+          "reason": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "explanation": {
+      "type": "object",
+      "required": [
+        "recommended_method",
+        "why_this_method",
+        "alternatives",
+        "blocked_methods",
+        "reason_codes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "recommended_method": {"type": "string", "minLength": 1},
+        "why_this_method": {"type": "string", "minLength": 1},
+        "alternatives": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "blocked_methods": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "reason_codes": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "blocked_methods": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["method_id", "reason_code", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "method_id": {"type": "string", "minLength": 1},
+          "reason_code": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "expected_outputs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "model_impact_required": {
+      "type": "boolean"
+    }
+  }
+}

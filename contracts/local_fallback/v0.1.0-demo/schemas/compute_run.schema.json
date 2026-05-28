@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/compute_run.schema.json",
+  "title": "ComputeRun",
+  "type": "object",
+  "required": [
+    "compute_run_id",
+    "platform_job_id",
+    "organization_id",
+    "project_id",
+    "dataset_id",
+    "dataset_version_id",
+    "workflow_type",
+    "status",
+    "contract_pack_version",
+    "config_hash",
+    "started_at",
+    "artifacts"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "compute_run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "platform_job_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "organization_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dataset_version_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workflow_type": {
+      "type": "string",
+      "enum": [
+        "ANALYZE_ONLY",
+        "PREVIEW_ACTION_PLAN",
+        "APPLY_SELECTED_ACTIONS",
+        "EXPORT"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "QUEUED",
+        "ACCEPTED",
+        "RUNNING",
+        "COMPLETED",
+        "FAILED",
+        "CANCELLED",
+        "SKIPPED",
+        "WAITING_APPROVAL"
+      ]
+    },
+    "contract_pack_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "config_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

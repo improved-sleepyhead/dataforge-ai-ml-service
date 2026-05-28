@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.dataforge.ai/local-fallback/v0.1.0-demo/error_response.schema.json",
+  "title": "ErrorResponse",
+  "type": "object",
+  "required": [
+    "error"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "error": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "recoverable",
+        "stage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "INVALID_JOB_PAYLOAD",
+            "UNSUPPORTED_MODALITY",
+            "ARTIFACT_NOT_FOUND",
+            "ARTIFACT_OUT_OF_SCOPE",
+            "INVALID_ARCHIVE_STRUCTURE",
+            "ARCHIVE_SAFETY_VIOLATION",
+            "POLICY_BLOCKED",
+            "PII_RESTRICTED",
+            "LEAKAGE_DETECTED",
+            "CONTRACT_VALIDATION_FAILED",
+            "PLUGIN_NOT_ENABLED",
+            "PLUGIN_CONTRACT_FAILED",
+            "PLUGIN_EXECUTION_FAILED",
+            "DAGSTER_RUN_FAILED",
+            "ACTION_PLAN_REQUIRES_APPROVAL",
+            "ACTION_PLAN_SIGNATURE_INVALID",
+            "ACTION_PLAN_PRECONDITION_FAILED",
+            "VALIDATION_GATE_FAILED",
+            "MODEL_IMPACT_NOT_ELIGIBLE",
+            "EXPORT_BLOCKED",
+            "TENANT_SCOPE_VIOLATION",
+            "EXTERNAL_API_BLOCKED",
+            "RESOURCE_LIMIT_EXCEEDED"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recoverable": {
+          "type": "boolean"
+        },
+        "stage": {
+          "type": "string",
+          "minLength": 1
+        },
+        "job_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "plugin_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "remediation_hint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "details": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

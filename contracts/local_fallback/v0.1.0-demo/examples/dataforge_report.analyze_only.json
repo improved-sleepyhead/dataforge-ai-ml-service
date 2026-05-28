@@ -1,0 +1,142 @@
+{
+  "report_id": "dataforge_report_001",
+  "report_schema_version": "dataforge_report.v1",
+  "dataset_id": "dataset_fraud_demo",
+  "version_id": "dataset_version_v1",
+  "workflow_type": "ANALYZE_ONLY",
+  "mutates_dataset": false,
+  "overview": {
+    "object_count": 1000,
+    "modalities": [
+      "tabular"
+    ],
+    "risk_profile": "demo_strict"
+  },
+  "score": {
+    "value": 0.2873,
+    "raw_score": 28.73,
+    "policy_version": "dataforge_score_v0",
+    "formula": "DataForgeScore = 100 * (w_c * Completeness + w_v * Validity + w_u * Uniqueness + w_b * Balance + w_p * PrivacySafety + w_m * ModelReadiness + w_l * LineageCompleteness) - Penalties",
+    "weights": {
+      "completeness": 0.15,
+      "validity": 0.15,
+      "uniqueness": 0.12,
+      "balance": 0.15,
+      "privacy_safety": 0.18,
+      "model_readiness": 0.15,
+      "lineage_completeness": 0.1
+    },
+    "components": {
+      "completeness": 0.82,
+      "validity": 0.88,
+      "uniqueness": 0.79,
+      "balance": 0.41,
+      "privacy_safety": 0.55,
+      "model_readiness": 0.58,
+      "lineage_completeness": 0.9
+    },
+    "weighted_components": {
+      "completeness": 0.123,
+      "validity": 0.132,
+      "uniqueness": 0.0948,
+      "balance": 0.0615,
+      "privacy_safety": 0.099,
+      "model_readiness": 0.087,
+      "lineage_completeness": 0.09
+    },
+    "penalties": [
+      {
+        "reason_code": "unmasked_pii",
+        "value": -30,
+        "applied": true
+      },
+      {
+        "reason_code": "severe_class_imbalance",
+        "value": -10,
+        "applied": true
+      }
+    ],
+    "hard_blocked": true,
+    "readiness_status": "BLOCKED",
+    "reason_codes": [
+      "unmasked_pii",
+      "severe_class_imbalance",
+      "pii_unmasked",
+      "rare_class_underrepresented"
+    ]
+  },
+  "modality_scores": {
+    "tabular": 0.2873
+  },
+  "blockers": [
+    {
+      "code": "PII_UNMASKED",
+      "severity": "critical",
+      "message": "Unmasked PII candidates require redaction before export.",
+      "evidence_refs": [
+        {
+          "kind": "EVIDENCE_BUNDLE",
+          "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/evidence/evidence_txn_00123.json"
+        }
+      ]
+    }
+  ],
+  "recommendations": [
+    {
+      "recommendation_id": "rec_impute_income_001",
+      "action": "IMPUTE_MISSING_VALUES",
+      "modality": "tabular",
+      "count": 42,
+      "reason_codes": [
+        "missing_monthly_income",
+        "segment_dependent_missingness"
+      ],
+      "reason": "Monthly income has segment-dependent missingness.",
+      "segment": "column=monthly_income",
+      "method_recommendation_id": "method_rec_impute_income_001",
+      "requires_approval": false
+    }
+  ],
+  "review_queues": [
+    {
+      "kind": "REVIEW_QUEUE",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/review/review_queue_label_001.jsonl"
+    }
+  ],
+  "detail_artifacts": [
+    {
+      "artifact_id": "artifact_decision_report_001",
+      "kind": "DECISION_REPORT",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/reports/decision_report_001.json",
+      "hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "media_type": "application/json",
+      "size_bytes": 4096,
+      "schema_version": "decision_report.v1",
+      "lineage": {
+        "parent_version_id": "dataset_version_v1",
+        "job_id": "job_analyze_001",
+        "config_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "created_at": "2026-05-20T07:45:00Z"
+      }
+    }
+  ],
+  "prediction_section": {
+    "status": "available",
+    "reason": null,
+    "prediction_manifest_ref": {
+      "kind": "PREDICTION_MANIFEST",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/predictions.jsonl"
+    },
+    "prediction_validation_report_ref": {
+      "kind": "PREDICTION_VALIDATION_REPORT",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/prediction_validation_report.json"
+    },
+    "model_error_analysis_report_ref": {
+      "kind": "MODEL_ERROR_ANALYSIS_REPORT",
+      "uri": "s3://dataforge/org_1/project_1/dataset_fraud_demo/v1/model_error_analysis_report.json"
+    },
+    "ambiguous_object_count": 1,
+    "probable_label_error_count": 1
+  },
+  "generated_at": "2026-05-20T07:45:00Z"
+}

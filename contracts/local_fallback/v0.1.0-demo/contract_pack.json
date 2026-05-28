@@ -1,0 +1,280 @@
+{
+  "contract_pack_id": "dataforgeai-local-fallback",
+  "version": "local-fallback-v0.1.0-demo",
+  "source": "temporary_ml_service_fixture_until_dataforgeai_contracts_is_ready",
+  "schemas": [
+    {
+      "name": "artifact_ref",
+      "path": "schemas/artifact_ref.schema.json"
+    },
+    {
+      "name": "compute_run",
+      "path": "schemas/compute_run.schema.json"
+    },
+    {
+      "name": "dataset_version",
+      "path": "schemas/dataset_version.schema.json"
+    },
+    {
+      "name": "prediction_manifest",
+      "path": "schemas/prediction_manifest.schema.json"
+    },
+    {
+      "name": "platform_job",
+      "path": "schemas/platform_job.schema.json"
+    },
+    {
+      "name": "error_response",
+      "path": "schemas/error_response.schema.json"
+    },
+    {
+      "name": "manifest_row",
+      "path": "schemas/manifest_row.schema.json"
+    },
+    {
+      "name": "object_analytical_passport",
+      "path": "schemas/object_analytical_passport.schema.json"
+    },
+    {
+      "name": "evidence_bundle",
+      "path": "schemas/evidence_bundle.schema.json"
+    },
+    {
+      "name": "decision_report",
+      "path": "schemas/decision_report.schema.json"
+    },
+    {
+      "name": "method_recommendation",
+      "path": "schemas/method_recommendation.schema.json"
+    },
+    {
+      "name": "action_plan",
+      "path": "schemas/action_plan.schema.json"
+    },
+    {
+      "name": "review_queue",
+      "path": "schemas/review_queue.schema.json"
+    },
+    {
+      "name": "dataforge_report",
+      "path": "schemas/dataforge_report.schema.json"
+    },
+    {
+      "name": "export_package",
+      "path": "schemas/export_package.schema.json"
+    },
+    {
+      "name": "split_manifest",
+      "path": "schemas/split_manifest.schema.json"
+    },
+    {
+      "name": "split_leakage_report",
+      "path": "schemas/split_leakage_report.schema.json"
+    },
+    {
+      "name": "duplicate_action_report",
+      "path": "schemas/duplicate_action_report.schema.json"
+    },
+    {
+      "name": "synthetic_dataset_report",
+      "path": "schemas/synthetic_dataset_report.schema.json"
+    },
+    {
+      "name": "validation_gates_report",
+      "path": "schemas/validation_gates_report.schema.json"
+    },
+    {
+      "name": "candidate_dataset_version",
+      "path": "schemas/candidate_dataset_version.schema.json"
+    },
+    {
+      "name": "model_impact_eligibility",
+      "path": "schemas/model_impact_eligibility.schema.json"
+    },
+    {
+      "name": "model_impact_report",
+      "path": "schemas/model_impact_report.schema.json"
+    },
+    {
+      "name": "version_compare_report",
+      "path": "schemas/version_compare_report.schema.json"
+    },
+    {
+      "name": "lineage_report",
+      "path": "schemas/lineage_report.schema.json"
+    },
+    {
+      "name": "tabular_profile_report",
+      "path": "schemas/tabular_profile_report.schema.json"
+    },
+    {
+      "name": "prediction_manifest_row",
+      "path": "schemas/prediction_manifest_row.schema.json"
+    },
+    {
+      "name": "tabular_imputation_report",
+      "path": "schemas/tabular_imputation_report.schema.json"
+    },
+    {
+      "name": "text_ocr_report",
+      "path": "schemas/text_ocr_report.schema.json"
+    }
+  ],
+  "examples": [
+    {
+      "name": "artifact_ref.basic",
+      "schema": "artifact_ref",
+      "path": "examples/artifact_ref.basic.json"
+    },
+    {
+      "name": "compute_run.analyze_only",
+      "schema": "compute_run",
+      "path": "examples/compute_run.analyze_only.json"
+    },
+    {
+      "name": "dataset_version.context",
+      "schema": "dataset_version",
+      "path": "examples/dataset_version.context.json"
+    },
+    {
+      "name": "prediction_manifest.fraud",
+      "schema": "prediction_manifest",
+      "path": "examples/prediction_manifest.fraud.json"
+    },
+    {
+      "name": "platform_job.context",
+      "schema": "platform_job",
+      "path": "examples/platform_job.context.json"
+    },
+    {
+      "name": "error_response.invalid_job_payload",
+      "schema": "error_response",
+      "path": "examples/error_response.invalid_job_payload.json"
+    },
+    {
+      "name": "manifest_row.tabular",
+      "schema": "manifest_row",
+      "path": "examples/manifest_row.tabular.json"
+    },
+    {
+      "name": "object_analytical_passport.with_prediction",
+      "schema": "object_analytical_passport",
+      "path": "examples/object_analytical_passport.with_prediction.json"
+    },
+    {
+      "name": "evidence_bundle.with_prediction",
+      "schema": "evidence_bundle",
+      "path": "examples/evidence_bundle.with_prediction.json"
+    },
+    {
+      "name": "evidence_bundle.no_prediction",
+      "schema": "evidence_bundle",
+      "path": "examples/evidence_bundle.no_prediction.json"
+    },
+    {
+      "name": "decision_report.needs_review",
+      "schema": "decision_report",
+      "path": "examples/decision_report.needs_review.json"
+    },
+    {
+      "name": "method_recommendation.imputation",
+      "schema": "method_recommendation",
+      "path": "examples/method_recommendation.imputation.json"
+    },
+    {
+      "name": "action_plan.imputation_preview",
+      "schema": "action_plan",
+      "path": "examples/action_plan.imputation_preview.json"
+    },
+    {
+      "name": "review_queue.label_review",
+      "schema": "review_queue",
+      "path": "examples/review_queue.label_review.json"
+    },
+    {
+      "name": "dataforge_report.analyze_only",
+      "schema": "dataforge_report",
+      "path": "examples/dataforge_report.analyze_only.json"
+    },
+    {
+      "name": "export_package.ready",
+      "schema": "export_package",
+      "path": "examples/export_package.ready.json"
+    },
+    {
+      "name": "split_manifest.group_stratified",
+      "schema": "split_manifest",
+      "path": "examples/split_manifest.group_stratified.json"
+    },
+    {
+      "name": "split_leakage_report.demo",
+      "schema": "split_leakage_report",
+      "path": "examples/split_leakage_report.demo.json"
+    },
+    {
+      "name": "duplicate_action_report.remove",
+      "schema": "duplicate_action_report",
+      "path": "examples/duplicate_action_report.remove.json"
+    },
+    {
+      "name": "synthetic_dataset_report.smote",
+      "schema": "synthetic_dataset_report",
+      "path": "examples/synthetic_dataset_report.smote.json"
+    },
+    {
+      "name": "synthetic_dataset_report.gaussian_copula",
+      "schema": "synthetic_dataset_report",
+      "path": "examples/synthetic_dataset_report.gaussian_copula.json"
+    },
+    {
+      "name": "validation_gates_report.demo",
+      "schema": "validation_gates_report",
+      "path": "examples/validation_gates_report.demo.json"
+    },
+    {
+      "name": "candidate_dataset_version.smote_proposed",
+      "schema": "candidate_dataset_version",
+      "path": "examples/candidate_dataset_version.smote_proposed.json"
+    },
+    {
+      "name": "model_impact_eligibility.eligible_demo",
+      "schema": "model_impact_eligibility",
+      "path": "examples/model_impact_eligibility.eligible_demo.json"
+    },
+    {
+      "name": "model_impact_report.smote_demo",
+      "schema": "model_impact_report",
+      "path": "examples/model_impact_report.smote_demo.json"
+    },
+    {
+      "name": "version_compare_report.smote_demo",
+      "schema": "version_compare_report",
+      "path": "examples/version_compare_report.smote_demo.json"
+    },
+    {
+      "name": "lineage_report.smote_demo",
+      "schema": "lineage_report",
+      "path": "examples/lineage_report.smote_demo.json"
+    },
+    {
+      "name": "tabular_profile_report.fraud",
+      "schema": "tabular_profile_report",
+      "path": "examples/tabular_profile_report.fraud.json"
+    },
+    {
+      "name": "prediction_manifest_row.fraud",
+      "schema": "prediction_manifest_row",
+      "path": "examples/prediction_manifest_row.fraud.json"
+    },
+    {
+      "name": "tabular_imputation_report.group_median",
+      "schema": "tabular_imputation_report",
+      "path": "examples/tabular_imputation_report.group_median.json"
+    },
+    {
+      "name": "text_ocr_report.privacy",
+      "schema": "text_ocr_report",
+      "path": "examples/text_ocr_report.privacy.json"
+    }
+  ]
+}
