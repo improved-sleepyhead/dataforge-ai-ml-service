@@ -15,28 +15,27 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.adapters import FakePlatformMetadataClient
+from app.api.schemas import AnalyzeDatasetRequest
 from app.domain import (
     ArtifactLineage,
     ArtifactRef,
     ComputeRunStatus,
-    WorkflowType,
 )
 from app.orchestration import (
-    ANALYZE_JOB_NAME,
     APPLY_JOB_NAME,
     JobEvent,
     JobStage,
-    RunContextResource,
     RunStatusBridge,
-    build_definitions,
     scan_event_for_raw_pii,
 )
+from app.orchestration.analyze_workflow import launch_analyze_dataset_workflow
+from tests.fixtures.demo_archive import build_demo_archive
 from tests.orchestration.test_dagster_runtime import (
-    _build_in_memory_resources,
     _build_real_apply_definitions,
     _job_by_name,
     _run_context,
 )
+from tools.run_mvp_demo import _demo_config, _resources_with_source
 
 
 def test_job_stage_enum_supports_all_required_stages() -> None:
@@ -136,22 +135,35 @@ def test_run_status_bridge_emits_cancelled_event() -> None:
     assert event.status is ComputeRunStatus.CANCELLED
 
 
-def test_analyze_job_emits_canonical_lifecycle_stages() -> None:
+def test_analyze_job_emits_canonical_lifecycle_stages(tmp_path: Path) -> None:
+    config = _demo_config(tmp_path)
     fake_platform = FakePlatformMetadataClient()
-    compute_resources = _build_in_memory_resources(fake_platform=fake_platform)
-    run_context_resource = RunContextResource(
-        run_context=_run_context(),
-        workflow_type=WorkflowType.ANALYZE_ONLY,
+    archive = build_demo_archive(output_dir=tmp_path / "demo_archive")
+    resources, source_archive, _source_transactions, prediction_artifact = (
+        _resources_with_source(
+            config=config,
+            fake_platform=fake_platform,
+            archive_path=archive.archive_path,
+        )
     )
-    definitions = build_definitions(
-        compute_resources=compute_resources,
-        run_context_resource=run_context_resource,
+    request = AnalyzeDatasetRequest(
+        platform_job_id="platform_job_status_bridge",
+        organization_id="org_demo",
+        project_id="project_demo",
+        dataset_id="dataset_demo",
+        dataset_version_id="dataset_version_v1",
+        dataset_object_refs=(source_archive,),
+        prediction_artifact_refs=(prediction_artifact,),
     )
-    analyze_job = _job_by_name(definitions, ANALYZE_JOB_NAME)
 
-    result = analyze_job.execute_in_process()
+    result = launch_analyze_dataset_workflow(
+        request=request,
+        config=config,
+        fake_platform=fake_platform,
+        compute_resources=resources,
+    )
 
-    assert result.success
+    assert result.status is ComputeRunStatus.ACCEPTED
     snapshot = fake_platform.snapshot()
     stages = {event.stage for event in snapshot.job_events}
     expected = {
