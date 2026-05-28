@@ -1,22 +1,17 @@
-"""Skeleton ANALYZE_ONLY assets for the DataForge AI compute plane.
+"""ANALYZE_ONLY assets for the DataForge AI compute plane.
 
-These assets are intentionally skeleton. They do not run real ML/data
-algorithms yet; their purpose is to wire up the Dagster runtime, expose the
-asset graph mandated by the orchestration steering rules, and prove that:
-
-* Dagster definitions load without errors;
-* a skeleton analyze job materializes against in-memory adapters;
-* the fake platform client receives stage events through the status bridge.
+These assets run the existing contract-compatible builders and register
+immutable analysis artifacts through scoped object storage. The graph is
+strictly non-mutating: it reads source/prediction artifacts and writes derived
+reports, evidence, recommendations, and review queues only.
 
 Strict constraints honored here:
 
-* ``ANALYZE_ONLY`` must not mutate source dataset artifacts. None of these
-  assets write to source paths or call ``put`` on object storage in this
-  skeleton.
+* ``ANALYZE_ONLY`` must not mutate source dataset artifacts.
 * Materialization metadata only contains stable technical fields. No raw
   PII, raw text, file contents, or secrets.
-* Decision Core consumes normalized evidence in real implementations; here
-  we just propagate placeholders so downstream assets can be wired up.
+* Decision Core consumes normalized evidence; plugin-specific outputs are
+  persisted as artifacts and referenced by hash/URI only.
 
 This module intentionally does not use ``from __future__ import annotations``
 because Dagster validates the ``context`` parameter type via runtime
@@ -27,11 +22,19 @@ from typing import Any
 
 from dagster import AssetExecutionContext, AssetKey, MaterializeResult, asset
 
-from app.adapters import FakePlatformMetadataClient
+from app.adapters import ArtifactRegistry, FakePlatformMetadataClient
+from app.adapters.object_storage import MinioObjectStorageAdapter
 from app.domain import WorkflowType
+from app.orchestration.analyze_runtime import (
+    artifact_for,
+    count_for,
+    ensure_analyze_outputs,
+    status_for,
+)
 from app.orchestration.job_event import JobStage
-from app.orchestration.run_context import RunContextResource
+from app.orchestration.run_context import AnalyzeRunContext, RunContextResource
 from app.orchestration.status_bridge import RunContext, RunStatusBridge
+from app.telemetry import MetricsRegistry, TracingRegistry
 
 ANALYZE_GROUP = "analyze_only"
 
@@ -80,7 +83,14 @@ _ANALYZE_STAGE_BY_ASSET: dict[str, tuple[JobStage, float]] = {
     "review_queue": (JobStage.RUNNING_DECISION_CORE, 0.95),
 }
 
-_ANALYZE_RESOURCE_KEYS = {"run_context", "fake_platform"}
+_ANALYZE_RESOURCE_KEYS = {
+    "run_context",
+    "fake_platform",
+    "artifact_registry",
+    "object_storage",
+    "metrics",
+    "tracing",
+}
 
 
 def _require_analyze_only(run_context: RunContext, workflow_type: WorkflowType) -> None:
@@ -111,28 +121,40 @@ def _materialization_metadata(
         "mutates_dataset": False,
         "stage": stage.value,
         "progress": progress,
-        "skeleton": True,
+        "analysis_mode": "artifact_materialization",
     }
 
 
-def _materialize_skeleton(
+def _materialize_analyze_asset(
     context: AssetExecutionContext,
     *,
     asset_name: str,
 ) -> MaterializeResult[None]:
     run_context_resource: RunContextResource = context.resources.run_context
     fake_platform: FakePlatformMetadataClient = context.resources.fake_platform
+    registry: ArtifactRegistry = context.resources.artifact_registry
+    storage: MinioObjectStorageAdapter = context.resources.object_storage
+    metrics: MetricsRegistry = context.resources.metrics
+    tracing: TracingRegistry = context.resources.tracing
 
     run_context = run_context_resource.run_context
     workflow_type = run_context_resource.workflow_type
+    analyze_context = _require_analyze_context(run_context_resource.analyze_context)
     _require_analyze_only(run_context, workflow_type)
+
+    ensure_analyze_outputs(
+        analyze_context=analyze_context,
+        run_context=run_context,
+        storage=storage,
+        registry=registry,
+        metrics=metrics,
+        tracing=tracing,
+    )
 
     stage, progress = _ANALYZE_STAGE_BY_ASSET[asset_name]
 
     bridge = RunStatusBridge(fake_platform=fake_platform)
     bridge.emit_stage(run_context=run_context, stage=stage, progress=progress)
-    if asset_name == "review_queue":
-        bridge.emit_completed(run_context=run_context)
 
     metadata = _materialization_metadata(
         run_context=run_context,
@@ -140,17 +162,39 @@ def _materialize_skeleton(
         stage=stage,
         progress=progress,
     )
+    artifact = artifact_for(analyze_context=analyze_context, asset_name=asset_name)
+    if artifact is not None:
+        metadata["artifact_uri"] = artifact.uri
+        metadata["artifact_hash"] = artifact.hash
+        metadata["artifact_kind"] = artifact.artifact_kind
+        metadata["schema_version"] = artifact.schema_version
+        metadata["artifact_uris"] = [artifact.uri]
+    manifest_count = count_for(analyze_context=analyze_context, name="manifest_row_count")
+    review_size = count_for(analyze_context=analyze_context, name="review_queue_size")
+    analysis_mode = status_for(analyze_context=analyze_context, name="analysis_mode")
+    if manifest_count is not None:
+        metadata["manifest_row_count"] = manifest_count
+    if review_size is not None:
+        metadata["review_queue_size"] = review_size
+    if analysis_mode is not None:
+        metadata["analysis_mode"] = analysis_mode
     return MaterializeResult(metadata=metadata)
+
+
+def _require_analyze_context(context: AnalyzeRunContext | None) -> AnalyzeRunContext:
+    if context is None:
+        raise ValueError("ANALYZE_ONLY assets require AnalyzeRunContext")
+    return context
 
 
 @asset(
     name="raw_manifest",
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
-    description="Skeleton: raw asset manifest assembled from immutable raw archive refs.",
+    description="Raw asset manifest assembled from immutable raw archive refs.",
 )
 def raw_manifest(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="raw_manifest")
+    return _materialize_analyze_asset(context, asset_name="raw_manifest")
 
 
 @asset(
@@ -158,10 +202,10 @@ def raw_manifest(context: AssetExecutionContext) -> MaterializeResult[None]:
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("raw_manifest")],
-    description="Skeleton: validated manifest after schema/contract checks.",
+    description="Validated manifest after schema/contract checks.",
 )
 def validated_manifest(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="validated_manifest")
+    return _materialize_analyze_asset(context, asset_name="validated_manifest")
 
 
 @asset(
@@ -169,10 +213,10 @@ def validated_manifest(context: AssetExecutionContext) -> MaterializeResult[None
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("validated_manifest")],
-    description="Skeleton: tabular profile/EDA report (placeholder for tabular plugin).",
+    description="Tabular profile/EDA report produced by the tabular plugin.",
 )
 def tabular_profile_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="tabular_profile_report")
+    return _materialize_analyze_asset(context, asset_name="tabular_profile_report")
 
 
 @asset(
@@ -180,10 +224,10 @@ def tabular_profile_report(context: AssetExecutionContext) -> MaterializeResult[
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("tabular_profile_report")],
-    description="Skeleton: per-object analytical passports (placeholder).",
+    description="Per-object analytical passports.",
 )
 def object_analytics_passports(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="object_analytics_passports")
+    return _materialize_analyze_asset(context, asset_name="object_analytics_passports")
 
 
 @asset(
@@ -191,10 +235,10 @@ def object_analytics_passports(context: AssetExecutionContext) -> MaterializeRes
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("object_analytics_passports")],
-    description="Skeleton: normalized EvidenceBundle for Decision Core (placeholder).",
+    description="Normalized EvidenceBundle artifacts for Decision Core.",
 )
 def evidence_bundle(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="evidence_bundle")
+    return _materialize_analyze_asset(context, asset_name="evidence_bundle")
 
 
 @asset(
@@ -202,10 +246,10 @@ def evidence_bundle(context: AssetExecutionContext) -> MaterializeResult[None]:
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("validated_manifest")],
-    description="Skeleton: normalized optional predictions manifest.",
+    description="Normalized optional predictions manifest.",
 )
 def prediction_manifest(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="prediction_manifest")
+    return _materialize_analyze_asset(context, asset_name="prediction_manifest")
 
 
 @asset(
@@ -213,10 +257,10 @@ def prediction_manifest(context: AssetExecutionContext) -> MaterializeResult[Non
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("prediction_manifest")],
-    description="Skeleton: prediction-manifest validation report.",
+    description="Prediction-manifest validation report.",
 )
 def prediction_validation_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="prediction_validation_report")
+    return _materialize_analyze_asset(context, asset_name="prediction_validation_report")
 
 
 @asset(
@@ -224,10 +268,10 @@ def prediction_validation_report(context: AssetExecutionContext) -> MaterializeR
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("prediction_validation_report")],
-    description="Skeleton: model error analysis derived from predictions.",
+    description="Model error analysis derived from predictions.",
 )
 def model_error_analysis_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="model_error_analysis_report")
+    return _materialize_analyze_asset(context, asset_name="model_error_analysis_report")
 
 
 @asset(
@@ -235,10 +279,10 @@ def model_error_analysis_report(context: AssetExecutionContext) -> MaterializeRe
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("model_error_analysis_report")],
-    description="Skeleton: ambiguous-object review candidates derived from predictions.",
+    description="Ambiguous-object review candidates derived from predictions.",
 )
 def ambiguous_object_candidates(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="ambiguous_object_candidates")
+    return _materialize_analyze_asset(context, asset_name="ambiguous_object_candidates")
 
 
 @asset(
@@ -246,10 +290,10 @@ def ambiguous_object_candidates(context: AssetExecutionContext) -> MaterializeRe
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("model_error_analysis_report")],
-    description="Skeleton: probable-label-error review candidates derived from predictions.",
+    description="Probable-label-error review candidates derived from predictions.",
 )
 def probable_label_error_candidates(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="probable_label_error_candidates")
+    return _materialize_analyze_asset(context, asset_name="probable_label_error_candidates")
 
 
 @asset(
@@ -257,10 +301,10 @@ def probable_label_error_candidates(context: AssetExecutionContext) -> Materiali
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("evidence_bundle")],
-    description="Skeleton: Decision Core dataset-level report (placeholder).",
+    description="Decision Core dataset-level report.",
 )
 def decision_report(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="decision_report")
+    return _materialize_analyze_asset(context, asset_name="decision_report")
 
 
 @asset(
@@ -268,10 +312,10 @@ def decision_report(context: AssetExecutionContext) -> MaterializeResult[None]:
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("decision_report")],
-    description="Skeleton: recommended actions surfaced to the platform UI.",
+    description="Recommended actions surfaced to the platform UI.",
 )
 def recommended_actions(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="recommended_actions")
+    return _materialize_analyze_asset(context, asset_name="recommended_actions")
 
 
 @asset(
@@ -279,10 +323,10 @@ def recommended_actions(context: AssetExecutionContext) -> MaterializeResult[Non
     group_name=ANALYZE_GROUP,
     required_resource_keys=_ANALYZE_RESOURCE_KEYS,
     deps=[AssetKey("decision_report")],
-    description="Skeleton: review queue for label/privacy/duplicate review.",
+    description="Review queue for label/privacy/duplicate review.",
 )
 def review_queue(context: AssetExecutionContext) -> MaterializeResult[None]:
-    return _materialize_skeleton(context, asset_name="review_queue")
+    return _materialize_analyze_asset(context, asset_name="review_queue")
 
 
 ANALYZE_ASSETS = (

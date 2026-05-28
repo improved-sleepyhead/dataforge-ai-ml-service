@@ -36,7 +36,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from app.adapters import (
     ArtifactRegistry,
@@ -127,13 +127,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"  expected counts    : {archive.expected_counts_path}")
 
     fake_platform = FakePlatformMetadataClient()
-    resources, source_artifact = _resources_with_source(
+    resources, source_archive, source_artifact, prediction_artifact = _resources_with_source(
         config=config,
         fake_platform=fake_platform,
         archive_path=archive.archive_path,
     )
-    print(f"  source artifact    : {source_artifact.uri}")
-    print(f"  source hash        : {source_artifact.hash}")
+    print(f"  archive artifact   : {source_archive.uri}")
+    print(f"  archive hash       : {source_archive.hash}")
+    print(f"  tabular artifact   : {source_artifact.uri}")
+    print(f"  tabular hash       : {source_artifact.hash}")
+    print(f"  prediction artifact: {prediction_artifact.uri}")
 
     # 3) Real Dagster ANALYZE_ONLY materialization.
     _print_step("ANALYZE_ONLY (real Dagster materialization)")
@@ -143,7 +146,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         project_id=_PROJECT_ID,
         dataset_id=_DATASET_ID,
         dataset_version_id=_PARENT_VERSION_ID,
-        dataset_object_refs=(source_artifact,),
+        dataset_object_refs=(source_archive,),
+        prediction_artifact_refs=(prediction_artifact,),
     )
     analyze_started = time.perf_counter()
     analyze_result = launch_analyze_dataset_workflow(
@@ -164,11 +168,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit(
             f"ANALYZE_ONLY materialized apply-only assets {sorted(leaked)} — drift detected"
         )
-    expected = expected_analyze_outputs(include_predictions=False)
+    expected = expected_analyze_outputs(include_predictions=True)
     missing = set(expected) - set(analyze_result.materialized_assets)
     if missing:
         raise SystemExit(
             f"ANALYZE_ONLY skipped expected assets {sorted(missing)} — drift detected"
+        )
+    required_artifacts = {
+        "prediction_manifest",
+        "prediction_validation_report",
+        "model_error_analysis_report",
+        "ambiguous_object_candidates",
+        "probable_label_error_candidates",
+        "decision_report",
+        "review_queue",
+    }
+    missing_artifacts = required_artifacts - set(analyze_result.artifact_uris)
+    if missing_artifacts:
+        raise SystemExit(
+            "ANALYZE_ONLY did not publish required artifact refs "
+            f"{sorted(missing_artifacts)}"
         )
 
     # 4) Build approved ActionPlan from kernel builders.
@@ -266,6 +285,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             f"    [{event.platform_job_id:<28}] {event.stage:<22} "
             f"status={event.status.value:<10} progress={progress}"
+        )
+
+    _print_step("Telemetry snapshot")
+    metrics_snapshot = resources.metrics.snapshot()
+    tracing_snapshot = resources.tracing.snapshot()
+    print(f"  metric counters    : {len(metrics_snapshot.counters)}")
+    print(f"  metric gauges      : {len(metrics_snapshot.gauges)}")
+    print(f"  metric histograms  : {len(metrics_snapshot.histograms)}")
+    print(f"  tracing spans      : {len(tracing_snapshot)}")
+    for span in tracing_snapshot:
+        print(
+            f"    - {span.name:<24} status={span.status.value:<9} "
+            f"duration={span.duration_ms:.2f}ms"
         )
 
     # 9) Final summary.
@@ -426,7 +458,7 @@ def _resources_with_source(
     config: ServiceConfig,
     fake_platform: FakePlatformMetadataClient,
     archive_path: Path,
-) -> tuple[ComputeResources, ArtifactRef]:
+) -> tuple[ComputeResources, ArtifactRef, ArtifactRef, ArtifactRef]:
     storage = MinioObjectStorageAdapter(
         client=_InMemoryS3Client(),
         bucket_name=config.object_storage.bucket_name,
@@ -438,14 +470,35 @@ def _resources_with_source(
         ),
     )
     registry = ArtifactRegistry(storage=storage)
+    source_archive = registry.save_artifact(
+        artifact_kind="raw_dataset_archive",
+        data=archive_path.read_bytes(),
+        artifact_format="zip",
+        media_type="application/zip",
+        schema_version="demo_archive.v1",
+        dataset_version_id=_PARENT_VERSION_ID,
+        created_by_job_id="compute_run_demo_source",
+        config_hash="sha256:" + "9" * 64,
+    ).artifact_ref
     with open_archive_path(archive_path) as reader:
         transactions = reader.find_required_transactions().read_bytes()
+        prediction_payload = _read_predictions(reader.descriptors())
     source_artifact = registry.save_artifact(
         artifact_kind="raw_transactions",
         data=transactions,
         artifact_format="csv",
         media_type="text/csv",
         schema_version="tabular_dataset.v1",
+        dataset_version_id=_PARENT_VERSION_ID,
+        created_by_job_id="compute_run_demo_source",
+        config_hash="sha256:" + "9" * 64,
+    ).artifact_ref
+    prediction_artifact = registry.save_artifact(
+        artifact_kind="raw_predictions",
+        data=prediction_payload,
+        artifact_format="jsonl",
+        media_type="application/jsonl",
+        schema_version="prediction_manifest_row.v1",
         dataset_version_id=_PARENT_VERSION_ID,
         created_by_job_id="compute_run_demo_source",
         config_hash="sha256:" + "9" * 64,
@@ -457,8 +510,18 @@ def _resources_with_source(
             artifact_registry=registry,
             fake_platform=fake_platform,
         ),
+        source_archive,
         source_artifact,
+        prediction_artifact,
     )
+
+
+def _read_predictions(descriptors: tuple[Any, ...]) -> bytes:
+    for descriptor in descriptors:
+        if descriptor.kind.value == "predictions":
+            with descriptor.open() as handle:
+                return cast(bytes, handle.read())
+    raise RuntimeError("demo archive must include predictions.jsonl")
 
 
 def _action_plan_request(

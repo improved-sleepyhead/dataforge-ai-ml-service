@@ -154,12 +154,13 @@ spec:
         stage('Unit tests') {
             steps {
                 container('python') {
-                    sh 'PYTHON=.venv/bin/python make test'
+                    sh 'mkdir -p build/junit'
+                    sh 'PYTEST_ADDOPTS="--junitxml=build/junit/unit.xml" PYTHON=.venv/bin/python make test'
                 }
             }
             post {
                 always {
-                    junit allowEmptyResults: true, testResults: 'build/junit/*.xml'
+                    junit allowEmptyResults: false, testResults: 'build/junit/unit.xml'
                 }
             }
         }
@@ -167,7 +168,13 @@ spec:
         stage('Contract tests') {
             steps {
                 container('python') {
-                    sh 'PYTHON=.venv/bin/python make test-contracts'
+                    sh 'mkdir -p build/junit'
+                    sh 'PYTEST_ADDOPTS="--junitxml=build/junit/contracts.xml" PYTHON=.venv/bin/python make test-contracts'
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: false, testResults: 'build/junit/contracts.xml'
                 }
             }
         }
@@ -175,7 +182,13 @@ spec:
         stage('Plugin tests') {
             steps {
                 container('python') {
-                    sh 'PYTHON=.venv/bin/python make test-plugins'
+                    sh 'mkdir -p build/junit'
+                    sh 'PYTEST_ADDOPTS="--junitxml=build/junit/plugins.xml" PYTHON=.venv/bin/python make test-plugins'
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: false, testResults: 'build/junit/plugins.xml'
                 }
             }
         }
@@ -183,7 +196,13 @@ spec:
         stage('Security tests') {
             steps {
                 container('python') {
-                    sh 'PYTHON=.venv/bin/python make test-security'
+                    sh 'mkdir -p build/junit'
+                    sh 'PYTEST_ADDOPTS="--junitxml=build/junit/security.xml" PYTHON=.venv/bin/python make test-security'
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: false, testResults: 'build/junit/security.xml'
                 }
             }
         }
@@ -191,7 +210,13 @@ spec:
         stage('E2E compute demo') {
             steps {
                 container('python') {
-                    sh 'PYTHON=.venv/bin/python make test-e2e-compute-demo'
+                    sh 'mkdir -p build/junit'
+                    sh 'PYTEST_ADDOPTS="--junitxml=build/junit/e2e-compute.xml" PYTHON=.venv/bin/python make test-e2e-compute-demo'
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: false, testResults: 'build/junit/e2e-compute.xml'
                 }
             }
         }
@@ -199,12 +224,13 @@ spec:
         stage('Performance acceptance') {
             steps {
                 container('python') {
-                    sh 'mkdir -p build/performance'
-                    sh 'PYTHON=.venv/bin/python make test-performance'
+                    sh 'mkdir -p build/performance build/junit'
+                    sh 'PYTEST_ADDOPTS="--junitxml=build/junit/performance.xml" PYTHON=.venv/bin/python make test-performance'
                 }
             }
             post {
                 always {
+                    junit allowEmptyResults: false, testResults: 'build/junit/performance.xml'
                     archiveArtifacts(
                         artifacts: 'build/performance/**',
                         allowEmptyArchive: true,
@@ -272,7 +298,7 @@ spec:
             when { expression { return fileExists('/usr/local/bin/trivy') || fileExists('/usr/bin/trivy') } }
             steps {
                 container('docker') {
-                    sh "trivy image --exit-code 1 --severity CRITICAL,HIGH ${env.RESOLVED_IMAGE} || true"
+                    sh "trivy image --exit-code 1 --severity CRITICAL,HIGH ${env.RESOLVED_IMAGE}"
                 }
             }
         }

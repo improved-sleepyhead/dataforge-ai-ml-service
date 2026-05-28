@@ -53,6 +53,7 @@ class Suite:
     name: str
     description: str
     command: tuple[str, ...]
+    timeout_seconds: int = 600
     optional: bool = False
 
 
@@ -65,10 +66,11 @@ class SuiteResult:
     duration_seconds: float
     skipped: bool = False
     skip_reason: str | None = None
+    timed_out: bool = False
 
     @property
     def passed(self) -> bool:
-        return not self.skipped and self.returncode == 0
+        return not self.skipped and not self.timed_out and self.returncode == 0
 
 
 @dataclass
@@ -106,6 +108,8 @@ class GateReport:
                     "command": list(r.suite.command),
                     "returncode": r.returncode,
                     "duration_seconds": round(r.duration_seconds, 3),
+                    "timeout_seconds": r.suite.timeout_seconds,
+                    "timed_out": r.timed_out,
                     "skipped": r.skipped,
                     "skip_reason": r.skip_reason,
                     "passed": r.passed,
@@ -116,48 +120,56 @@ class GateReport:
         }
 
 
-def build_suites(python: str) -> tuple[Suite, ...]:
+def build_suites(python: str, *, timeout_seconds: int = 600) -> tuple[Suite, ...]:
     """Build the canonical list of suites pinned to a python interpreter."""
     return (
         Suite(
             name="lint",
             description="ruff check app tools tests",
             command=(python, "-m", "ruff", "check", "app", "tools", "tests"),
+            timeout_seconds=timeout_seconds,
         ),
         Suite(
             name="typecheck",
             description="mypy app tools tests (strict)",
             command=(python, "-m", "mypy", "app", "tools", "tests"),
+            timeout_seconds=timeout_seconds,
         ),
         Suite(
             name="unit",
             description="pytest tests (full suite)",
             command=(python, "-m", "pytest", "tests"),
+            timeout_seconds=timeout_seconds,
         ),
         Suite(
             name="contract",
             description="pytest tests/contracts",
             command=(python, "-m", "pytest", "tests/contracts"),
+            timeout_seconds=timeout_seconds,
         ),
         Suite(
             name="plugin",
             description="pytest tests/plugins",
             command=(python, "-m", "pytest", "tests/plugins"),
+            timeout_seconds=timeout_seconds,
         ),
         Suite(
             name="security_privacy",
             description="pytest tests/security",
             command=(python, "-m", "pytest", "tests/security"),
+            timeout_seconds=timeout_seconds,
         ),
         Suite(
             name="e2e_compute",
             description="pytest tests/e2e",
             command=(python, "-m", "pytest", "tests/e2e"),
+            timeout_seconds=timeout_seconds,
         ),
         Suite(
             name="performance",
             description="pytest tests/performance",
             command=(python, "-m", "pytest", "tests/performance"),
+            timeout_seconds=timeout_seconds,
         ),
     )
 
@@ -209,25 +221,37 @@ def run_gate(
         if stream:
             print(f"[run  ] {suite.name}: {' '.join(suite.command)}")
         suite_start = time.perf_counter()
-        completed = subprocess.run(
-            list(suite.command),
-            cwd=str(cwd),
-            check=False,
-        )
+        timed_out = False
+        try:
+            completed = subprocess.run(
+                list(suite.command),
+                cwd=str(cwd),
+                check=False,
+                timeout=suite.timeout_seconds,
+            )
+            returncode = completed.returncode
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            returncode = 124
         duration = time.perf_counter() - suite_start
 
         report.results.append(
             SuiteResult(
                 suite=suite,
-                returncode=completed.returncode,
+                returncode=returncode,
                 duration_seconds=duration,
+                timed_out=timed_out,
             )
         )
         if stream:
-            tag = "ok   " if completed.returncode == 0 else "fail "
+            tag = "time " if timed_out else ("ok   " if returncode == 0 else "fail ")
             print(
-                f"[{tag}] {suite.name}: rc={completed.returncode} "
-                f"in {duration:.2f}s"
+                f"[{tag}] {suite.name}: rc={returncode} in {duration:.2f}s"
+                + (
+                    f" (timeout={suite.timeout_seconds}s)"
+                    if timed_out
+                    else ""
+                )
             )
 
     report.total_duration_seconds = time.perf_counter() - overall_start
@@ -250,6 +274,8 @@ def render_summary(report: GateReport) -> str:
     for result in report.results:
         if result.skipped:
             status = "skipped"
+        elif result.timed_out:
+            status = "timeout"
         elif result.passed:
             status = "passed"
         else:
@@ -272,7 +298,13 @@ def render_summary(report: GateReport) -> str:
         lines.append("failed suites:")
         for failure in failures:
             lines.append(
-                f"  - {failure.suite.name} (rc={failure.returncode})"
+                f"  - {failure.suite.name} (rc={failure.returncode}"
+                + (
+                    f", timeout={failure.suite.timeout_seconds}s"
+                    if failure.timed_out
+                    else ""
+                )
+                + ")"
             )
     lines.append("=" * 72)
     return "\n".join(lines)
@@ -299,12 +331,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional path to write a deterministic JSON summary.",
     )
+    parser.add_argument(
+        "--suite-timeout-seconds",
+        type=int,
+        default=600,
+        help="Timeout applied to each suite before recording a failed timeout.",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
-    suites = build_suites(args.python)
+    suites = build_suites(args.python, timeout_seconds=args.suite_timeout_seconds)
     skip_set = frozenset(args.skip)
 
     artifact_paths: list[str] = []

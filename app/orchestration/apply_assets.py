@@ -33,6 +33,12 @@ from app.orchestration.apply_runtime import (
 from app.orchestration.job_event import JobStage
 from app.orchestration.run_context import ApplyRunContext, RunContextResource
 from app.orchestration.status_bridge import RunContext, RunStatusBridge
+from app.telemetry import (
+    METRIC_EXPORT_BLOCKED_COUNT,
+    METRIC_JOB_DURATION_MS,
+    MetricsRegistry,
+    TracingRegistry,
+)
 
 APPLY_GROUP = "apply_selected_actions"
 
@@ -80,6 +86,8 @@ _APPLY_RESOURCE_KEYS = {
     "fake_platform",
     "artifact_registry",
     "object_storage",
+    "metrics",
+    "tracing",
 }
 
 
@@ -129,6 +137,10 @@ def _resources(
         context.resources.artifact_registry,
         context.resources.object_storage,
     )
+
+
+def _telemetry(context: AssetExecutionContext) -> tuple[MetricsRegistry, TracingRegistry]:
+    return context.resources.metrics, context.resources.tracing
 
 
 def _metadata(
@@ -346,11 +358,21 @@ def synthetic_dataset(context: AssetExecutionContext) -> MaterializeResult[None]
 )
 def model_impact_report(context: AssetExecutionContext) -> MaterializeResult[None]:
     run_context, apply_context, fake_platform, registry, storage = _resources(context)
-    artifact = ensure_model_impact_report(
-        apply_context=apply_context,
-        run_context=run_context,
-        storage=storage,
-        registry=registry,
+    metrics, tracing = _telemetry(context)
+    with tracing.span(
+        "model_impact.evaluate",
+        attributes={"stage": "model_impact.evaluate", "job_type": "APPLY_SELECTED_ACTIONS"},
+    ):
+        artifact = ensure_model_impact_report(
+            apply_context=apply_context,
+            run_context=run_context,
+            storage=storage,
+            registry=registry,
+        )
+    metrics.observe(
+        METRIC_JOB_DURATION_MS,
+        value=0.0,
+        labels={"stage": "model_impact.evaluate", "job_type": "APPLY_SELECTED_ACTIONS"},
     )
     refs = (artifact.artifact_ref,) if artifact is not None else ()
     return _emit_and_result(
@@ -373,13 +395,18 @@ def model_impact_report(context: AssetExecutionContext) -> MaterializeResult[Non
 )
 def export_package(context: AssetExecutionContext) -> MaterializeResult[None]:
     run_context, apply_context, fake_platform, registry, storage = _resources(context)
-    artifact = build_final_apply_outputs(
-        apply_context=apply_context,
-        run_context=run_context,
-        storage=storage,
-        registry=registry,
-        platform_client=fake_platform,
-    )
+    metrics, tracing = _telemetry(context)
+    with tracing.span(
+        "export.build",
+        attributes={"stage": "export.build", "job_type": "APPLY_SELECTED_ACTIONS"},
+    ):
+        artifact = build_final_apply_outputs(
+            apply_context=apply_context,
+            run_context=run_context,
+            storage=storage,
+            registry=registry,
+            platform_client=fake_platform,
+        )
     state = apply_context.execution_state
     final_candidate = final_candidate_ref(state)
     final_export = final_export_ref(state)
@@ -396,6 +423,16 @@ def export_package(context: AssetExecutionContext) -> MaterializeResult[None]:
     )
     candidate = state.candidate_dataset_version
     package = state.export_package
+    if package is not None and package.blocked_reason_codes:
+        metrics.increment(
+            METRIC_EXPORT_BLOCKED_COUNT,
+            labels={"stage": "export.build", "reason_code": "blocked"},
+        )
+    metrics.observe(
+        METRIC_JOB_DURATION_MS,
+        value=0.0,
+        labels={"stage": "export.build", "job_type": "APPLY_SELECTED_ACTIONS"},
+    )
     return _emit_and_result(
         asset_name="export_package",
         run_context=run_context,

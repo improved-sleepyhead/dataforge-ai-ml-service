@@ -29,13 +29,8 @@ PYTHON=.venv/bin/python make install-dev
 ```
 
 That installs the FastAPI runtime deps (Pydantic, jsonschema, pyarrow,
-scikit-learn, uvicorn) plus the dev toolchain (pytest, pytest-cov,
-ruff, mypy, httpx, types-jsonschema). Dagster is needed for the
-orchestration tests; install it explicitly:
-
-```bash
-.venv/bin/python -m pip install "dagster>=1.13,<2.0"
-```
+scikit-learn, uvicorn), Dagster for orchestration tests, plus the dev
+toolchain (pytest, pytest-cov, ruff, mypy, httpx, types-jsonschema).
 
 Set the demo env so `app.kernel.config.load_config(...)` succeeds:
 
@@ -244,12 +239,15 @@ artifact but never publishes a `candidate_artifact_uri` or
 `tools/run_mvp_demo.py` (also wired as `make run-mvp-demo`) executes
 the same flow as a runnable script — useful for hackathon demos and
 manual smoke checks. It boots the FastAPI app on a free port, probes
-`/api/v1/health` + `/api/v1/capabilities`, builds the demo archive,
-runs ANALYZE_ONLY through `launch_analyze_dataset_workflow`, builds an
-`ActionPlan` from `build_method_recommendations`, runs APPLY through
+`/api/v1/health` + `/api/v1/capabilities`, builds and stores the demo
+archive plus its `PredictionManifest`, runs ANALYZE_ONLY through
+`launch_analyze_dataset_workflow`, verifies prediction-aware analysis
+artifacts are materialized, builds an `ActionPlan` from
+`build_method_recommendations`, runs APPLY through
 `launch_apply_actions_workflow`, verifies raw immutability, dumps the
-`ExportPackage` readiness gates, prints the model-impact verdict, and
-prints the full `FakePlatform` event tape with progress percentages.
+`ExportPackage` readiness gates, prints the model-impact verdict,
+prints the local telemetry counters/spans, and prints the full
+`FakePlatform` event tape with progress percentages.
 
 ```bash
 PYTHON=.venv/bin/python make run-mvp-demo
