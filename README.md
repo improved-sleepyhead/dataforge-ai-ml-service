@@ -276,15 +276,9 @@ round-trip совместимость.
 
 ## Документация
 
-- [RUNBOOK.md](RUNBOOK.md) - операторский walkthrough для demo archive,
-  quality gates, analyze/apply/export и troubleshooting.
-- [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) - честные ограничения MVP:
-  implemented/proof/contract-ready уровни, что не является production-ready.
 - [TECHNICAL_IMPLEMENTATION.md](TECHNICAL_IMPLEMENTATION.md) - подробная
   техническая заметка по устройству FastAPI, kernel, plugins, adapters и
   Dagster workflow.
-- `docs/PRD.md`, `docs/DOCS.md`, `docs/DATASETS.md`, `docs/INFRA.md`,
-  `docs/TESTING.md` - продуктовый и архитектурный контекст.
 
 ## Границы ответственности
 

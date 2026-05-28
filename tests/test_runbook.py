@@ -157,7 +157,14 @@ def test_runbook_troubleshooting_covers_every_stable_error_code() -> None:
         )
 
 
-def test_readme_links_to_the_runbook() -> None:
-    """README must point operators at the runbook so it is discoverable."""
+def test_readme_links_only_to_technical_implementation_note() -> None:
+    """README must only link to the committed technical implementation note."""
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "RUNBOOK.md" in readme
+    assert "TECHNICAL_IMPLEMENTATION.md" in readme
+    assert "RUNBOOK.md" not in readme
+    assert "KNOWN_LIMITATIONS.md" not in readme
+    assert "docs/PRD.md" not in readme
+    assert "docs/DOCS.md" not in readme
+    assert "docs/DATASETS.md" not in readme
+    assert "docs/INFRA.md" not in readme
+    assert "docs/TESTING.md" not in readme
